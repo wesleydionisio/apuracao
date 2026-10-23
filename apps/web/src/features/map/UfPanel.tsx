@@ -1,4 +1,4 @@
-// Painel da UF: no celular um Drawer de baixo (vaul), no desktop pela lateral.
+// Painel da UF: no celular uma gaveta que sobe de baixo (vaul); no desktop um modal no centro. Nunca pela lateral.
 import type { Board, HistRow } from '@apuracao/shared';
 import { flipped, fmtPct, twoWay, inUf, ufName } from '@apuracao/shared';
 import { ArrowRight, Hourglass, X } from 'lucide-react';
@@ -7,7 +7,8 @@ import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { SourceStamp } from '@/components/core/live';
 import { Button } from '@/components/ui/button';
-import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { staticData } from '@/lib/api';
@@ -16,25 +17,33 @@ import { cn } from '@/lib/utils';
 import { leaderOf, marginPts } from './colors';
 import { cityHref, pa2022, useAsync, useMedia, useUfMunicipalities, type MapLayer, type MunRow } from './data';
 import { MapLegend } from './Legend';
-import { MunMap, type MunHit } from './MunMap';
+import HexMap, { type HexHit } from './HexMap';
 import { CandidateLines, CompareRow, CountedBar, FlipNote, Kpi, pair, RefLegend, SectionTitle, StatusBadge, TransferBlock, VersusBar } from './parts';
 
-export function UfDrawer({ board, uf, onClose }: { board: Board; uf: string | null; onClose: () => void }) {
+export function UfPanel({ board, uf, onClose }: { board: Board; uf: string | null; onClose: () => void }) {
   const desktop = useMedia('(min-width: 1024px)');
+  if (desktop)
+    return (
+      <Dialog open={!!uf} onOpenChange={(o) => !o && onClose()}>
+        <DialogContent showCloseButton={false} className="flex h-[min(88dvh,880px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[600px]">
+          {uf && <UfDetail key={uf} board={board} uf={uf} desktop />}
+        </DialogContent>
+      </Dialog>
+    );
   return (
-    <Drawer open={!!uf} onOpenChange={(o) => !o && onClose()} direction={desktop ? 'right' : 'bottom'} repositionInputs={false}>
-      <DrawerContent
-        className={cn(
-          'data-[vaul-drawer-direction=bottom]:h-[88dvh] data-[vaul-drawer-direction=bottom]:max-h-[88dvh] data-[vaul-drawer-direction=right]:w-[440px] data-[vaul-drawer-direction=right]:max-w-[92vw]',
-        )}
-      >
-        {uf && <UfDetail key={uf} board={board} uf={uf} />}
+    <Drawer open={!!uf} onOpenChange={(o) => !o && onClose()} repositionInputs={false}>
+      <DrawerContent className="data-[vaul-drawer-direction=bottom]:h-[88dvh] data-[vaul-drawer-direction=bottom]:max-h-[88dvh]">
+        {uf && <UfDetail key={uf} board={board} uf={uf} desktop={false} />}
       </DrawerContent>
     </Drawer>
   );
 }
 
-function UfDetail({ board, uf }: { board: Board; uf: string }) {
+function UfDetail({ board, uf, desktop }: { board: Board; uf: string; desktop: boolean }) {
+  // título, descrição e fechar do mesmo componente de fora (modal ou gaveta), para leitor de tela e foco
+  const Title = desktop ? DialogTitle : DrawerTitle;
+  const Desc = desktop ? DialogDescription : DrawerDescription;
+  const Close = desktop ? DialogClose : DrawerClose;
   const cands = board.candidates;
   const live = !!board.released && !!board.br;
   const snap = live ? board.ufs[`uf:${uf}`] : undefined;
@@ -49,23 +58,23 @@ function UfDetail({ board, uf }: { board: Board; uf: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <DrawerHeader className="relative border-b px-4 pb-3 pt-2 text-left">
+      <div className={cn('relative border-b px-4 pb-3 text-left', desktop ? 'pt-4' : 'pt-2')}>
         <div className="flex items-start justify-between gap-3 pr-9">
           <div className="min-w-0 text-left">
-            <DrawerTitle className="truncate text-left text-xl font-semibold tracking-tight">{ufName(uf)}</DrawerTitle>
-            <DrawerDescription className="num text-left text-xs">
+            <Title className="truncate text-left text-xl font-semibold tracking-tight">{ufName(uf)}</Title>
+            <Desc className="num text-left text-xs text-muted-foreground">
               {uf} · {fmtCompact(el)} eleitores
-            </DrawerDescription>
+            </Desc>
           </div>
           {snap && <StatusBadge s={snap.status} className="shrink-0" />}
         </div>
-        <DrawerClose asChild>
+        <Close asChild>
           <Button variant="ghost" size="icon" className="absolute right-2 top-2 size-10" aria-label="Fechar">
             <X />
           </Button>
-        </DrawerClose>
+        </Close>
         {snap && <CountedBar pst={snap.pst} className="mt-3" />}
-      </DrawerHeader>
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+24px)]">
         {snap?.valid && (
@@ -190,7 +199,7 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
   const cands = board.candidates;
   const canLive = live && board.flags.map_mun;
   const [layer, setLayer] = useState<MapLayer>(canLive ? 'live' : 't1');
-  const [hit, setHit] = useState<MunHit | null>(null);
+  const [hit, setHit] = useState<HexHit | null>(null);
   const [all, setAll] = useState(false);
   const { data, loading } = useUfMunicipalities(uf, canLive);
   const abroad = uf === 'ZZ';
@@ -240,7 +249,7 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
 
       {!abroad && (
         <div className="relative">
-          <MunMap uf={uf} values={values} cands={cands} highlight={hit?.ibge} onPick={setHit} maxHeight={380} />
+          <HexMap cands={cands} layer={layer} scope={uf} highlight={hit?.ibge} onPick={setHit} maxHeight={380} label={`Mapa ${inUf(uf)} em hexágonos, na cor de quem lidera em cada região`} />
           {hit && hitRow && (
             <div
               className="absolute z-10 w-56 -translate-x-1/2 rounded-xl border bg-popover p-3 shadow-lg"
@@ -273,7 +282,7 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
           <MapLegend cands={cands} compact className="mt-3" />
           <p className="mt-2 text-center text-[12px] text-muted-foreground">
             {layer === 'live'
-              ? `Toque numa cidade. Em cinza, as que ainda não têm parcial coletada (${withLive} de ${rows.length} até agora).`
+              ? `Toque numa cidade. O hexágono cresce conforme a região é apurada (${withLive} de ${rows.length} cidades com parcial).`
               : layer === 't1'
                 ? 'Confronto direto entre os dois finalistas no 1º turno de 2026. Toque numa cidade.'
                 : '2º turno de 2022, pelos mesmos partidos. Toque numa cidade.'}

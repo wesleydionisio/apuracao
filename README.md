@@ -63,7 +63,12 @@ poller lê o andamento de todas as cidades nos arquivos `-ab` de cada UF, busca 
 - **Pontos**: o ponto acende quando o % apurado da cidade passa do sorteio fixo dele e ganha a cor de um
   candidato na proporção dos votos da cidade.
 - Zoom e arrasto nos dois: pinça e dois dedos no celular (um dedo arrasta só com zoom, para não prender a
-  rolagem), Ctrl/⌘ + rolagem no computador, duplo toque, botões e teclado.
+  rolagem); no computador a rolagem dá zoom (afastado ao máximo, rolar para baixo volta a rolar a página);
+  duplo toque, botões e teclado.
+
+O mesmo mapa de hexágonos (`HexMap`) está no cartão da home e do painel (estático), na visão por estado da
+aba Mapa (cada hexágono na cor do seu estado, com siglas e ficha ao passar o mouse), no painel da UF e na
+página da cidade. O painel da UF abre como modal no desktop e gaveta de baixo no celular; nada abre pela lateral.
 
 Testes: `pnpm test`.
 

@@ -14,7 +14,7 @@ import { CityCommand, CityPicker } from '@/features/city/CityCommand';
 import { loadCityIndex, pushRecent, type RecentCity } from '@/features/city/search';
 import { leaderOf, marginPts } from '@/features/map/colors';
 import { cityHref, pa2022, useUfMunicipalities, type MunRow } from '@/features/map/data';
-import { MunMap } from '@/features/map/MunMap';
+import HexMap from '@/features/map/HexMap';
 import {
   CompareRow,
   CountedBar,
@@ -235,10 +235,18 @@ function CitySheet({ board, view, onPick }: { board: Board; view: CityView; onPi
           Onde fica
         </SectionTitle>
         <WhenSeen h={220}>
-          <MunMap uf={mun.uf} values={{ [mun.ibge]: now ? now.pa : pa1 }} cands={cands} highlight={mun.ibge} dim maxHeight={240} />
+          <HexMap
+            cands={cands}
+            layer={now ? 'live' : 't1'}
+            scope={mun.uf}
+            highlight={mun.ibge}
+            dimOthers
+            maxHeight={260}
+            label={`Mapa ${ofUf(mun.uf)} em hexágonos, com ${mun.name} contornada`}
+          />
         </WhenSeen>
         <p className="mt-2 text-center text-[12px] text-muted-foreground">
-          {mun.name} em destaque no mapa {ofUf(mun.uf)}, na cor de quem lidera {now ? 'agora' : 'no 1º turno'}.
+          {mun.name} contornada no mapa {ofUf(mun.uf)}; cada região na cor de quem lidera {now ? 'agora' : 'no 1º turno'}.
         </p>
       </section>
 

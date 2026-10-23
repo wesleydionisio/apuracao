@@ -1,7 +1,8 @@
 // Zoom e arrasto do mapa em canvas, sem biblioteca. Celular: pinça (e arrasto com dois dedos); com zoom, um
 // dedo arrasta. Sem zoom, um dedo continua rolando a página (touch-action: pan-y), para o mapa não prender
-// a rolagem. Computador: Ctrl/⌘ + rolagem ou pinça do trackpad, arrastar com o mouse. Nos dois: duplo
-// toque/clique aproxima, botões +/−, teclado (+, −, 0, setas).
+// a rolagem. Computador: a rolagem do mouse dá zoom (e a pinça do trackpad), arrastar com o mouse move;
+// com o mapa todo afastado, rolar para baixo volta a rolar a página. Nos dois: duplo toque/clique aproxima,
+// botões +/−, teclado (+, −, 0, setas).
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
 /** tela (px CSS) = posição no mapa sem zoom × k + (x, y) */
@@ -11,8 +12,8 @@ export interface View {
   y: number;
 }
 
-/** no zoom máximo o hexágono mais fino tem ~17 px na tela */
-export const MAX_ZOOM = 10;
+/** no zoom máximo o hexágono mais fino (~7 km) tem ~14 px na tela do celular */
+export const MAX_ZOOM = 16;
 
 export const reduceMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -22,10 +23,11 @@ export function useViewport(
   h: number,
   redraw: () => void,
   onTap: (x: number, y: number) => void,
+  /** desligado: mapa estático (sem rolagem, pinça nem arrasto) */
+  enabled = true,
 ) {
   const v = useRef<View>({ k: 1, x: 0, y: 0 });
   const [zoomed, setZoomed] = useState(false);
-  const [hint, setHint] = useState(false);
   const size = useRef({ w, h });
   const cb = useRef({ redraw, onTap });
   cb.current = { redraw, onTap };
@@ -91,30 +93,24 @@ export function useViewport(
     }
   }, [w, h, set]);
 
-  // Ctrl/⌘ + rolagem (e a pinça do trackpad, que chega como rolagem com ctrlKey); rolagem pura rola a página
+  // rolagem = zoom (a pinça do trackpad chega como rolagem com ctrlKey). Afastado ao máximo, rolar para baixo
+  // rola a página; aproximado ao máximo, rolar para cima também: o mapa nunca prende a rolagem nos extremos
   useEffect(() => {
     const node = el.current;
-    if (!node) return;
-    let hide = 0;
+    if (!node || !enabled) return;
     const onWheel = (e: WheelEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) {
-        setHint(true);
-        clearTimeout(hide);
-        hide = window.setTimeout(() => setHint(false), 1400);
-        return;
-      }
+      const dy = e.deltaMode === 1 ? e.deltaY * 20 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
+      const k = v.current.k;
+      if ((dy > 0 && k <= 1.0001) || (dy < 0 && k >= MAX_ZOOM - 0.0001)) return;
       e.preventDefault();
-      setHint(false);
+      cancelAnimationFrame(anim.current);
       const r = node.getBoundingClientRect();
-      const dy = e.deltaMode === 1 ? e.deltaY * 20 : e.deltaY;
-      zoomAt(Math.exp(-dy * 0.004), e.clientX - r.left, e.clientY - r.top);
+      // pinça do trackpad manda passos pequenos e muitos: mais sensível
+      zoomAt(Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0025)), e.clientX - r.left, e.clientY - r.top);
     };
     node.addEventListener('wheel', onWheel, { passive: false });
-    return () => {
-      node.removeEventListener('wheel', onWheel);
-      clearTimeout(hide);
-    };
-  }, [el, zoomAt]);
+    return () => node.removeEventListener('wheel', onWheel);
+  }, [el, zoomAt, enabled]);
 
   // gestos
   const pts = useRef(new Map<number, { x: number; y: number }>());
@@ -213,7 +209,6 @@ export function useViewport(
   return {
     v,
     zoomed,
-    hint,
     zoomBy,
     reset,
     bind: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onKeyDown },

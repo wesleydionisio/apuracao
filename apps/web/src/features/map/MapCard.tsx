@@ -1,11 +1,12 @@
-// Cartão do mapa para a home: mapa real, contagem de estados por candidato e atalho para a aba Mapa.
+// Cartão do mapa para a home e o painel: a grade de hexágonos (estática; o zoom fica na aba Mapa), a contagem
+// de estados por candidato e o atalho para a aba Mapa.
 import { fmtPct } from '@apuracao/shared';
 import { ArrowRight } from 'lucide-react';
 import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBoard } from '@/store/board';
-import { BrazilMap } from './BrazilMap';
+import HexMap from './HexMap';
 import { useStateValues } from './data';
 import { MapLegend } from './Legend';
 
@@ -27,7 +28,7 @@ export default function MapCard() {
     <section className="rounded-2xl border bg-card">
       <div className="flex items-center justify-between gap-3 px-4 pt-4">
         <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold tracking-tight">Mapa por estado</h2>
+          <h2 className="text-[15px] font-semibold tracking-tight">Mapa</h2>
           <p className="text-xs text-muted-foreground">
             {live ? (board.br ? `Parcial com ${fmtPct(board.br.pst, 1)}% apurado` : 'Parcial') : '1º turno, só os dois finalistas'}
           </p>
@@ -37,8 +38,14 @@ export default function MapCard() {
         </Link>
       </div>
 
-      <Link href="/mapa" aria-label="Abrir o mapa por estado" className="block px-3 pt-2">
-        <BrazilMap values={values} cands={cands} labels={false} className="mx-auto max-w-[400px]" label="Mapa do Brasil: cor de quem lidera em cada estado" />
+      <Link href="/mapa" aria-label="Abrir o mapa" className="block px-3 pt-2">
+        <HexMap
+          cands={cands}
+          layer={live ? 'live' : 't1'}
+          zoomable={false}
+          className="mx-auto max-w-[420px]"
+          label="Mapa do Brasil em hexágonos, na cor de quem lidera em cada região"
+        />
       </Link>
 
       <div className="flex items-center justify-between gap-2 border-t px-4 py-3">

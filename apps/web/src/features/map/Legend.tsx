@@ -1,10 +1,27 @@
-// Legenda divergente: A forte → fraco | fraco → B forte, com avatares nas pontas.
+// Legenda divergente dos mapas de hexágonos: A forte → fraco | fraco → B forte, com avatares nas pontas.
+// Os três tons são os mesmos que o mapa pinta (hex.ts): vantagem de 20+ pontos, de 6 a 20, abaixo de 6.
 import type { CandidateDef } from '@apuracao/shared';
+import { useMemo } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { cn } from '@/lib/utils';
-import { bandSwatch } from './colors';
+import { HEX_BANDS, HEX_X, HEX_Y, rgbCss, shades, toRgb } from './hex';
 
-const TICKS = ['20+', '10', '5', '2', '0'];
+const TICKS = [`${HEX_BANDS[0]}+`, String(HEX_BANDS[1]), '0'];
+
+/** hexágono com vértice para cima, como no mapa */
+export function HexGlyph({ color, size = 12, opacity, className }: { color: string; size?: number; opacity?: number; className?: string }) {
+  const pts = HEX_X.map((x, k) => `${(x * 0.98).toFixed(3)},${(HEX_Y[k] * 0.98).toFixed(3)}`).join(' ');
+  return (
+    <svg viewBox="-1 -1 2 2" width={size} height={size} aria-hidden className={cn('shrink-0', className)}>
+      <polygon points={pts} fill={color} opacity={opacity} />
+    </svg>
+  );
+}
+
+/** os três tons de cada candidato, como o mapa pinta */
+export function useHexShades(cands: CandidateDef[]) {
+  return useMemo(() => ({ a: shades(toRgb(cands[0].color)).map(rgbCss), b: shades(toRgb(cands[1].color)).map(rgbCss) }), [cands]);
+}
 
 export function MapLegend({
   cands,
@@ -24,29 +41,24 @@ export function MapLegend({
   ghost?: string;
 }) {
   const [a, b] = cands;
-  const bands = [4, 3, 2, 1, 0];
+  const tones = useHexShades(cands);
+  const cell = (color: string, tick: string, key: string) => (
+    <div key={key} className="flex min-w-0 flex-col items-center gap-1">
+      <HexGlyph color={color} size={compact ? 12 : 14} />
+      {!compact && <span className="num text-[11px] leading-none text-muted-foreground">{tick}</span>}
+    </div>
+  );
   return (
     <div
-      className={cn('flex min-w-0 flex-col items-center gap-1.5', compact ? 'max-w-[10rem] flex-1' : 'w-full', className)}
-      aria-label="Legenda: cor de quem lidera, mais forte quanto maior a diferença"
+      className={cn('flex min-w-0 flex-col items-center gap-1.5', compact ? 'flex-1' : 'w-full', className)}
+      aria-label="Legenda: cor de quem lidera, mais viva quanto maior a diferença"
     >
-      {/* faixas flexíveis: dividem a largura disponível (nunca empurram a página em 320px) */}
-      <div className="flex w-full max-w-[22rem] min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-center justify-center gap-2">
         {!bare && <CandidateAvatar c={a} size="xs" />}
-        <div className="flex min-w-0 flex-1 items-end gap-0.5">
-          {bands.map((band, i) => (
-            <div key={`a${band}`} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-              <span className="block h-2.5 w-full rounded-[3px]" style={{ background: bandSwatch(a, band) }} />
-              {!compact && <span className="num text-[11px] leading-none text-muted-foreground">{TICKS[i]}</span>}
-            </div>
-          ))}
-          <span className="w-1 shrink-0" />
-          {[...bands].reverse().map((band, i) => (
-            <div key={`b${band}`} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-              <span className="block h-2.5 w-full rounded-[3px]" style={{ background: bandSwatch(b, band) }} />
-              {!compact && <span className="num text-[11px] leading-none text-muted-foreground">{TICKS[4 - i]}</span>}
-            </div>
-          ))}
+        <div className="flex items-end gap-1">
+          {tones.a.map((c, i) => cell(c, TICKS[i], `a${i}`))}
+          <span className="w-1.5 shrink-0" />
+          {[...tones.b].reverse().map((c, i) => cell(c, TICKS[2 - i], `b${i}`))}
         </div>
         {!bare && <CandidateAvatar c={b} size="xs" />}
       </div>
@@ -56,7 +68,7 @@ export function MapLegend({
             <p key={c} className={cn('flex flex-wrap content-start items-center justify-center gap-x-3 gap-y-1', i > 0 && 'invisible')} aria-hidden={i > 0}>
               <span>{c}</span>
               <span className="inline-flex items-center gap-1">
-                <span className="inline-block size-2.5 rounded-[3px] bg-border" /> sem dados
+                <HexGlyph color="currentColor" size={6} opacity={0.4} /> sem dados
               </span>
             </p>
           ))}

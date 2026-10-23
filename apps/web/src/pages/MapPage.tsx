@@ -1,4 +1,4 @@
-// Aba Mapa: mapa real do Brasil (padrão) ou lista de estados; toque abre o painel da UF.
+// Aba Mapa: grade de hexágonos por cidade (padrão), pontos, hexágonos por estado ou lista; tocar num estado abre o painel da UF.
 // Camadas: Agora | 1º turno | 2022. Com "Agora", dá para comparar com uma referência e pintar o deslocamento.
 import type { Board } from '@apuracao/shared';
 import { fmtPct } from '@apuracao/shared';
@@ -8,19 +8,21 @@ import { useLocation, useParams } from 'wouter';
 import { SourceStamp } from '@/components/core/live';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { BrazilMap } from '@/features/map/BrazilMap';
 import { REF_LABEL, swingOf, swingValues, useStateValues, useUfRefs, type MapLayer, type RefLayer } from '@/features/map/data';
 import { MapLegend } from '@/features/map/Legend';
 import { MapRankings } from '@/features/map/Rankings';
 import { StateList } from '@/features/map/StateList';
 import { StateTally } from '@/features/map/Tally';
-import { UfDrawer } from '@/features/map/UfDrawer';
+import { UfPanel } from '@/features/map/UfPanel';
+import { UfTip } from '@/features/map/UfTip';
+import type { HexHit } from '@/features/map/HexMap';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 
 type View = 'hex' | 'dots' | 'map' | 'list';
 const VIEW_KEY = 'map:view';
 const CityMap = lazy(() => import('@/features/map/CityMap'));
+const HexMap = lazy(() => import('@/features/map/HexMap'));
 
 function savedView(): View {
   try {
@@ -113,6 +115,7 @@ function MapView({ board }: { board: Board }) {
   }, [t1, board.ufs]);
 
   const pick = (uf: string) => nav(`/mapa/${uf}`, { replace: !!selected });
+  const [tip, setTip] = useState<HexHit | null>(null);
   const close = () => nav('/mapa', { replace: true });
 
   const title = swingMode
@@ -226,16 +229,20 @@ function MapView({ board }: { board: Board }) {
         </section>
       ) : view === 'map' ? (
         <section className="rounded-2xl border bg-card p-3 sm:p-5">
-          <BrazilMap
-            values={mapValues}
-            tipValues={swingMode ? values : undefined}
-            tipRefs={tipRefs}
-            cands={cands}
-            selected={selected}
-            onPick={pick}
-            className="mx-auto max-w-[520px]"
-            label={swingMode ? 'Mapa do deslocamento por estado' : undefined}
-          />
+          <div className="relative mx-auto max-w-[620px]">
+            <Suspense fallback={<Skeleton className="aspect-[1000/1051] w-full rounded-xl" />}>
+              <HexMap
+                cands={cands}
+                ufValues={mapValues}
+                labels
+                selectedUf={selected}
+                onPick={(hit) => hit && pick(hit.uf)}
+                onHover={setTip}
+                label={swingMode ? 'Mapa do deslocamento por estado, em hexágonos' : 'Mapa do Brasil em hexágonos, na cor de quem lidera em cada estado'}
+              />
+            </Suspense>
+            {tip && <UfTip uf={tip.uf} x={tip.x} y={tip.y} value={values[tip.uf]} cands={cands} refs={tipRefs} />}
+          </div>
           <MapLegend
             cands={cands}
             className="mt-3"
@@ -274,7 +281,7 @@ function MapView({ board }: { board: Board }) {
       <MapRankings values={values} swing={swing} refLabel={REF_LABEL[rankRef]} cands={cands} onPick={pick} />
 
       <SourceStamp at={board.source.at} />
-      <UfDrawer board={board} uf={selected} onClose={close} />
+      <UfPanel board={board} uf={selected} onClose={close} />
     </div>
   );
 }
