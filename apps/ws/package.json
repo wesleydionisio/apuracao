@@ -1,0 +1,13 @@
+{
+  "name": "@apuracao/ws",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "tsx watch src/index.ts", "start": "tsx src/index.ts", "typecheck": "tsc -p .", "load": "tsx scripts/load.ts" },
+  "dependencies": {
+    "@apuracao/shared": "workspace:*",
+    "ioredis": "^5.4.2",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.51.0",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": { "@types/node": "^22.10.0", "@types/ws": "^8.5.13", "typescript": "^5.7.2", "ws": "^8.18.0" }
+}

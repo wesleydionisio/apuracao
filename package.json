@@ -1,0 +1,15 @@
+{
+  "name": "apuracao",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "dev:poller": "pnpm --filter @apuracao/poller dev",
+    "dev:ws": "pnpm --filter @apuracao/ws dev",
+    "dev:api": "pnpm --filter @apuracao/api dev",
+    "dev:web": "pnpm --filter @apuracao/web dev",
+    "etl": "pnpm --filter @apuracao/data etl"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@apuracao/api",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "tsx watch src/index.ts", "start": "tsx src/index.ts", "typecheck": "tsc -p .", "test": "tsx --test test/*.test.ts" },
+  "dependencies": {
+    "@apuracao/shared": "workspace:*",
+    "@fastify/cookie": "^11.0.1",
+    "@fastify/static": "^8.0.3",
+    "@resvg/resvg-js": "^2.6.2",
+    "fastify": "^5.2.0",
+    "ioredis": "^5.4.2",
+    "pg": "^8.13.1",
+    "satori": "^0.12.0",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": { "@types/node": "^22.10.0", "@types/pg": "^8.11.10", "typescript": "^5.7.2" }
+}

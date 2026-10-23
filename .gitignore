@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+public/data/*
+!public/data/.gitkeep
+var/
+packages/data/raw/
