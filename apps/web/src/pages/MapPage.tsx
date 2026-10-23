@@ -1,204 +1,164 @@
-import type { Board, HistRow } from '@apuracao/shared';
-import { flipped, slugify, twoWay, ufName } from '@apuracao/shared';
+// Aba Mapa: mapa real do Brasil (padrão) ou lista de estados; toque abre o painel da UF.
+import type { Board, CandidateDef } from '@apuracao/shared';
+import { fmtPct } from '@apuracao/shared';
+import { Map as MapIcon, Rows3 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link, useLocation, useParams } from 'wouter';
-import { LegalFooter } from '../components/chrome';
-import { UfTransfer, useAsync, useUfMunicipalities } from '../components/context';
-import { ScoreCard } from '../components/placar';
-import { Card, Chip, Empty, Skeleton, Title } from '../components/ui';
-import { staticData } from '../lib/api';
-import { fmtCompact, fmtPct } from '../lib/format';
-import { MunCanvas, StatesSvg } from '../map/GeoMap';
-import TileMap, { MapLegend } from '../map/TileMap';
-import { candOf, shortLabel, useBoard } from '../store/board';
-import { Loading } from './Home';
+import { useLocation, useParams } from 'wouter';
+import { CandidateAvatar } from '@/components/core/candidate';
+import { SourceStamp } from '@/components/core/live';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { BrazilMap } from '@/features/map/BrazilMap';
+import { useAsync, useStateValues, type MapLayer, type UfValue } from '@/features/map/data';
+import { MapLegend } from '@/features/map/Legend';
+import { StateList } from '@/features/map/StateList';
+import { UfDrawer } from '@/features/map/UfDrawer';
+import { staticData } from '@/lib/api';
+import { useBoard } from '@/store/board';
+
+type View = 'map' | 'list';
 
 export default function MapPage() {
   const board = useBoard((s) => s.board);
+  if (!board) return <MapSkeleton />;
+  return <MapView board={board} />;
+}
+
+function MapView({ board }: { board: Board }) {
   const params = useParams<{ uf?: string }>();
   const [, nav] = useLocation();
-  const [mode, setMode] = useState<'grid' | 'geo'>('grid');
+  const [view, setView] = useState<View>('map');
+  const live = !!board.released && !!board.br;
+  // sem escolha do usuário a camada acompanha a liberação (17h); escolhida, fica
+  const [layer, setLayer] = useState<MapLayer | null>(null);
+  const effective: MapLayer = layer === null || (layer === 'live' && !live) ? (live ? 'live' : 't1') : layer;
+  const { values } = useStateValues(board, effective);
   const { data: t1 } = useAsync(() => staticData.hist('t1-2026'), []);
   const selected = params.uf?.toUpperCase() ?? null;
+  const cands = board.candidates;
 
-  const live = !!board?.released && !!board.br;
-  const values = useMemo(() => {
-    const out: Record<string, { pa: number | null; pst: number | null }> = {};
-    if (!board) return out;
-    if (live) {
-      for (const [k, s] of Object.entries(board.ufs)) out[k.slice(3)] = { pa: s.valid ? s.pa : null, pst: s.pst };
-    } else if (t1) {
-      for (const [uf, h] of Object.entries(t1.uf)) out[uf] = { pa: twoWay(h, board.candidates), pst: null };
-    }
+  const electorate = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const [uf, h] of Object.entries(t1?.uf ?? {})) out[uf] = h.el;
+    for (const [k, s] of Object.entries(board.ufs)) if (s.el) out[k.slice(3)] = s.el;
     return out;
-  }, [board, live, t1]);
+  }, [t1, board.ufs]);
 
-  if (!board) return <Loading />;
-  const pick = (uf: string) => nav(selected === uf ? '/mapa' : `/mapa/${uf}`, { replace: true });
+  const pick = (uf: string) => nav(`/mapa/${uf}`, { replace: !!selected });
+  const close = () => nav('/mapa', { replace: true });
+
+  const title =
+    effective === 'live' ? 'Quem lidera em cada estado' : effective === 't1' ? 'Como cada estado votou no 1º turno' : 'Como cada estado votou em 2022';
+  const caption =
+    effective === 'live'
+      ? 'Parcial do 2º turno, votos válidos.'
+      : effective === 't1'
+        ? 'Confronto direto entre os dois finalistas no 1º turno de 2026.'
+        : '2º turno de 2022, pelos mesmos partidos.';
 
   return (
-    <div className="space-y-3">
-      <Card>
-        <Title
-          right={
-            <div className="flex rounded-lg bg-soft p-0.5 text-[12px]" role="tablist">
-              {(['grid', 'geo'] as const).map((m) => (
-                <button
-                  key={m}
-                  role="tab"
-                  aria-selected={mode === m}
-                  onClick={() => setMode(m)}
-                  className={`min-h-9 rounded-md px-3 ${mode === m ? 'bg-card font-semibold shadow-sm' : 'text-muted'}`}
-                >
-                  {m === 'grid' ? 'Grade' : 'Mapa'}
-                </button>
-              ))}
+    <div className="space-y-4 pb-2">
+      <header className="flex items-end justify-between gap-3 pt-1">
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground">Presidente · 2º turno</p>
+          <h1 className="text-[22px] font-semibold leading-tight tracking-tight">{title}</h1>
+        </div>
+        <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como">
+          <ToggleGroupItem value="map" aria-label="Mapa">
+            <MapIcon />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="list" aria-label="Lista">
+            <Rows3 />
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </header>
+
+      <div className="flex items-center justify-between gap-2">
+        <ToggleGroup type="single" size="sm" value={effective} onValueChange={(v) => v && setLayer(v as MapLayer)} aria-label="Camada" className="rounded-lg bg-muted p-0.5">
+          {live && (
+            <ToggleGroupItem value="live" className="rounded-md! data-[state=on]:bg-card data-[state=on]:shadow-sm">
+              Agora
+            </ToggleGroupItem>
+          )}
+          <ToggleGroupItem value="t1" className="rounded-md! data-[state=on]:bg-card data-[state=on]:shadow-sm">
+            1º turno
+          </ToggleGroupItem>
+          <ToggleGroupItem value="y2022" className="rounded-md! data-[state=on]:bg-card data-[state=on]:shadow-sm">
+            2022
+          </ToggleGroupItem>
+        </ToggleGroup>
+        {effective === 'live' && board.br && <span className="num text-xs text-muted-foreground">{fmtPct(board.br.pst, 1)}% apurado</span>}
+      </div>
+
+      <Tally values={values} cands={cands} />
+
+      {view === 'map' ? (
+        <section className="rounded-2xl border bg-card p-3 sm:p-5">
+          <BrazilMap values={values} cands={cands} selected={selected} onPick={pick} className="mx-auto max-w-[520px]" />
+          <MapLegend cands={cands} className="mt-3" />
+          <p className="mt-3 text-center text-xs text-muted-foreground">{caption} Toque num estado para ver as cidades.</p>
+          {values.ZZ?.pa != null && (
+            <button type="button" onClick={() => pick('ZZ')} className="press mx-auto mt-3 flex min-h-10 items-center gap-2 rounded-full border px-3 text-xs">
+              Exterior
+              <span className="num font-semibold" style={{ color: values.ZZ.pa >= 50 ? cands[0].color : cands[1].color }}>
+                {fmtPct(Math.max(values.ZZ.pa, 100 - values.ZZ.pa), 1)}%
+              </span>
+            </button>
+          )}
+        </section>
+      ) : (
+        <StateList values={values} electorate={electorate} cands={cands} onPick={pick} showPst={effective === 'live'} />
+      )}
+
+      <SourceStamp at={board.source.at} />
+      <UfDrawer board={board} uf={selected} onClose={close} />
+    </div>
+  );
+}
+
+/** "lidera em N estados" — contagem por candidato com foto */
+function Tally({ values, cands }: { values: Record<string, UfValue | undefined>; cands: CandidateDef[] }) {
+  let a = 0;
+  let b = 0;
+  for (const [uf, v] of Object.entries(values)) {
+    if (uf === 'ZZ' || v?.pa == null) continue;
+    if (v.pa > 50) a++;
+    else if (v.pa < 50) b++;
+  }
+  const rest = 27 - a - b;
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {[
+        { c: cands[0], n: a },
+        { c: cands[1], n: b },
+      ].map(({ c, n }) => (
+        <div key={c.key} className="flex items-center gap-3 rounded-xl border bg-card p-3">
+          <CandidateAvatar c={c} size="md" />
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-1">
+              <span className="display text-2xl font-semibold leading-none" style={{ color: c.color }}>
+                {n}
+              </span>
+              <span className="text-xs text-muted-foreground">{n === 1 ? 'estado' : 'estados'}</span>
             </div>
-          }
-        >
-          {live ? 'Por estado, agora' : 'Por estado no 1º turno'}
-        </Title>
-        {!live && <p className="mb-3 text-[12px] text-muted">Confronto direto entre os dois finalistas no 1º turno. O mapa ao vivo abre às 17h.</p>}
-        {mode === 'grid' ? (
-          <TileMap values={values} cands={board.candidates} selected={selected} onPick={pick} />
-        ) : (
-          <StatesSvg
-            values={Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v.pa]))}
-            cands={board.candidates}
-            selected={selected}
-            onPick={pick}
-          />
-        )}
-        <MapLegend cands={board.candidates} />
-        {!selected && <p className="mt-2 text-center text-[12px] text-muted">Toque num estado para ver as cidades</p>}
-      </Card>
-      {selected && <UfPanel key={selected} board={board} uf={selected} t1={t1?.uf[selected]} live={live} />}
-      <LegalFooter />
+            <div className="mt-1 text-xs leading-tight text-muted-foreground">{c.short}</div>
+          </div>
+        </div>
+      ))}
+      {rest > 0 && rest < 27 && <p className="col-span-2 -mt-1 text-[11px] text-muted-foreground">{rest} sem parcial ainda.</p>}
     </div>
   );
 }
 
-function UfPanel({ board, uf, t1, live }: { board: Board; uf: string; t1?: HistRow; live: boolean }) {
-  const snap = board.ufs[`uf:${uf}`];
-  const { data: y22file } = useAsync(() => staticData.hist('y2022-t2'), []);
-  const { data, loading } = useUfMunicipalities(uf, live);
-  const [all, setAll] = useState(false);
-  const [, nav] = useLocation();
-  const ca = candOf(board, 'a')!;
-  const cb = candOf(board, 'b')!;
-  const y22 = y22file?.uf[uf];
-  const flip = snap && y22 ? flipped(snap, y22, board.y2022Map) : null;
-  const pa1 = twoWay(t1, board.candidates);
-  const pa22 = y22 ? twoWay(y22, [{ ...ca, n: board.y2022Map.a }, { ...cb, n: board.y2022Map.b }]) : null;
-
-  const munValues = useMemo(() => {
-    const out: Record<string, number | null> = {};
-    for (const r of data?.rows ?? []) out[r.m.ibge] = r.s?.valid ? r.s.pa : null;
-    return out;
-  }, [data]);
-
-  const rows = (data?.rows ?? []).filter((r) => (live ? r.s : r.t1));
-  const shown = all ? rows.slice(0, 120) : rows.slice(0, 12);
-
+function MapSkeleton() {
   return (
-    <div className="space-y-3" id="uf-panel">
-      {live && snap ? (
-        <ScoreCard board={board} snap={snap} title={ufName(uf)} />
-      ) : (
-        <Card>
-          <Title>{ufName(uf)}</Title>
-          <p className="text-[13px] text-muted">A parcial de {uf} aparece aqui a partir das 17h.</p>
-        </Card>
-      )}
-      <Card>
-        <Title>{ufName(uf)} em contexto</Title>
-        <div className="num grid grid-cols-2 gap-2 text-[13px]">
-          <Compare label="1º turno 2026 (A×B)" pa={pa1} board={board} />
-          <Compare label="2º turno 2022" pa={pa22} board={board} />
-        </div>
-        {flip && (
-          <p className="mt-3 rounded-xl bg-soft p-3 text-[14px]">
-            🔄 <strong>{ufName(uf)} virou</strong> em relação a 2022: agora {candOf(board, flip.to)!.short} está à frente
-            {snap ? ` (${fmtPct(snap.pst, 0)}% apurado)` : ''}.
-          </p>
-        )}
-        {live && <UfTransfer board={board} uf={uf} />}
-      </Card>
-      {live && board.flags.map_mun && (
-        <Card>
-          <Title right={<Chip>maiores cidades</Chip>}>Municípios de {uf}</Title>
-          <MunCanvas
-            uf={uf}
-            values={munValues}
-            cands={board.candidates}
-            onPick={(ibge) => {
-              const m = data?.rows.find((r) => r.m.ibge === ibge)?.m;
-              if (m) nav(`/cidade/${m.uf.toLowerCase()}/${m.slug || slugify(m.name)}`);
-            }}
-          />
-          <p className="mt-2 text-center text-[11px] text-muted">Cidades em cinza ainda não têm parcial coletada.</p>
-        </Card>
-      )}
-      <Card>
-        <Title>{live ? 'Cidades com parcial' : 'Cidades no 1º turno'}</Title>
-        {loading ? (
-          <Skeleton h={160} />
-        ) : !rows.length ? (
-          <Empty title="Sem dados de cidades ainda">{live ? 'As maiores cidades entram conforme o TSE publica.' : 'Histórico municipal ainda não carregado.'}</Empty>
-        ) : (
-          <>
-            <ul className="divide-y divide-line">
-              {shown.map((r) => {
-                const pa = live ? (r.s?.valid ? r.s.pa : null) : twoWay(r.t1, board.candidates);
-                const f = live && r.s && r.y22 ? flipped(r.s, r.y22, board.y2022Map) : null;
-                const lead = pa === null ? null : pa >= 50 ? ca : cb;
-                return (
-                  <li key={r.m.ibge}>
-                    <Link href={`/cidade/${r.m.uf.toLowerCase()}/${r.m.slug || slugify(r.m.name)}`} className="flex min-h-12 items-center gap-2 py-1.5">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[14px] font-medium">
-                          {r.m.name} {f && <span title="virou vs 2022">🔄</span>}
-                        </div>
-                        <div className="num text-[11px] text-muted">
-                          {fmtCompact(r.m.el)} eleitores{live && r.s ? ` · ${fmtPct(r.s.pst, 0)}% apurado` : ''}
-                        </div>
-                      </div>
-                      {lead && pa !== null && (
-                        <span className="num shrink-0 rounded-lg px-2 py-1 text-[12px] font-bold text-white" style={{ background: lead.color }}>
-                          {shortLabel(board.candidates, lead.key === 'a' ? 0 : 1)} {fmtPct(Math.max(pa, 100 - pa), 1)}%
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-            {rows.length > 12 && !all && (
-              <button onClick={() => setAll(true)} className="mt-2 min-h-11 w-full rounded-xl border border-line text-[14px]">
-                Ver mais cidades ({rows.length})
-              </button>
-            )}
-          </>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function Compare({ label, pa, board }: { label: string; pa: number | null; board: Board }) {
-  const ca = candOf(board, 'a')!;
-  const cb = candOf(board, 'b')!;
-  return (
-    <div className="rounded-xl bg-soft p-3">
-      <div className="text-[11px] text-muted">{label}</div>
-      {pa === null ? (
-        <div className="mt-1 text-muted">—</div>
-      ) : (
-        <div className="mt-1 flex justify-between font-semibold">
-          <span style={{ color: ca.color }}>{fmtPct(pa, 1)}%</span>
-          <span style={{ color: cb.color }}>{fmtPct(100 - pa, 1)}%</span>
-        </div>
-      )}
+    <div className="space-y-4 pt-1">
+      <Skeleton className="h-12 w-3/4" />
+      <div className="grid grid-cols-2 gap-2">
+        <Skeleton className="h-16" />
+        <Skeleton className="h-16" />
+      </div>
+      <Skeleton className="aspect-square w-full rounded-2xl" />
     </div>
   );
 }

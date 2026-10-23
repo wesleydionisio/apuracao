@@ -1,6 +1,9 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { Route, Switch, useLocation } from 'wouter';
-import { Header, TabBar } from './components/chrome';
+import { useCandidateCssVars } from '@/components/core/candidate';
+import { LegalFooter } from '@/components/shell/bits';
+import { Header } from '@/components/shell/Header';
+import { TabBar } from '@/components/shell/TabBar';
 import { Skeleton, Toaster } from './components/ui';
 import { api, fetchBoard } from './lib/api';
 import { live } from './lib/live';
@@ -107,8 +110,8 @@ function Frame() {
       <div ref={headerRef} className="fixed inset-x-0 top-0 z-30">
         <Header />
       </div>
-      <main className="pb-tabbar mx-auto max-w-3xl lg:max-w-5xl px-3" style={{ paddingTop: 'calc(var(--header-total, 120px) + 12px)' }}>
-        <Suspense fallback={<Skeleton h={240} />}>
+      <main className="pb-tabbar mx-auto max-w-3xl px-4 lg:max-w-6xl" style={{ paddingTop: 'calc(var(--header-total, 64px) + 12px)' }}>
+        <Suspense fallback={<PageFallback />}>
           <Switch>
             <Route path="/" component={Home} />
             <Route path="/mapa" component={MapPage} />
@@ -121,14 +124,37 @@ function Frame() {
             <Route path="/p/:id" component={GuessPage} />
             <Route path="/m/:id" component={MomentPage} />
             <Route>
-              <p className="py-10 text-center text-muted">Página não encontrada.</p>
+              <div className="py-16 text-center">
+                <p className="text-[15px] font-semibold">Página não encontrada</p>
+                <a href="/" className="mt-2 inline-flex min-h-11 items-center text-[14px] text-muted-foreground underline underline-offset-4">
+                  Voltar ao placar
+                </a>
+              </div>
             </Route>
           </Switch>
         </Suspense>
+        {/* aviso legal em toda tela, menos o chat em tela cheia (que tem os termos no próprio composer) */}
+        {!path.startsWith('/chat') && !path.startsWith('/sala') && <LegalFooter />}
       </main>
       <TabBar />
-      <Toaster />
+      <Suspense fallback={null}>
+        <Toaster
+          position="bottom-center"
+          offset={{ bottom: 'calc(var(--tabbar-total) + 12px)' }}
+          mobileOffset={{ bottom: 'calc(var(--tabbar-total) + 12px)', left: '16px', right: '16px' }}
+        />
+      </Suspense>
     </>
+  );
+}
+
+function PageFallback() {
+  return (
+    <div className="space-y-4 pt-2" aria-busy="true">
+      <Skeleton h={28} className="w-48" />
+      <Skeleton h={220} />
+      <Skeleton h={120} />
+    </div>
   );
 }
 
@@ -136,6 +162,7 @@ export default function App() {
   const [path] = useLocation();
   useBoardPolling();
   useIdentityAndStats();
+  useCandidateCssVars();
   const standalone = path === '/tv' || path.startsWith('/embed');
   useEffect(() => {
     // TV e embed não precisam de chat; o placar vem pelo polling

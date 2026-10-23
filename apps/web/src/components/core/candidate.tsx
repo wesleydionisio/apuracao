@@ -23,14 +23,10 @@ export function useCandidateCssVars() {
   }, [c?.[0].color, c?.[1].color]);
 }
 
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter((w) => w.length > 2)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
+const initials = (name: string) => {
+  const w = name.trim().split(/\s+/).filter(Boolean);
+  return (w.length > 1 ? w[0][0] + w[w.length - 1][0] : (w[0] ?? '?').slice(0, 2)).toUpperCase();
+};
 
 const SIZES = {
   xs: 'size-6 rounded-md text-[10px]',

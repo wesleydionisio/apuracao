@@ -51,7 +51,7 @@ export function SourceStamp({ at, className, short = false }: { at?: string | nu
   );
 }
 
-/** variação em pontos percentuais: ▲ 0,4 / ▼ 1,2 — nunca usa só cor */
+/** variação em pontos percentuais: ↗ 0,4 / ↘ 1,2 — direção pela seta, nunca pela cor */
 export function Delta({ v, digits = 1, className, suffix = '' }: { v: number | null | undefined; digits?: number; className?: string; suffix?: string }) {
   if (v === null || v === undefined || Math.abs(v) < 10 ** -digits / 2) {
     return <span className={cn('num text-xs text-muted-foreground', className)}>=</span>;
@@ -59,7 +59,8 @@ export function Delta({ v, digits = 1, className, suffix = '' }: { v: number | n
   const up = v > 0;
   const Icon = up ? ArrowUpRight : ArrowDownRight;
   return (
-    <span className={cn('num inline-flex items-center gap-0.5 text-xs font-medium', up ? 'text-live' : 'text-destructive', className)}>
+    // neutro de propósito: verde/vermelho aqui confundiria com as cores dos candidatos
+    <span className={cn('num inline-flex items-center gap-0.5 text-xs font-medium text-muted-foreground', className)}>
       <Icon className="size-3.5" aria-hidden />
       <span className="sr-only">{up ? 'subiu' : 'caiu'}</span>
       {fmtPct(Math.abs(v), digits)}

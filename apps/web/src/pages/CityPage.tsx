@@ -1,55 +1,66 @@
-import type { Board, Snap } from '@apuracao/shared';
-import { flipped, slugify, transfer, twoWay, ufName } from '@apuracao/shared';
-import { useEffect, useState } from 'react';
+// Sua cidade: busca (Command) e página da cidade com parcial, comparações, virada vs 2022 e transferência.
+import type { Board, Municipality } from '@apuracao/shared';
+import { flipped, fmtPct, twoWay, ufName } from '@apuracao/shared';
+import { ChevronRight, Users } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams } from 'wouter';
-import { CitySearch } from '../components/city-search';
-import { LegalFooter } from '../components/chrome';
-import { useAsync } from '../components/context';
-import { StatusChip } from '../components/placar';
-import { Card, Empty, ShareButton, Skeleton, Title } from '../components/ui';
-import { api, HttpError, ogUrl, staticData, type CityView } from '../lib/api';
-import { fmtCompact, fmtInt, fmtPct, signed } from '../lib/format';
-import { candOf, useBoard } from '../store/board';
-import { Loading } from './Home';
-
-const LS_CITY = 'my-city';
+import { CandidateAvatar } from '@/components/core/candidate';
+import { SourceStamp } from '@/components/core/live';
+import { ShareButton } from '@/components/ui';
+import { Skeleton } from '@/components/ui/skeleton';
+import { CityCommand, CityPicker } from '@/features/city/CityCommand';
+import { loadCityIndex, pushRecent, type RecentCity } from '@/features/city/search';
+import { cityHref, pa2022 } from '@/features/map/data';
+import { MunMap } from '@/features/map/MunMap';
+import { CandidateLines, CompareRow, CountedBar, FlipNote, SectionTitle, StatusBadge, TransferBlock } from '@/features/map/parts';
+import { api, HttpError, ogUrl, type CityView } from '@/lib/api';
+import { fmtCompact } from '@/lib/format';
+import { useBoard } from '@/store/board';
 
 export default function CityPage() {
   const board = useBoard((s) => s.board);
   const params = useParams<{ uf?: string; slug?: string }>();
   const [, nav] = useLocation();
-  if (!board) return <Loading />;
-  if (!params.uf || !params.slug) return <CityHome nav={nav} />;
-  return <CityDetail board={board} uf={params.uf} slug={params.slug} nav={nav} />;
+  const go = (m: RecentCity | Municipality) => nav(cityHref(m));
+  if (!params.uf || !params.slug) return <CityHome onPick={go} />;
+  if (!board) return <DetailSkeleton />;
+  return <CityDetail key={`${params.uf}/${params.slug}`} board={board} uf={params.uf} slug={params.slug} onPick={go} />;
 }
 
-function CityHome({ nav }: { nav: (to: string) => void }) {
-  const [last, setLast] = useState<string | null>(null);
-  useEffect(() => {
-    try {
-      setLast(localStorage.getItem(LS_CITY));
-    } catch {
-      /* sem storage */
-    }
-  }, []);
+function CityHome({ onPick }: { onPick: (m: RecentCity | Municipality) => void }) {
+  const top = useBoard((s) => s.stats?.topCities);
   return (
-    <div className="space-y-3">
-      <Card>
-        <Title>Sua cidade</Title>
-        <p className="mb-3 text-[13px] text-muted">Veja a parcial da sua cidade e compare com o 1º turno, com 2022, com o estado e com o Brasil.</p>
-        <CitySearch onPick={(m) => nav(`/cidade/${m.uf.toLowerCase()}/${m.slug || slugify(m.name)}`)} />
-        {last && (
-          <Link href={last} className="mt-3 flex min-h-11 items-center text-[14px] font-semibold underline">
-            Voltar para {decodeURIComponent(last.split('/').pop() ?? '').replace(/-/g, ' ')}
-          </Link>
-        )}
-      </Card>
-      <LegalFooter />
+    <div className="space-y-5 pb-2 pt-1">
+      <header>
+        <p className="text-xs text-muted-foreground">Presidente · 2º turno</p>
+        <h1 className="text-[22px] font-semibold leading-tight tracking-tight">Sua cidade</h1>
+        <p className="mt-1 text-sm text-muted-foreground">A parcial do seu município comparada com o estado, o Brasil, o 1º turno e 2022.</p>
+      </header>
+      <section className="overflow-hidden rounded-2xl border bg-card">
+        <CityCommand onPick={onPick} placeholder="Digite o nome da cidade" listClassName="max-h-[60dvh] overflow-y-auto" />
+      </section>
+      {!!top?.length && (
+        <section>
+          <SectionTitle right={<Users className="size-4 text-muted-foreground" aria-hidden />}>Cidades com mais palpites</SectionTitle>
+          <ul className="divide-y rounded-xl border bg-card">
+            {top.slice(0, 5).map((c, i) => (
+              <li key={c.ibge}>
+                <button type="button" onClick={() => loadCityIndex().then((idx) => { const m = idx.find((x) => x.m.ibge === c.ibge)?.m; if (m) onPick(m); })} className="press flex min-h-12 w-full items-center gap-3 px-3 text-left">
+                  <span className="num w-4 text-xs text-muted-foreground">{i + 1}</span>
+                  <span className="flex-1 truncate text-sm font-medium">{c.name}</span>
+                  <span className="text-xs text-muted-foreground">{c.uf}</span>
+                  <span className="num text-xs text-muted-foreground">{c.n.toLocaleString('pt-BR')}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
 
-function CityDetail({ board, uf, slug, nav }: { board: Board; uf: string; slug: string; nav: (to: string) => void }) {
+function CityDetail({ board, uf, slug, onPick }: { board: Board; uf: string; slug: string; onPick: (m: RecentCity | Municipality) => void }) {
   const [view, setView] = useState<CityView | null>(null);
   const [err, setErr] = useState<'404' | 'net' | null>(null);
   const UF = uf.toUpperCase();
@@ -63,165 +74,170 @@ function CityDetail({ board, uf, slug, nav }: { board: Board; uf: string; slug: 
           if (!alive) return;
           setView(v);
           setErr(null);
-          try {
-            localStorage.setItem(LS_CITY, `/cidade/${uf.toLowerCase()}/${slug}`);
-          } catch {
-            /* sem storage */
-          }
+          pushRecent(v.mun);
         })
         .catch((e) => alive && setErr(e instanceof HttpError && e.status === 404 ? '404' : 'net'));
-    setView(null);
     load();
     const t = setInterval(load, 30_000);
     return () => {
       alive = false;
       clearInterval(t);
     };
-  }, [UF, slug, uf]);
-
-  // y2022 de reserva pelo arquivo estático, caso a API não traga
-  const { data: y22uf } = useAsync(() => staticData.histMun('y2022-t2', UF), [UF]);
-
-  const search = (
-    <Card>
-      <CitySearch onPick={(m) => nav(`/cidade/${m.uf.toLowerCase()}/${m.slug || slugify(m.name)}`)} placeholder="Buscar outra cidade" compact />
-    </Card>
-  );
+  }, [UF, slug]);
 
   if (err === '404')
     return (
-      <div className="space-y-3">
-        <Empty title="Cidade não encontrada">Confira o nome e tente buscar de novo.</Empty>
-        {search}
+      <div className="space-y-4 pt-1">
+        <div className="rounded-2xl border bg-card p-5">
+          <h1 className="text-lg font-semibold">Cidade não encontrada</h1>
+          <p className="mt-1 text-sm text-muted-foreground">O endereço pode estar incompleto. Busque pelo nome:</p>
+        </div>
+        <CityPicker onPick={onPick} label="Buscar cidade" />
       </div>
     );
   if (!view)
     return (
-      <div className="space-y-3">
-        <Skeleton h={260} />
-        {err && <p className="text-center text-[13px] text-muted">Sem conexão. Tentando de novo…</p>}
-      </div>
+      <>
+        <DetailSkeleton />
+        {err && <p className="mt-3 text-center text-sm text-muted-foreground">Sem conexão. Tentando de novo…</p>}
+      </>
     );
 
+  const cands = board.candidates;
   const { mun } = view;
-  const ca = candOf(board, 'a')!;
-  const cb = candOf(board, 'b')!;
-  const now = board.released ? view.now : null;
-  const pa1 = twoWay(view.t1, board.candidates);
-  const y22 = view.y2022 ?? y22uf?.[mun.ibge] ?? null;
-  const pa22 = y22 ? twoWay(y22, [{ ...ca, n: board.y2022Map.a }, { ...cb, n: board.y2022Map.b }]) : null;
-  const flip = now && y22 ? flipped(now, y22, board.y2022Map) : null;
-  const tr = now?.valid && view.t1 ? transfer(now, view.t1, board.candidates) : null;
+  const live = board.released;
+  const now = live ? view.now : null;
+  const pa1 = twoWay(view.t1, cands);
+  const p22 = pa2022(board, view.y2022);
+  const flip = now?.valid && view.y2022 && now.pst >= 5 ? flipped(now, view.y2022, board.y2022Map) : null;
   const shareText = now?.valid
-    ? `${mun.name} (${mun.uf}) com ${fmtPct(now.pst, 0)}% apurado: ${ca.short} ${fmtPct(now.pa, 1)}% × ${fmtPct(now.pb, 1)}% ${cb.short}`
+    ? `${mun.name} (${mun.uf}) com ${fmtPct(now.pst, 0)}% apurado: ${cands[0].short} ${fmtPct(now.pa, 1)}% × ${fmtPct(now.pb, 1)}% ${cands[1].short}`
     : `Acompanhe a apuração em ${mun.name} (${mun.uf})`;
 
   return (
-    <div className="space-y-3">
-      <Card>
-        <div className="mb-1 flex items-start justify-between gap-2">
+    <div className="space-y-5 pb-2 pt-1">
+      <header>
+        <div className="flex items-center justify-between gap-2">
+          <nav aria-label="Você está em" className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            <Link href="/" className="hover:text-foreground">Brasil</Link>
+            <ChevronRight className="size-3 shrink-0" aria-hidden />
+            <Link href={`/mapa/${mun.uf}`} className="truncate hover:text-foreground">{ufName(mun.uf)}</Link>
+          </nav>
+          <CityPicker onPick={onPick} compact />
+        </div>
+        <div className="mt-1 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-[22px] font-extrabold leading-tight">{mun.name}</h1>
-            <p className="text-[12px] text-muted">
-              {ufName(mun.uf)}, {fmtCompact(mun.el)} eleitores
+            <h1 className="text-[26px] font-semibold leading-tight tracking-tight">{mun.name}</h1>
+            <p className="num text-xs text-muted-foreground">
+              {mun.uf} · {fmtCompact(mun.el)} eleitores
             </p>
           </div>
-          {now && <StatusChip s={now.status} />}
+          {now && <StatusBadge s={now.status} className="mt-1.5 shrink-0" />}
         </div>
-        {flip && (
-          <p className="mt-2 rounded-xl bg-soft p-3 text-[14px] font-semibold">
-            🔄 {mun.name} virou: em 2022 deu {candOf(board, flip.from)!.short}, agora {candOf(board, flip.to)!.short} está à frente
-          </p>
-        )}
-        {!board.released ? (
-          <p className="mt-3 text-[13px] text-muted">A parcial da cidade aparece aqui a partir das 17h de domingo.</p>
-        ) : !now?.valid ? (
-          <p className="mt-3 text-[13px] text-muted">Ainda sem parcial do TSE para esta cidade. Atualizamos sozinhos.</p>
-        ) : (
-          <CityScore board={board} s={now} />
-        )}
-      </Card>
+      </header>
 
-      <Card>
-        <Title>Comparação</Title>
-        <ul className="num space-y-2 text-[13px]">
-          {now?.valid && <Row label={`${mun.name} agora`} pa={now.pa} board={board} strong />}
-          {view.uf?.valid && board.released && <Row label={`${ufName(mun.uf)} agora`} pa={view.uf.pa} board={board} />}
-          {view.br?.valid && board.released && <Row label="Brasil agora" pa={view.br.pa} board={board} />}
-          <Row label={`${mun.name} no 1º turno (A×B)`} pa={pa1} board={board} />
-          <Row label={`${mun.name} em 2022 (2º turno)`} pa={pa22} board={board} />
+      <section className="rounded-2xl border bg-card p-4">
+        {now?.valid ? (
+          <>
+            <CountedBar pst={now.pst} className="mb-4" />
+            <CandidateLines cands={cands} snap={now} size="lg" />
+          </>
+        ) : (
+          <PreLive live={live} board={board} pa1={pa1} name={mun.name} />
+        )}
+      </section>
+
+      {flip && <FlipNote place={mun.name} from={cands.find((c) => c.key === flip.from)!} to={cands.find((c) => c.key === flip.to)!} />}
+
+      <section>
+        <SectionTitle>Como {mun.name} se compara</SectionTitle>
+        <ul className="divide-y rounded-2xl border bg-card px-4">
+          {now?.valid && <CompareRow label={`${mun.name} agora`} hint={`${fmtPct(now.pst, 1)}% apurado`} pa={now.pa} cands={cands} strong />}
+          {live && view.uf?.valid ? <CompareRow label={`${ufName(mun.uf)} agora`} hint={`${fmtPct(view.uf.pst, 1)}% apurado`} pa={view.uf.pa} cands={cands} /> : null}
+          {live && view.br?.valid ? <CompareRow label="Brasil agora" hint={`${fmtPct(view.br.pst, 1)}% apurado`} pa={view.br.pa} cands={cands} /> : null}
+          <CompareRow label={`${mun.name} no 1º turno`} hint="só os votos dos dois finalistas" pa={pa1} cands={cands} />
+          <CompareRow label={`${mun.name} em 2022`} hint="2º turno, mesmos partidos" pa={p22} cands={cands} />
         </ul>
-        {tr && (
-          <p className="mt-3 text-[12px] text-muted">
-            Em relação ao 1º turno, {ca.short} {signed(tr.gainA / 1000, 1)} mil e {cb.short} {signed(tr.gainB / 1000, 1)} mil votos
-            {tr.scale < 1 ? ' (proporcional ao apurado)' : ''}.
-          </p>
-        )}
-      </Card>
+      </section>
 
-      <div className="grid grid-cols-1 gap-2">
-        <ShareButton
-          input={{ title: `${mun.name} na apuração`, text: shareText, url: `/cidade/${mun.uf.toLowerCase()}/${mun.slug || slugify(mun.name)}`, image: ogUrl.city(mun.ibge), filename: `${mun.slug}.png` }}
-          label="Compartilhar minha cidade"
-          className="w-full"
-        />
-      </div>
-      {search}
-      <LegalFooter />
+      {now?.valid && view.t1 && (
+        <section className="rounded-2xl border bg-card p-4">
+          <SectionTitle>De onde vieram os votos</SectionTitle>
+          <TransferBlock snap={now} t1={view.t1} cands={cands} place={`em ${mun.name}`} />
+        </section>
+      )}
+
+      <section className="rounded-2xl border bg-card p-4">
+        <SectionTitle right={<Link href={`/mapa/${mun.uf}`} className="text-xs font-medium text-muted-foreground hover:text-foreground">Mapa de {mun.uf}</Link>}>
+          Onde fica
+        </SectionTitle>
+        <WhenSeen h={200}>
+          <MunMap uf={mun.uf} values={{ [mun.ibge]: now?.valid ? now.pa : pa1 }} cands={cands} highlight={mun.ibge} dim maxHeight={220} />
+        </WhenSeen>
+      </section>
+
+      <ShareButton
+        input={{ title: `${mun.name} na apuração`, text: shareText, url: cityHref(mun), image: ogUrl.city(mun.ibge), filename: `${mun.slug}.png` }}
+        label="Compartilhar minha cidade"
+        className="w-full"
+      />
+      <SourceStamp at={now?.at ?? board.source.at} />
     </div>
   );
 }
 
-function CityScore({ board, s }: { board: Board; s: Snap }) {
-  const ca = candOf(board, 'a')!;
-  const cb = candOf(board, 'b')!;
+function PreLive({ live, board, pa1, name }: { live: boolean; board: Board; pa1: number | null; name: string }) {
+  const cands = board.candidates;
   return (
-    <div className="mt-3">
-      <div className="flex justify-between">
-        {[
-          [ca, s.pa, s.a],
-          [cb, s.pb, s.b],
-        ].map(([c, p, v], i) => {
-          const cc = c as typeof ca;
-          return (
-            <div key={cc.key} className={i ? 'text-right' : ''}>
-              <div className="text-[13px] font-semibold" style={{ color: cc.color }}>{cc.short}</div>
-              <div className="display text-[34px] font-extrabold leading-none">{fmtPct(p as number, 1)}%</div>
-              <div className="num text-[12px] text-muted">{fmtInt(v as number)} votos</div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-soft">
-        <div style={{ width: `${s.pa}%`, background: ca.color }} />
-        <div style={{ width: `${s.pb}%`, background: cb.color }} />
-      </div>
-      <p className="num mt-2 text-[12px] text-muted">{fmtPct(s.pst, 1)}% das urnas apuradas na cidade</p>
-    </div>
-  );
-}
-
-function Row({ label, pa, board, strong }: { label: string; pa: number | null; board: Board; strong?: boolean }) {
-  const ca = candOf(board, 'a')!;
-  const cb = candOf(board, 'b')!;
-  return (
-    <li className={`rounded-xl p-2.5 ${strong ? 'bg-soft' : ''}`}>
-      <div className="flex justify-between gap-2">
-        <span className={`min-w-0 truncate ${strong ? 'font-semibold' : ''}`}>{label}</span>
-        {pa === null ? (
-          <span className="text-muted">—</span>
-        ) : (
-          <span className="shrink-0 font-semibold">
-            <span style={{ color: ca.color }}>{fmtPct(pa, 1)}</span> × <span style={{ color: cb.color }}>{fmtPct(100 - pa, 1)}</span>
-          </span>
-        )}
-      </div>
-      {pa !== null && (
-        <div className="mt-1.5 flex h-1.5 overflow-hidden rounded-full bg-soft">
-          <div style={{ width: `${pa}%`, background: ca.color }} />
-          <div style={{ width: `${100 - pa}%`, background: cb.color }} />
+    <div>
+      <p className="text-sm text-muted-foreground">
+        {live ? `Ainda sem parcial do TSE para ${name}. Atualizamos sozinhos a cada 30 segundos.` : `A parcial de ${name} aparece aqui a partir das 17h de domingo.`}
+      </p>
+      {pa1 !== null && (
+        <div className="mt-4">
+          <div className="mb-2 text-xs text-muted-foreground">No 1º turno, entre os dois finalistas</div>
+          <div className="flex items-center justify-between gap-3">
+            {[
+              { c: cands[0], p: pa1 },
+              { c: cands[1], p: 100 - pa1 },
+            ].map(({ c, p }, i) => (
+              <div key={c.key} className={i ? 'flex items-center gap-2 text-right' : 'flex items-center gap-2'}>
+                {!i && <CandidateAvatar c={c} size="md" />}
+                <div>
+                  <div className="text-xs text-muted-foreground">{c.short}</div>
+                  <div className="display text-2xl font-semibold">{fmtPct(p, 1)}%</div>
+                </div>
+                {!!i && <CandidateAvatar c={c} size="md" />}
+              </div>
+            ))}
+          </div>
         </div>
       )}
-    </li>
+    </div>
+  );
+}
+
+/** só monta os filhos quando entram na tela (a malha municipal é o maior download da página) */
+function WhenSeen({ children, h }: { children: ReactNode; h: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || seen) return;
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && setSeen(true), { rootMargin: '200px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [seen]);
+  return <div ref={ref} style={seen ? undefined : { minHeight: h }}>{seen ? children : null}</div>;
+}
+
+function DetailSkeleton() {
+  return (
+    <div className="space-y-4 pt-1">
+      <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-8 w-2/3" />
+      <Skeleton className="h-52 w-full rounded-2xl" />
+      <Skeleton className="h-64 w-full rounded-2xl" />
+    </div>
   );
 }

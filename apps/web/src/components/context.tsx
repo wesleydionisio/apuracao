@@ -1,11 +1,13 @@
 // Camadas de contexto do 2º turno: transferência de votos do 1º turno e "virou de lado" vs 2022.
 import type { Board, HistoryFile, HistRow, MunBoard, Municipality, Snap } from '@apuracao/shared';
 import { flipped, transfer, ufName } from '@apuracao/shared';
+import { ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'wouter';
+import { CandidateAvatar } from '@/components/core/candidate';
 import { fetchMunBoard, staticData } from '../lib/api';
 import { fmtCompact, fmtPct, signed } from '../lib/format';
-import { candOf, shortLabel } from '../store/board';
+import { candOf } from '../store/board';
 import { Card, Chip, Empty, Skeleton, Title } from './ui';
 
 function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): { data: T | undefined; loading: boolean } {
@@ -26,39 +28,53 @@ function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): { data: T | undefin
 
 export { useAsync };
 
-/** Barra de fluxo: estoque do 1º turno → quanto foi para A, para B e o resto. */
+/**
+ * Fluxo do estoque do 1º turno (votos dos eliminados + brancos/nulos + abstenção):
+ * quanto foi para A, para B e quanto ficou de fora.
+ */
 function FlowBar({ board, snap, t1 }: { board: Board; snap: Snap; t1: HistRow }) {
-  const ca = candOf(board, 'a')!;
-  const cb = candOf(board, 'b')!;
+  const [ca, cb] = board.candidates;
   const t = transfer(snap, t1, board.candidates);
   const ga = Math.max(0, t.gainA);
   const gb = Math.max(0, t.gainB);
   const rest = Math.max(0, t.stock - ga - gb);
   const tot = ga + gb + rest || 1;
+  const seg = [
+    { k: 'a', w: ga / tot, color: ca.color },
+    { k: 'b', w: gb / tot, color: cb.color },
+    { k: 'r', w: rest / tot, color: 'var(--muted)' },
+  ];
   return (
     <div>
-      <div className="flex h-7 w-full overflow-hidden rounded-lg text-[11px] font-semibold text-white">
-        <div className="flex items-center justify-center" style={{ width: `${(ga / tot) * 100}%`, background: ca.color }}>
-          {ga / tot > 0.12 ? fmtPct((ga / tot) * 100, 0) + '%' : ''}
-        </div>
-        <div className="flex items-center justify-center" style={{ width: `${(gb / tot) * 100}%`, background: cb.color }}>
-          {gb / tot > 0.12 ? fmtPct((gb / tot) * 100, 0) + '%' : ''}
-        </div>
-        <div className="bg-soft" style={{ width: `${(rest / tot) * 100}%` }} />
+      <div className="mb-1.5 flex justify-between text-[11px] text-muted-foreground">
+        <span>Estoque do 1º turno</span>
+        <span className="num">≈ {fmtCompact(t.stock)} votos</span>
       </div>
-      <div className="num mt-2 grid grid-cols-2 gap-2 text-[12px]">
-        <div>
-          <span style={{ color: ca.color }} className="font-semibold">{ca.short}</span>: {signed(t.gainA / 1e6, 2)} mi
-          {t.pctA !== null && <span className="text-muted"> ({fmtPct(t.pctA, 0)}% do estoque)</span>}
-        </div>
-        <div className="text-right">
-          <span style={{ color: cb.color }} className="font-semibold">{cb.short}</span>: {signed(t.gainB / 1e6, 2)} mi
-          {t.pctB !== null && <span className="text-muted"> ({fmtPct(t.pctB, 0)}%)</span>}
-        </div>
+      <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full" role="img" aria-label={`${ca.short} ficou com ${fmtPct((ga / tot) * 100, 0)}% do estoque, ${cb.short} com ${fmtPct((gb / tot) * 100, 0)}%`}>
+        {seg.map((s) => (
+          <div key={s.k} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${s.w * 100}%`, background: s.color }} />
+        ))}
       </div>
-      <p className="mt-1 text-[11px] text-muted">
-        Parte cinza: quem não votou ou votou branco/nulo. Estoque ≈ {fmtCompact(t.stock)} votos (eliminados + brancos/nulos + abstenção do 1º turno)
-        {t.scale < 1 ? `, proporcional aos ${fmtPct(t.scale * 100, 0)}% do eleitorado já apurado` : ''}.
+      <dl className="mt-3 grid grid-cols-2 gap-3">
+        {[
+          { c: ca, gain: t.gainA, pct: t.pctA },
+          { c: cb, gain: t.gainB, pct: t.pctB },
+        ].map(({ c, gain, pct }) => (
+          <div key={c.key} className="flex items-center gap-2.5">
+            <CandidateAvatar c={c} size="sm" />
+            <div className="min-w-0">
+              <dt className="truncate text-[12px] text-muted-foreground">{c.short}</dt>
+              <dd className="display text-[17px] font-semibold leading-tight" style={{ color: c.color }}>
+                {pct === null ? '—' : `${fmtPct(pct, 0)}%`}
+                <span className="num ml-1.5 text-[11px] font-normal text-muted-foreground">{signed(gain / 1e6, 2)} mi</span>
+              </dd>
+            </div>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+        Ganho de cada um sobre o 1º turno, como parte do estoque. Cinza: não votou ou votou branco/nulo
+        {t.scale < 1 ? `. Proporcional aos ${fmtPct(t.scale * 100, 0)}% do eleitorado já apurado` : ''}.
       </p>
     </div>
   );
@@ -76,39 +92,41 @@ export function TransferCard({ board }: { board: Board }) {
       })
       .filter((x): x is NonNullable<typeof x> => !!x && x.t.stock > 0)
       .sort((x, y) => y.t.stock - x.t.stock)
-      .slice(0, 10);
+      .slice(0, 8);
   }, [hist, board.ufs, board.candidates]);
-  const ca = candOf(board, 'a')!;
-  const cb = candOf(board, 'b')!;
+  const [ca, cb] = board.candidates;
   return (
     <Card>
       <Title right={<Chip>vs 1º turno</Chip>}>De onde vieram os votos</Title>
       {loading ? (
-        <Skeleton h={90} />
+        <Skeleton h={120} />
       ) : !hist?.br || !br ? (
-        <Empty title="Dados do 1º turno ainda não carregados">A comparação aparece assim que o histórico for publicado.</Empty>
+        <Empty title="Histórico do 1º turno indisponível">A comparação aparece assim que o histórico for publicado.</Empty>
       ) : (
         <>
           <FlowBar board={board} snap={br} t1={hist.br} />
           {rows.length > 0 && (
             <table className="num mt-4 w-full text-[12px]">
-              <thead className="text-left text-muted">
-                <tr>
-                  <th className="py-1 font-medium">UF</th>
-                  <th className="py-1 text-right font-medium" style={{ color: ca.color }}>{shortLabel(board.candidates, 0)}</th>
-                  <th className="py-1 text-right font-medium" style={{ color: cb.color }}>{shortLabel(board.candidates, 1)}</th>
-                  <th className="py-1 text-right font-medium">estoque</th>
+              <caption className="sr-only">Parte do estoque do 1º turno que foi para cada candidato, por estado</caption>
+              <thead className="text-left text-[11px] text-muted-foreground">
+                <tr className="border-b">
+                  <th className="py-1.5 font-normal">Estado</th>
+                  <th className="py-1.5 text-right font-normal">{ca.short.split(' ')[0]}</th>
+                  <th className="py-1.5 text-right font-normal">{cb.short.split(' ')[0]}</th>
+                  <th className="py-1.5 text-right font-normal">Estoque</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line">
+              <tbody className="divide-y">
                 {rows.map((r) => (
                   <tr key={r.uf}>
-                    <td className="py-1.5">
-                      <Link href={`/mapa/${r.uf}`} className="font-semibold">{r.uf}</Link>
+                    <td className="py-2">
+                      <Link href={`/mapa/${r.uf}`} className="font-semibold hover:underline">
+                        {r.uf}
+                      </Link>
                     </td>
-                    <td className="py-1.5 text-right">{r.t.pctA === null ? '—' : `${fmtPct(r.t.pctA, 0)}%`}</td>
-                    <td className="py-1.5 text-right">{r.t.pctB === null ? '—' : `${fmtPct(r.t.pctB, 0)}%`}</td>
-                    <td className="py-1.5 text-right text-muted">{fmtCompact(r.t.stock)}</td>
+                    <td className="py-2 text-right font-medium" style={{ color: ca.color }}>{r.t.pctA === null ? '—' : `${fmtPct(r.t.pctA, 0)}%`}</td>
+                    <td className="py-2 text-right font-medium" style={{ color: cb.color }}>{r.t.pctB === null ? '—' : `${fmtPct(r.t.pctB, 0)}%`}</td>
+                    <td className="py-2 text-right text-muted-foreground">{fmtCompact(r.t.stock)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -147,29 +165,40 @@ export function FlipsCard({ board }: { board: Board }) {
     <Card>
       <Title right={<Chip>vs 2º turno de 2022</Chip>}>Virou de lado</Title>
       {loading ? (
-        <Skeleton h={80} />
+        <Skeleton h={90} />
       ) : !y22 ? (
-        <Empty title="Histórico de 2022 ainda não carregado" />
+        <Empty title="Histórico de 2022 indisponível" />
       ) : !list.length ? (
         <Empty title="Nenhum estado mudou de lado até agora">Contamos só estados com pelo menos 5% apurado.</Empty>
       ) : (
-        <ul className="space-y-2">
+        <ul className="-mx-1 divide-y">
           {list.map(({ uf, s, f }) => {
+            const from = candOf(board, f!.from)!;
             const to = candOf(board, f!.to)!;
             return (
               <li key={uf}>
-                <Link href={`/mapa/${uf}`} className="flex min-h-11 items-center justify-between gap-2 rounded-xl bg-soft px-3 py-2">
-                  <span className="text-[14px]">
-                    <strong>{ufName(uf)}</strong> virou para <strong style={{ color: to.color }}>{to.short}</strong>
+                <Link href={`/mapa/${uf}`} className="press flex min-h-13 items-center gap-3 rounded-lg px-1 hover:bg-accent/60">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14px] font-semibold">{ufName(uf)}</div>
+                    <div className="num text-[11px] text-muted-foreground">{fmtPct(s.pst, 0)}% apurado</div>
+                  </div>
+                  <span className="flex shrink-0 items-center gap-1.5" aria-label={`de ${from.party ?? from.short} em 2022 para ${to.short}`}>
+                    <span className="rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: from.color, background: `color-mix(in oklab, ${from.color} 12%, transparent)` }}>
+                      {board.y2022Map[from.key] === from.n && from.party ? `${from.party} em 2022` : '2022'}
+                    </span>
+                    <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden />
+                    <CandidateAvatar c={to} size="xs" />
+                    <span className="text-[13px] font-semibold" style={{ color: to.color }}>
+                      {to.short.split(' ')[0]}
+                    </span>
                   </span>
-                  <span className="num shrink-0 text-[11px] text-muted">{fmtPct(s.pst, 0)}% apurado</span>
                 </Link>
               </li>
             );
           })}
         </ul>
       )}
-      <p className="mt-3 text-[11px] text-muted">Parcial: pode desvirar até o fim da apuração. Toque num estado para ver as cidades.</p>
+      <p className="mt-2 text-[11px] text-muted-foreground">Parcial: pode desvirar até o fim da apuração.</p>
     </Card>
   );
 }

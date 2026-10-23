@@ -1,91 +1,78 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { create } from 'zustand';
-import { TSE_URL } from '../lib/env';
-import { fmtTime } from '../lib/format';
+// Primitivas compartilhadas do app (sobre os componentes shadcn). Os nomes são estáveis:
+// várias telas importam daqui.
+import { Share2 } from 'lucide-react';
+import { lazy, useEffect, useRef, useState, type ReactNode } from 'react';
+import { SourceStamp } from '@/components/core/live';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Skeleton as Shimmer } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import { prefetchImage, share, type ShareInput } from '../lib/share';
 import { useBoard } from '../store/board';
 
+/** Superfície padrão: cartão discreto, borda sutil, sem sombra pesada. */
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`surface rounded-2xl p-4 ${className}`}>{children}</section>;
+  return <section className={cn('rounded-xl border bg-card p-4 text-card-foreground', className)}>{children}</section>;
 }
 
+/** Título de bloco: 15px semibold + ação/meta à direita */
 export function Title({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-2">
-      <h2 className="text-[15px] font-semibold leading-tight">{children}</h2>
+    <div className="mb-3 flex min-h-6 items-center justify-between gap-3">
+      <h2 className="text-[15px] leading-tight font-semibold tracking-[-0.01em]">{children}</h2>
       {right}
     </div>
   );
 }
 
 export function Chip({ children, tone = 'muted' }: { children: ReactNode; tone?: 'muted' | 'warn' | 'live' }) {
-  const cls =
-    tone === 'warn'
-      ? 'bg-warn/15 text-warn'
-      : tone === 'live'
-        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-        : 'bg-soft text-muted';
-  return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{children}</span>;
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        'h-6 rounded-full px-2 text-[11px] font-medium',
+        tone === 'warn' && 'bg-warning/12 text-warning',
+        tone === 'live' && 'bg-live/12 text-live',
+        tone === 'muted' && 'text-muted-foreground',
+      )}
+    >
+      {tone === 'live' && <span className="size-1.5 rounded-full bg-live" aria-hidden />}
+      {children}
+    </Badge>
+  );
 }
 
 /** Rótulo obrigatório de toda projeção */
 export function Estimate({ pst }: { pst: number }) {
-  return (
-    <Chip tone="warn">
-      estimativa com {pst.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% apurado
-    </Chip>
-  );
+  return <Chip tone="warn">estimativa · {pst.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% apurado</Chip>;
 }
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="rounded-xl border border-dashed border-line px-4 py-6 text-center">
+    <div className="rounded-lg border border-dashed px-4 py-6 text-center">
       <p className="text-sm font-medium">{title}</p>
-      {children && <p className="mt-1 text-[13px] text-muted">{children}</p>}
+      {children && <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{children}</p>}
     </div>
   );
 }
 
-export function Skeleton({ h = 80 }: { h?: number }) {
-  return <div className="animate-pulse rounded-2xl bg-soft" style={{ height: h }} />;
+export function Skeleton({ h = 80, className }: { h?: number; className?: string }) {
+  return <Shimmer className={cn('w-full rounded-xl', className)} style={{ height: h }} />;
 }
 
-/** "dados oficiais do TSE · atualizado às hh:mm:ss" — vai em toda tela */
+/** "Dados oficiais do TSE · hh:mm:ss" — vai em toda tela */
 export function TseLink({ className = '' }: { className?: string }) {
   const at = useBoard((s) => s.board?.source.at);
-  return (
-    <span className={`text-[11px] text-muted ${className}`}>
-      <a href={TSE_URL} target="_blank" rel="noopener" className="underline underline-offset-2">
-        Dados oficiais do TSE
-      </a>
-      {at ? <>, atualizados às <span className="num">{fmtTime(at)}</span></> : null}
-    </span>
-  );
+  return <SourceStamp at={at} className={className} />;
 }
 
-// ------------------------------------------------------------------ toast
+// ------------------------------------------------------------------ toast (sonner)
 
-const useToast = create<{ msg: string | null; k: number }>(() => ({ msg: null, k: 0 }));
-export const toast = (msg: string) => useToast.setState({ msg, k: Date.now() });
-
-export function Toaster() {
-  const { msg, k } = useToast();
-  useEffect(() => {
-    if (!msg) return;
-    const t = setTimeout(() => useToast.setState({ msg: null }), 2600);
-    return () => clearTimeout(t);
-  }, [k, msg]);
-  if (!msg) return null;
-  return (
-    <div
-      role="status"
-      className="pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4"
-      style={{ bottom: 'calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px)' }}
-    >
-      <div key={k} className="toast-in rounded-full bg-fg px-4 py-2 text-sm text-bg shadow-[var(--shadow-md)]">{msg}</div>
-    </div>
-  );
-}
+// sonner fica fora do bundle inicial: carrega no primeiro toast (e o Toaster é lazy no App)
+export const toast = (msg: string) => {
+  void import('sonner').then((m) => m.toast(msg));
+};
+export const Toaster = lazy(() => import('@/components/ui/sonner').then((m) => ({ default: m.Toaster })));
 
 // ------------------------------------------------------------------ compartilhar
 
@@ -101,13 +88,12 @@ export function ShareButton({
   className?: string;
 }) {
   const [busy, setBusy] = useState(false);
-  const base =
-    variant === 'solid'
-      ? 'bg-fg text-bg'
-      : 'border border-line bg-card text-fg';
+  const iconOnly = !label;
   return (
-    <button
+    <Button
       type="button"
+      variant={variant === 'solid' ? 'default' : iconOnly ? 'ghost' : 'outline'}
+      size={iconOnly ? 'icon' : 'default'}
       aria-label={label || 'Compartilhar'}
       disabled={busy}
       onPointerDown={() => prefetchImage(input.image)}
@@ -118,20 +104,16 @@ export function ShareButton({
         if (r === 'copied') toast('Link copiado — cole no WhatsApp');
         else if (r === 'failed') toast('Não deu para compartilhar daqui');
       }}
-      className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold press disabled:opacity-60 ${base} ${className}`}
+      className={cn('press', iconOnly ? 'size-11 rounded-full text-muted-foreground' : 'h-11 rounded-xl px-4', className)}
     >
-      <ShareIcon />
+      <Share2 className="size-4" aria-hidden />
       {label}
-    </button>
+    </Button>
   );
 }
 
 export function ShareIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return <Share2 className="size-4" aria-hidden />;
 }
 
 // ------------------------------------------------------------------ lazy por visibilidade

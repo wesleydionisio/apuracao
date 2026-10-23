@@ -42,3 +42,12 @@ export function slugify(s: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 }
+
+const UF_PREP: Record<string, 'no' | 'na' | 'em'> = {
+  AC: 'no', AL: 'em', AP: 'no', AM: 'no', BA: 'na', CE: 'no', DF: 'no', ES: 'no', GO: 'em', MA: 'no',
+  MT: 'em', MS: 'em', MG: 'em', PA: 'no', PB: 'na', PR: 'no', PE: 'em', PI: 'no', RJ: 'no', RN: 'no',
+  RS: 'no', RO: 'em', RR: 'em', SC: 'em', SP: 'em', SE: 'em', TO: 'em', ZZ: 'no',
+};
+
+/** "na Bahia", "em São Paulo", "no Rio de Janeiro" */
+export const inUf = (uf: string) => `${UF_PREP[uf.toUpperCase()] ?? 'em'} ${ufName(uf)}`;
