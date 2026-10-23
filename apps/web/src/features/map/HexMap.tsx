@@ -306,6 +306,19 @@ export default function HexMap({
       const off = new Path2D();
       const offHi = new Path2D();
       const ring = new Path2D();
+      // os pontos apagados (ainda sem votos) ficam sempre na grade mais grossa e com o mesmo tamanho na tela:
+      // com zoom eles só se afastam, não se multiplicam nem crescem
+      const lv0 = st.levels[0];
+      const dotR = (0.2 * lv0.L.R * frame.s0) / T;
+      const idx0 = inScope[0];
+      for (let j = 0; j < idx0.length; j++) {
+        const h = idx0[j];
+        const x = lv0.L.cx[h];
+        const y = lv0.L.cy[h];
+        if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+        if (shownAt(st, lv0, h, now)[1] >= 0.015) continue;
+        hexPath(hi !== null && lv0.L.city[h] === hi ? offHi : off, x, y, dotR);
+      }
       const idx = inScope[li];
       for (let j = 0; j < idx.length; j++) {
         const h = idx[j];
@@ -315,11 +328,8 @@ export default function HexMap({
         const mine = hi !== null && L.city[h] === hi;
         const [sh, q] = shownAt(st, lv, h, now);
         if (mine) hexPath(ring, x, y, R * 0.97);
-        if (q < 0.015) {
-          // ainda sem votos: um ponto apagado marca o lugar do hexágono
-          hexPath(mine ? offHi : off, x, y, R * 0.2);
-          continue;
-        }
+        // ainda sem votos: fica o ponto apagado da grade grossa, desenhado acima
+        if (q < 0.015) continue;
         // cresce de ~1/3 até 92% do raio conforme a região é apurada (o resto é o vão entre hexágonos)
         const r = R * (0.32 + 0.6 * Math.sqrt(q));
         const i = (sh >= 50 ? 0 : 3) + bandOfMargin(Math.abs(2 * sh - 100));
