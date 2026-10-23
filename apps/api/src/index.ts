@@ -13,7 +13,7 @@ import {
   isReleased,
   KEY,
   Moderator,
-  randomNick,
+  nickForId,
   type CandidateDef,
   type Municipality,
 } from '@apuracao/shared';
@@ -44,10 +44,7 @@ if (config.serveData) {
 }
 
 // ---------- identidade anônima ----------
-const nickFor = (id: string) => {
-  let seed = hueOf(id) + 1;
-  return randomNick(() => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646);
-};
+const nickFor = nickForId;
 
 function identity(req: FastifyRequest, reply: FastifyReply): string {
   const id = verifyAid(req.cookies[AID_COOKIE], config.secret);

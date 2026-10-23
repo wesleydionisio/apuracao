@@ -9,12 +9,12 @@ const API = process.env.API_URL ?? 'http://localhost:3001';
 const WS = process.env.WS_URL ?? 'ws://localhost:3002';
 const DATA_DIR = resolve(process.env.DATA_DIR ?? join(__dirname, '../../public/data'));
 
-// Rotas HTML compartilháveis vão para a API (que injeta as metas OG).
-// Em modo mock (?mock=1) ou com WEB_ONLY=1 o próprio Vite serve o SPA.
+// Em produção as rotas compartilháveis vêm da API (HTML do build + metas OG).
+// Em dev, navegador fica com o Vite (o index.html cru da API não tem o preâmbulo do Vite);
+// requisições sem Accept: text/html (curl, crawlers de teste) ainda vão para a API ver as metas.
 const htmlBypass = (req: IncomingMessage) => {
   const wantsHtml = (req.headers.accept ?? '').includes('text/html');
-  if (wantsHtml && (process.env.WEB_ONLY || (req.url ?? '').includes('mock=1'))) return '/index.html';
-  return undefined;
+  return wantsHtml ? '/index.html' : undefined;
 };
 
 const html = { target: API, changeOrigin: true, bypass: htmlBypass };

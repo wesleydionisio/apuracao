@@ -133,11 +133,20 @@ function handle(m: ServerMsg) {
   const board = useBoard.getState();
   const chat = useChat.getState();
   switch (m.t) {
-    case 'hello':
-      board.set({ online: m.online, me: { ...m.you } });
+    case 'hello': {
+      // apelido personalizado vive no aparelho: reenvia a cada (re)conexão
+      let custom: string | null = null;
+      try {
+        custom = localStorage.getItem('nick');
+      } catch {
+        /* sem storage */
+      }
+      if (custom && custom !== m.you.nick) live.nick(custom);
+      board.set({ online: m.online, me: { ...m.you, nick: custom || m.you.nick } });
       chat.set({ enabled: m.flags.chat });
       board.setFlags(m.flags);
       break;
+    }
     case 'snap':
       board.applySnap(m.d);
       break;
