@@ -286,7 +286,15 @@ app.get<{ Params: { uf: string; slug: string } }>('/api/city/by-slug/:uf/:slug',
   cityReply(municipalities().bySlug.get(`${req.params.uf.toLowerCase()}/${req.params.slug}`), reply),
 );
 
+let onlineMemo: { at: number; n: number | null } | null = null;
 async function onlineCount(): Promise<number | null> {
+  if (onlineMemo && Date.now() - onlineMemo.at < 5000) return onlineMemo.n;
+  const n = await scanOnline();
+  onlineMemo = { at: Date.now(), n };
+  return n;
+}
+
+async function scanOnline(): Promise<number | null> {
   if (!redis) return null;
   try {
     let cursor = '0';

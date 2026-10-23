@@ -27,8 +27,9 @@
 		root * /srv/data
 		@static path /static/*
 		@live not path /static/*
-		header @static Cache-Control "public, max-age=3600"
-		header @live Cache-Control "public, s-maxage=5, stale-while-revalidate=30"
+		# stale-if-error: se a VPS cair, a CDN continua servindo a última versão
+		header @static Cache-Control "public, max-age=3600, stale-if-error=86400"
+		header @live Cache-Control "public, s-maxage=5, stale-while-revalidate=30, stale-if-error=3600"
 		header Access-Control-Allow-Origin *
 		file_server
 	}

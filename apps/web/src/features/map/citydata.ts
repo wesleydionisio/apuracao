@@ -119,7 +119,8 @@ export function useCityValues(dots: DotsFile | null, layer: DotLayer, board: Boa
     if (!enabled || layer !== 'live' || !board?.released) return;
     let alive = true;
     const load = () =>
-      getJSON<Grid>(`/data/mungrid.json?t=${Date.now()}`, { cache: 'no-store' })
+      // sem query de cache-buster: a URL fixa deixa a CDN segurar o arquivo (s-maxage=5)
+      getJSON<Grid>('/data/mungrid.json', { cache: 'no-store' })
         .then((g) => alive && setGrid(g))
         .catch(() => {});
     load();

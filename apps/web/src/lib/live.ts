@@ -175,6 +175,9 @@ function handle(m: ServerMsg) {
   const board = useBoard.getState();
   const chat = useChat.getState();
   switch (m.t) {
+    case 'batch':
+      for (const x of m.b) handle(x);
+      break;
     case 'hello': {
       // apelido personalizado vive no aparelho: reenvia a cada (re)conexão
       let custom: string | null = null;

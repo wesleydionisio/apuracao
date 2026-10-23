@@ -25,9 +25,20 @@ export const config = {
   ipRefill: Number(env.IP_REFILL || 2),
   reactBurst: int(env.REACT_BURST, 10),
   reactRefill: Number(env.REACT_REFILL || 5),
-  /** slow mode liga quando a sala passa de N msgs/s (média de 5s) */
-  slowTrigger: Number(env.SLOW_TRIGGER || 5),
+  /** slow mode liga quando a subsala passa de N msgs/s (média de 5s) */
+  slowTrigger: Number(env.SLOW_TRIGGER || 2),
   slowSeconds: int(env.SLOW_SECONDS, 5),
+  /** pessoas por subsala invisível: acima disso a sala se divide (a torcida continua uma só) */
+  shardSize: int(env.SHARD_SIZE, 1500),
+  /** teto de mensagens entregues por subsala por segundo (o que passa disso volta como "busy") */
+  chatCap: int(env.CHAT_CAP, 3),
+  /** o chat sai em lotes: um frame por subsala a cada N ms */
+  chatBatchMs: int(env.CHAT_BATCH_MS, 250),
+  /** de quanto em quanto tempo a contagem de reações/torcida vai para as salas */
+  reactFlushMs: int(env.REACT_FLUSH_MS, 2000),
+  /** permessage-deflate (o cliente negocia); só comprime frames maiores que isso */
+  compress: env.WS_COMPRESS !== '0',
+  compressMin: int(env.WS_COMPRESS_MIN, 160),
   reportsToDelete: int(env.REPORTS_TO_DELETE, 3),
   historySize: 200,
   blockedTerms: (env.BLOCKED_TERMS || '').split(',').map((s) => s.trim()).filter(Boolean),

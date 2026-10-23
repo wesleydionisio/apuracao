@@ -35,6 +35,7 @@ function fmtWait(s: number): string {
 const ERR_TEXT: Record<string, string> = {
   rate: 'Devagar: espere um pouco para mandar outra.',
   slow: 'Modo lento ligado nesta sala.',
+  busy: 'Sala muito movimentada: tente de novo em instantes.',
   blocked: 'Mensagem bloqueada: sem links, ofensas ou ameaças.',
   closed: 'Esta sala foi fechada pela moderação.',
   invalid: 'Mensagem inválida (até 240 caracteres).',
@@ -71,6 +72,8 @@ export default function ChatView({
   // digitando no celular: a torcida sai do caminho para sobrar espaço às mensagens
   const kb = useKeyboardOpen();
   const [text, setText] = useState('');
+  // última enviada: se o servidor recusar por ritmo (sala cheia, modo lento), o texto volta para o campo
+  const lastSent = useRef<{ body: string; at: number } | null>(null);
   const [cool, setCool] = useState(0);
   const [picked, setPicked] = useState<ChatMsg | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -138,6 +141,11 @@ export default function ChatView({
     if (err?.wait) setCool(Math.ceil(err.wait));
     // censurado: limpa o que estava digitado para o aviso com o tempo ficar à vista
     if (err?.code === 'muted') setText('');
+    const sent = lastSent.current;
+    if ((err?.code === 'busy' || err?.code === 'rate' || err?.code === 'slow') && sent && Date.now() - sent.at < 10_000) {
+      lastSent.current = null;
+      setText((t) => t || sent.body);
+    }
     // a sessão caiu no servidor: entra de novo e manda
     if (err?.code === 'auth' && Date.now() - err.at < 5000) {
       sendAfterLogin.current = true;
@@ -165,6 +173,7 @@ export default function ChatView({
       return;
     }
     if (live.chat(room, body)) {
+      lastSent.current = { body, at: Date.now() };
       setText('');
       setStuck(true);
       setUnseen(0);

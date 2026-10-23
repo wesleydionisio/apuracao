@@ -70,9 +70,12 @@ export type ServerMsg =
   | { t: 'online'; n: number }
   | { t: 'flags'; flags: Flags; closedRooms?: Room[] }
   | { t: 'slow'; r: Room; seconds: number }
+  /** várias mensagens num frame só (o chat sai em lotes de ~250 ms) */
+  | { t: 'batch'; b: ServerMsg[] }
   | {
       t: 'err';
-      code: 'rate' | 'slow' | 'blocked' | 'closed' | 'invalid' | 'off' | 'muted' | 'auth';
+      /** busy: a sala já entregou o máximo de mensagens por segundo; tente de novo em `wait` s */
+      code: 'rate' | 'slow' | 'busy' | 'blocked' | 'closed' | 'invalid' | 'off' | 'muted' | 'auth';
       r?: Room;
       /** segundos até poder mandar de novo (rate, slow, muted) */
       wait?: number;
@@ -118,6 +121,12 @@ export const KEY = {
   snap: (s: string) => `snap:${s}`,
   chat: (r: Room) => `chat:${r}`,
   react: (r: Room) => `react:${r}`,
+  /** membros por sala neste worker (JSON), para o total global que decide quantas subsalas abrir */
+  members: (worker: string) => `members:${worker}`,
+  /** HASH sala -> número de subsalas em vigor (o mesmo para todos os workers) */
+  shards: 'shards',
+  /** mensagens entregues numa subsala neste segundo (teto global) */
+  cap: (shard: string, sec: number) => `cap:${shard}:${sec}`,
   online: (worker: string) => `online:${worker}`,
   flag: (f: string) => `flag:${f}`,
   roomClosed: 'flag:rooms_closed', // SET de salas desligadas

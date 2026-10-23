@@ -33,6 +33,7 @@ import { config } from './config';
 import { Bucket, BucketMap, RateWindow } from './limits';
 import { AiModerator, type Verdict } from './moderation-ai';
 import { connectRedis } from './redis';
+import { jump, nextShardCount, shardId, shardKey } from './shards';
 import { Strikes, WEIGHT, type Ladder } from './strikes';
 
 interface UD {
@@ -46,6 +47,10 @@ interface UD {
   auth: boolean;
   ip: string;
   rooms: Set<Room>;
+  /** chave estável para escolher a subsala (jump hash) */
+  skey: bigint;
+  /** subsala em que a pessoa está em cada sala */
+  shard: Map<Room, number>;
   msg: Bucket;
   react: Bucket;
   last: Map<Room, number>;
@@ -59,8 +64,12 @@ interface UD {
 type WS = uWS.WebSocket<UD>;
 
 const ALL = 'all';
+/** a sala inteira: torcida/reações, momentos, exclusões */
 const roomTopic = (r: Room) => `r:${r}`;
+/** o fluxo de mensagens de uma subsala */
+const chatTopic = (shard: string) => `c:${shard}`;
 const snapTopic = (s: string) => `s:${s}`;
+const roomOfShard = (shard: string) => shard.slice(0, shard.lastIndexOf('#'));
 
 // prefixo IBGE -> UF, para levar momentos municipais para a sala do estado
 const IBGE_UF: Record<string, string> = {
@@ -86,14 +95,20 @@ let online = 0;
 let conns = 0;
 const ipConns = new Map<string, number>();
 const ipBuckets = new BucketMap(config.ipBurst, config.ipRefill);
-const roomMembers = new Map<Room, number>();
-const roomRates = new Map<Room, RateWindow>();
-const slow = new Map<Room, { seconds: number; calmSince: number | null }>();
+const roomSockets = new Map<Room, Set<WS>>();
+/** subsalas em vigor por sala (vem do Redis, igual em todos os workers) */
+const shardCount = new Map<Room, number>();
+/** taxa e modo lento são por subsala ("br#3") */
+const roomRates = new Map<string, RateWindow>();
+const slow = new Map<string, { seconds: number; calmSince: number | null }>();
+/** próximo lote por tópico de subsala (JSON já serializado) */
+const outbox = new Map<string, string[]>();
+const capLocal = new Map<string, { sec: number; n: number }>();
 const reactDelta = new Map<Room, Map<Reaction, number>>();
 const reactAgg = new Map<Room, Partial<Record<Reaction, number>>>();
 const reactSig = new Map<Room, string>();
 const deleted = new Set<string>();
-const m = { in: 0, out: 0, chatIn: 0, blocked: 0, punished: 0, muted: 0, rateLimited: 0, rejectedConns: 0, inRate: 0, outRate: 0 };
+const m = { in: 0, out: 0, chatIn: 0, blocked: 0, punished: 0, muted: 0, rateLimited: 0, busy: 0, rejectedConns: 0, inRate: 0, outRate: 0 };
 let lastIn = 0;
 let lastOut = 0;
 
@@ -118,10 +133,14 @@ const board = new BoardState({
 const app = uWS.App();
 
 // ---------- envio ----------
+// frames pequenos (pong, online) não compensam o deflate
+const zip = (s: string) => config.compress && s.length >= config.compressMin;
+
 function send(ws: WS, msg: ServerMsg) {
   if (!ws.getUserData().open) return;
   try {
-    ws.send(JSON.stringify(msg));
+    const s = JSON.stringify(msg);
+    ws.send(s, false, zip(s));
     m.out++;
   } catch {
     /* socket fechou no meio de um await */
@@ -129,8 +148,24 @@ function send(ws: WS, msg: ServerMsg) {
 }
 
 function publish(topic: string, msg: ServerMsg) {
-  app.publish(topic, JSON.stringify(msg));
+  publishRaw(topic, JSON.stringify(msg));
+}
+
+function publishRaw(topic: string, s: string) {
+  app.publish(topic, s, false, zip(s));
   m.out += app.numSubscribers(topic);
+}
+
+/** chat vai em lote: junta o que chegar na janela e manda um frame por subsala */
+function queue(topic: string, msg: ServerMsg) {
+  let q = outbox.get(topic);
+  if (!q) outbox.set(topic, (q = []));
+  q.push(JSON.stringify(msg));
+}
+
+function flushOutbox() {
+  for (const [topic, q] of outbox) publishRaw(topic, q.length === 1 ? q[0] : `{"t":"batch","b":[${q.join(',')}]}`);
+  outbox.clear();
 }
 
 const newId = () => Date.now().toString(36) + randomBytes(4).toString('hex');
@@ -141,7 +176,7 @@ function onBus(channel: string, payload: string) {
     const d = JSON.parse(payload);
     if (channel === CH.snap) board.apply(Array.isArray(d) ? (d as Snap[]) : [d as Snap]);
     else if (channel === CH.moment) board.moment(d as Moment);
-    else if (channel === CH.chat) deliver(d.r, d.m, d.a);
+    else if (channel === CH.chat) deliver(d.r, typeof d.k === 'number' ? d.k : 0, d.m, d.a);
     else if (channel === CH.del) applyDelete(d.r, d.id);
     else if (channel === CH.flags) void reloadFlags();
   } catch (e) {
@@ -150,18 +185,46 @@ function onBus(channel: string, payload: string) {
 }
 
 // ---------- chat ----------
-/** entrega local de uma mensagem (de qualquer worker) */
-function deliver(room: Room, msg: ChatMsg, author?: string) {
+/**
+ * entrega local de uma mensagem (de qualquer worker). `k` é a subsala do autor; null (momentos do
+ * sistema) vai para a sala inteira. O histórico é um só por sala: quem entra vê a sala toda.
+ */
+function deliver(room: Room, k: number | null, msg: ChatMsg, author?: string) {
   if (!isValidRoom(room) || !msg?.id) return;
   store.mirror(room, msg, JSON.stringify(msg), author);
-  if (!msg.sys) rateOf(room).hit();
-  publish(roomTopic(room), { t: 'chat', r: room, m: msg });
+  const out: ServerMsg = { t: 'chat', r: room, m: msg };
+  if (k === null) return publish(roomTopic(room), out);
+  const id = shardId(room, k);
+  if (!msg.sys) rateOf(id).hit();
+  queue(chatTopic(id), out);
 }
 
-function rateOf(room: Room) {
-  let w = roomRates.get(room);
-  if (!w) roomRates.set(room, (w = new RateWindow()));
+function rateOf(shard: string) {
+  let w = roomRates.get(shard);
+  if (!w) roomRates.set(shard, (w = new RateWindow()));
   return w;
+}
+
+const shardOf = (ud: UD, room: Room) => ud.shard.get(room) ?? 0;
+
+/** teto global de mensagens por segundo na subsala (Redis; sem ele, por worker) */
+async function takeCap(shard: string, now: number): Promise<boolean> {
+  const sec = Math.floor(now / 1000);
+  if (bus?.ready()) {
+    try {
+      const key = KEY.cap(shard, sec);
+      const res = await bus.cmd.multi().incr(key).expire(key, 5).exec();
+      return Number(res?.[0]?.[1]) <= config.chatCap;
+    } catch {
+      /* cai para o contador local */
+    }
+  }
+  const c = capLocal.get(shard);
+  if (!c || c.sec !== sec) {
+    capLocal.set(shard, { sec, n: 1 });
+    return config.chatCap >= 1;
+  }
+  return ++c.n <= config.chatCap;
 }
 
 function applyDelete(room: Room, id: string) {
@@ -196,7 +259,7 @@ async function punish(ws: WS, room: Room, ladder: Ladder, cat: ModCategory) {
   // primeira mensagem barrada da pessoa: todos veem "bloqueada pela moderação" (sem o texto).
   // Das seguintes ninguém fica sabendo: não vale dar palco para quem insiste.
   if (pen.first) {
-    await broadcast(room, { id: newId(), nick: ud.nick, hue: ud.hue, body: '', at: Date.now(), mod: cat, ...(ud.side ? { side: ud.side } : {}) }, ud.pub);
+    await broadcast(room, shardOf(ud, room), { id: newId(), nick: ud.nick, hue: ud.hue, body: '', at: Date.now(), mod: cat, ...(ud.side ? { side: ud.side } : {}) }, ud.pub);
   }
   if (!ud.open) return;
   const pub = pen.first ? { public: true as const } : {};
@@ -244,9 +307,10 @@ async function postChat(ws: WS, room: Room, body: unknown) {
     const cat: ModCategory = hasLink(text) ? 'link' : v && ai.isFlagged(v) && v.cat !== 'spam' ? v.cat : 'palavrao';
     return punish(ws, room, cat === 'link' ? 'spam' : 'abuse', cat);
   }
-  // 3. modo lento e limite de taxa; insistir vira spam
+  // 3. modo lento (da subsala) e limite de taxa; insistir vira spam
   const now = Date.now();
-  const sl = slow.get(room);
+  const shard = shardId(room, shardOf(ud, room));
+  const sl = slow.get(shard);
   const last = ud.last.get(room) ?? 0;
   if (sl && sl.seconds > 0 && now - last < sl.seconds * 1000) {
     m.rateLimited++;
@@ -264,7 +328,12 @@ async function postChat(ws: WS, room: Room, body: unknown) {
   if (k && ud.recent.some((r) => r.k === k)) return punish(ws, room, 'spam', 'spam');
   ud.recent.push({ k, at: now });
   if (ud.recent.length > 5) ud.recent.shift();
-  // 5. modelo de decisão (só o que passou pelos filtros baratos chega aqui)
+  // 5. teto da subsala: a banda por pessoa fica limitada, por maior que a sala seja
+  if (!(await takeCap(shard, now))) {
+    m.busy++;
+    return send(ws, { t: 'err', code: 'busy', r: room, wait: 2 });
+  }
+  // 6. modelo de decisão (só o que passou pelos filtros baratos chega aqui)
   const v: Verdict = await ai.classify(chk.body);
   if (!ud.open) return;
   if (ai.isFlagged(v)) {
@@ -274,21 +343,21 @@ async function postChat(ws: WS, room: Room, body: unknown) {
   ud.last.set(room, now);
   m.chatIn++;
   const msg: ChatMsg = { id: newId(), nick: ud.nick, hue: ud.hue, body: chk.body, at: now, ...(ud.side ? { side: ud.side } : {}) };
-  await broadcast(room, msg, ud.pub);
+  await broadcast(room, shardOf(ud, room), msg, ud.pub);
 }
 
-/** grava e entrega para a sala inteira (todos os workers via Redis, ou local) */
-async function broadcast(room: Room, msg: ChatMsg, author: string) {
+/** grava e entrega para a subsala `k` (todos os workers via Redis, ou local) */
+async function broadcast(room: Room, k: number, msg: ChatMsg, author: string) {
   if (bus?.ready()) {
     try {
       await store.persist(room, JSON.stringify(msg));
-      await bus.cmd.publish(CH.chat, JSON.stringify({ r: room, m: msg, a: author }));
+      await bus.cmd.publish(CH.chat, JSON.stringify({ r: room, k, m: msg, a: author }));
       return; // volta pela assinatura e é entregue em todos os workers, inclusive este
     } catch (e) {
       console.warn('[chat] Redis falhou, entregando local:', (e as Error).message);
     }
   }
-  deliver(room, msg, author);
+  deliver(room, k, msg, author);
 }
 
 async function report(ws: WS, room: Room, id: unknown) {
@@ -326,7 +395,7 @@ async function announceMoment(mo: Moment) {
     persist = (await bus.cmd.set(`lock:${id}`, '1', 'EX', 86_400, 'NX').catch(() => null)) === 'OK';
   }
   for (const r of rooms) {
-    deliver(r, msg);
+    deliver(r, null, msg);
     if (persist) void store.persist(r, JSON.stringify(msg)).catch(() => {});
   }
 }
@@ -343,7 +412,8 @@ function react(ws: WS, room: Room, e: unknown) {
 async function flushReactions() {
   const deltas = [...reactDelta.entries()];
   reactDelta.clear();
-  const active = [...roomMembers.keys()];
+  // a torcida é da sala inteira (todas as subsalas somam no mesmo placar)
+  const active = [...roomSockets.keys()];
   if (bus?.ready()) {
     try {
       const pipe = bus.cmd.pipeline();
@@ -382,23 +452,87 @@ function mergeLocal(deltas: [Room, Map<Reaction, number>][]) {
 // ---------- slow mode ----------
 function tickSlowMode() {
   const now = Date.now();
-  for (const [room, w] of roomRates) {
+  for (const [shard, w] of roomRates) {
     const rate = w.tick();
-    const st = slow.get(room);
+    const st = slow.get(shard);
+    const room = roomOfShard(shard);
     if (rate > config.slowTrigger) {
       if (!st || st.seconds === 0) {
-        slow.set(room, { seconds: config.slowSeconds, calmSince: null });
-        publish(roomTopic(room), { t: 'slow', r: room, seconds: config.slowSeconds });
+        slow.set(shard, { seconds: config.slowSeconds, calmSince: null });
+        publish(chatTopic(shard), { t: 'slow', r: room, seconds: config.slowSeconds });
       } else st.calmSince = null;
     } else if (st && st.seconds > 0) {
       if (rate < config.slowTrigger / 2) {
         st.calmSince ??= now;
         if (now - st.calmSince > 30_000) {
-          slow.delete(room);
-          publish(roomTopic(room), { t: 'slow', r: room, seconds: 0 });
+          slow.delete(shard);
+          publish(chatTopic(shard), { t: 'slow', r: room, seconds: 0 });
         }
       } else st.calmSince = null;
-    } else if (rate === 0 && !roomMembers.has(room)) roomRates.delete(room);
+    } else if (rate === 0 && !st) roomRates.delete(shard);
+  }
+}
+
+// ---------- subsalas ----------
+/**
+ * A cada 5s: soma as pessoas de cada sala em todos os workers e decide quantas subsalas ela tem.
+ * O número fica no Redis para todos os workers concordarem; quem muda de subsala só passa a ver
+ * outro fluxo de mensagens (sem aviso, sem perder o que já estava na tela).
+ */
+async function rebalance() {
+  const local: Record<Room, number> = {};
+  for (const [r, s] of roomSockets) local[r] = s.size;
+  let totals = local;
+  let stored: Record<string, string> = {};
+  if (bus?.ready()) {
+    try {
+      await bus.cmd.set(KEY.members(config.workerId), JSON.stringify(local), 'EX', 15);
+      const sum: Record<Room, number> = {};
+      let cursor = '0';
+      do {
+        const [next, keys] = await bus.cmd.scan(cursor, 'MATCH', KEY.members('*'), 'COUNT', 200);
+        cursor = next;
+        if (!keys.length) continue;
+        for (const v of await bus.cmd.mget(...keys)) {
+          try {
+            for (const [r, n] of Object.entries(JSON.parse(v ?? '{}') as Record<Room, number>)) sum[r] = (sum[r] ?? 0) + n;
+          } catch {
+            /* worker com JSON estranho: ignora */
+          }
+        }
+      } while (cursor !== '0');
+      stored = await bus.cmd.hgetall(KEY.shards);
+      totals = sum;
+    } catch {
+      totals = local;
+      stored = {};
+    }
+  }
+  const updates: Record<string, number> = {};
+  for (const r of new Set([...Object.keys(totals), ...Object.keys(stored)])) {
+    const cur = Number(stored[r]) || shardCount.get(r) || 1;
+    const n = nextShardCount(cur, totals[r] ?? 0, config.shardSize);
+    if (stored[r] ? Number(stored[r]) !== n : n > 1) updates[r] = n;
+    applyShards(r, n);
+  }
+  if (bus?.ready() && Object.keys(updates).length) await bus.cmd.hset(KEY.shards, updates).catch(() => {});
+}
+
+/** muda o número de subsalas da sala e remaneja só quem o jump hash mandou para outra */
+function applyShards(r: Room, n: number) {
+  if ((shardCount.get(r) ?? 1) === n) return;
+  shardCount.set(r, n);
+  for (const ws of roomSockets.get(r) ?? []) {
+    const ud = ws.getUserData();
+    const old = ud.shard.get(r);
+    const k = jump(ud.skey, n);
+    if (old === k) continue;
+    if (old !== undefined) ws.unsubscribe(chatTopic(shardId(r, old)));
+    ud.shard.set(r, k);
+    ws.subscribe(chatTopic(shardId(r, k)));
+    const was = old !== undefined ? (slow.get(shardId(r, old))?.seconds ?? 0) : 0;
+    const now = slow.get(shardId(r, k))?.seconds ?? 0;
+    if (was !== now) send(ws, { t: 'slow', r, seconds: now });
   }
 }
 
@@ -454,8 +588,13 @@ async function join(ws: WS, rooms: unknown) {
       break;
     }
     ud.rooms.add(r);
-    roomMembers.set(r, (roomMembers.get(r) ?? 0) + 1);
+    let set = roomSockets.get(r);
+    if (!set) roomSockets.set(r, (set = new Set()));
+    set.add(ws);
     ws.subscribe(roomTopic(r));
+    const k = jump(ud.skey, shardCount.get(r) ?? 1);
+    ud.shard.set(r, k);
+    ws.subscribe(chatTopic(shardId(r, k)));
     const scope = roomScope(r);
     if (scope && scope !== 'br') {
       ws.subscribe(snapTopic(scope));
@@ -464,7 +603,7 @@ async function join(ws: WS, rooms: unknown) {
     }
     const agg = reactAgg.get(r);
     if (agg) send(ws, { t: 'react', r, agg });
-    const sl = slow.get(r);
+    const sl = slow.get(shardId(r, k));
     if (sl?.seconds) send(ws, { t: 'slow', r, seconds: sl.seconds });
     const hist = await store.history(r, HISTORY_ON_JOIN);
     if (ud.open && ud.rooms.has(r)) send(ws, { t: 'history', r, m: hist.filter((x) => !deleted.has(x.id)) });
@@ -476,17 +615,21 @@ function leave(ws: WS, rooms: unknown) {
   if (!Array.isArray(rooms)) return;
   for (const r of rooms) {
     if (typeof r !== 'string' || !ud.rooms.delete(r)) continue;
-    dropMember(r);
+    dropMember(r, ws);
     ws.unsubscribe(roomTopic(r));
+    const k = ud.shard.get(r);
+    if (k !== undefined) ws.unsubscribe(chatTopic(shardId(r, k)));
+    ud.shard.delete(r);
     const scope = roomScope(r);
     if (scope && scope !== 'br') ws.unsubscribe(snapTopic(scope));
   }
 }
 
-function dropMember(r: Room) {
-  const n = (roomMembers.get(r) ?? 1) - 1;
-  if (n <= 0) roomMembers.delete(r);
-  else roomMembers.set(r, n);
+function dropMember(r: Room, ws: WS) {
+  const set = roomSockets.get(r);
+  if (!set) return;
+  set.delete(ws);
+  if (!set.size) roomSockets.delete(r);
 }
 
 // ---------- servidor ----------
@@ -494,7 +637,8 @@ const decoder = new TextDecoder();
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
 
 app.ws<UD>('/ws', {
-  compression: uWS.DISABLED,
+  // deflate sem janela por conexão: barato em memória, e o publish comprime uma vez para todos
+  compression: config.compress ? uWS.SHARED_COMPRESSOR : uWS.DISABLED,
   maxPayloadLength: 1024,
   idleTimeout: 120,
   sendPingsAutomatically: true,
@@ -524,7 +668,8 @@ app.ws<UD>('/ws', {
     // com sessão, a identidade é a conta (mesmo apelido e cor em qualquer aparelho); sem, o cookie anônimo
     const session = verifySession(readCookie(cookie, SESSION_COOKIE), config.secret);
     const aid = session ? `u-${session.uid}` : (verifyAid(readCookie(cookie, AID_COOKIE), config.secret) ?? `e-${randomBytes(12).toString('hex')}`);
-    const pub = createHash('sha256').update(aid).digest('base64url').slice(0, 10);
+    const digest = createHash('sha256').update(aid).digest();
+    const pub = digest.toString('base64url').slice(0, 10);
     res.upgrade<UD>(
       {
         aid,
@@ -535,6 +680,8 @@ app.ws<UD>('/ws', {
         auth: !!session,
         ip,
         rooms: new Set(),
+        skey: shardKey(digest),
+        shard: new Map(),
         msg: new Bucket(config.userBurst, config.userRefill),
         react: new Bucket(config.reactBurst, config.reactRefill),
         last: new Map(),
@@ -603,7 +750,7 @@ app.ws<UD>('/ws', {
     const n = (ipConns.get(ud.ip) ?? 1) - 1;
     if (n <= 0) ipConns.delete(ud.ip);
     else ipConns.set(ud.ip, n);
-    for (const r of ud.rooms) dropMember(r);
+    for (const r of ud.rooms) dropMember(r, ws);
   },
 });
 
@@ -629,7 +776,9 @@ app.get('/metrics', (res) => {
   const lines = [
     `ws_connections ${conns}`,
     `ws_online_global ${online}`,
-    `ws_rooms_local ${roomMembers.size}`,
+    `ws_rooms_local ${roomSockets.size}`,
+    `ws_shards_max ${Math.max(1, ...shardCount.values())}`,
+    `ws_chat_busy_total ${m.busy}`,
     `ws_msgs_in_per_s ${m.inRate.toFixed(1)}`,
     `ws_msgs_out_per_s ${m.outRate.toFixed(1)}`,
     `ws_msgs_in_total ${m.in}`,
@@ -679,8 +828,11 @@ app.listen(config.host, config.port, (ls) => {
 // ---------- timers ----------
 void board.pollFile();
 setInterval(() => void board.pollFile(), config.filePollMs);
-setInterval(() => void flushReactions().catch(() => {}), 1000);
+setInterval(() => void flushReactions().catch(() => {}), config.reactFlushMs);
+setInterval(flushOutbox, config.chatBatchMs);
 setInterval(tickSlowMode, 1000);
+setInterval(() => void rebalance().catch(() => {}), 5000);
+void rebalance().catch(() => {});
 setInterval(() => {
   m.inRate = (m.in - lastIn) / 5;
   m.outRate = (m.out - lastOut) / 5;
@@ -697,7 +849,7 @@ function shutdown() {
   console.log('[ws] encerrando');
   if (listenSocket) uWS.us_listen_socket_close(listenSocket);
   const done = () => process.exit(0);
-  if (bus?.ready()) bus.cmd.del(KEY.online(config.workerId)).finally(done);
+  if (bus?.ready()) bus.cmd.del(KEY.online(config.workerId), KEY.members(config.workerId)).finally(done);
   else done();
   setTimeout(done, 2000).unref();
 }

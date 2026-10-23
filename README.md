@@ -82,6 +82,20 @@ Testes: `pnpm test`.
 
 Cloudflare: proxy laranja em tudo; SSL "Full (strict)"; cache rule para `/data/*` com Edge TTL 5s
 (respeitando `stale-while-revalidate`); cache total para `/assets/*`; rate limiting na regra free em `POST /api/guess`.
+Uma segunda cache rule, "Eligible for cache" + "Use cache-control header", para `GET /api/stats`,
+`/api/guesses/hist`, `/api/guess/*` e `/api/city/*`: sem ela o Cloudflare não guarda caminho sem extensão e cada
+visitante bate na VPS. As respostas pessoais já saem `private, no-store` e continuam fora do cache.
+`stale-if-error` nos arquivos de `/data`: se a VPS cair, a CDN segue servindo o último placar por até 1 h.
+
+### Salas grandes (subsalas invisíveis)
+
+Acima de `SHARD_SIZE` pessoas (padrão 1500, somando todos os workers), a sala se divide em subsalas. Ninguém vê
+a divisão: o nome, a torcida/reações, o histórico ao entrar e os momentos são da sala inteira; só o fluxo de
+mensagens é por subsala. Cada subsala entrega no máximo `CHAT_CAP` mensagens por segundo (padrão 3); o que
+passar volta para o autor como "sala muito movimentada" e o texto volta para o campo. Assim a banda por pessoa
+fica em ~3 msg/s, seja a sala de 200 ou de 40 mil. O chat sai em lotes de `CHAT_BATCH_MS` (250 ms) com
+permessage-deflate (`WS_COMPRESS=0` desliga), e a torcida é enviada a cada `REACT_FLUSH_MS` (2 s).
+Métricas: `ws_shards_max`, `ws_chat_busy_total`. Teste: `SECRET=<o do .env> ROOM=br CONNS=3000 CHAT_RATE=80 pnpm load`.
 
 ### Moderação do chat
 
