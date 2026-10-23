@@ -45,6 +45,8 @@ export const config = {
   replay: {
     minutes: Number(env.REPLAY_MINUTES ?? 20),
     seed: int(env.REPLAY_SEED, 2026),
+    /** roteiro em apps/poller/scenarios/<nome>.json, ou "aleatorio" */
+    scenario: env.REPLAY_SCENARIO ?? 'domingo',
   },
 };
 

@@ -1,0 +1,20 @@
+{
+  "nome": "Domingo: Bolsonaro começa empatado, abre pequena vantagem, perde fôlego e termina 1 ponto à frente",
+  "candidato": "22",
+  "nota": "margem = (% do candidato − % do adversário) nos votos válidos, em pontos, conforme o % de urnas apuradas no Brasil. Edite os pontos para criar outros cenários (margem negativa = adversário à frente).",
+  "margem": [
+    [0, 0],
+    [3, 0.1],
+    [8, 0.6],
+    [15, 1.5],
+    [25, 2.4],
+    [35, 2.9],
+    [45, 3.0],
+    [55, 2.6],
+    [65, 2.1],
+    [75, 1.7],
+    [85, 1.3],
+    [95, 1.05],
+    [100, 1.0]
+  ]
+}

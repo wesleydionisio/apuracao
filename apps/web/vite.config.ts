@@ -50,6 +50,8 @@ export default defineConfig({
       '/cidade/': html,
       '/sala/': html,
       '/ws': { target: WS, ws: true, changeOrigin: true },
+      // controles da simulação (poller em SOURCE=replay) para a barra de debug
+      '/__dev': { target: process.env.POLLER_URL ?? 'http://localhost:3003', changeOrigin: true, rewrite: (p) => p.replace(/^\/__dev/, '/dev') },
     },
   },
   build: {

@@ -162,6 +162,9 @@ function PageFallback() {
   );
 }
 
+// barra de debug da simulação: só existe em `vite dev` (removida do build de produção)
+const DevBar = import.meta.env.DEV ? lazy(() => import('./dev/DevBar')) : null;
+
 export default function App() {
   const [path] = useLocation();
   useBoardPolling();
@@ -172,14 +175,25 @@ export default function App() {
     // TV e embed não precisam de chat; o placar vem pelo polling
     if (!path.startsWith('/embed')) live.start();
   }, [path]);
+  const dev = DevBar && !path.startsWith('/embed') && (
+    <Suspense fallback={null}>
+      <DevBar />
+    </Suspense>
+  );
   if (standalone)
     return (
       <Suspense fallback={null}>
+        {dev}
         <Switch>
           <Route path="/tv" component={TvPage} />
           <Route path="/embed/placar" component={EmbedPage} />
         </Switch>
       </Suspense>
     );
-  return <Frame />;
+  return (
+    <>
+      {dev}
+      <Frame />
+    </>
+  );
 }

@@ -1,7 +1,7 @@
 // Saídas do poller: JSON estático (sempre), Redis (se houver), Postgres (se houver).
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, existsSync } from 'node:fs';
-import { rename, writeFile } from 'node:fs/promises';
+import { copyFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { CH, KEY, type Board, type Flags, type Moment, type MunBoard, type Snap } from '@apuracao/shared';
 import { Redis } from 'ioredis';
@@ -13,16 +13,19 @@ export async function writeJsonAtomic(file: string, data: unknown) {
   mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   await writeFile(tmp, JSON.stringify(data));
-  for (let i = 0; ; i++) {
+  for (let i = 0; i < 3; i++) {
     try {
       await rename(tmp, file);
       return;
-    } catch (e) {
-      // Windows: leitor com o arquivo aberto → EPERM momentâneo
-      if (i >= 5) throw e;
-      await new Promise((r) => setTimeout(r, 50 * (i + 1)));
+    } catch {
+      // Windows: leitor/antivírus/OneDrive com o arquivo aberto → EPERM momentâneo.
+      // Espera curta: no Linux (produção) o rename nunca falha; aqui não vale travar o ciclo.
+      await new Promise((r) => setTimeout(r, 15));
     }
   }
+  // último recurso: sobrescreve no lugar (leitores tratam JSON truncado mantendo a versão anterior)
+  await copyFile(tmp, file);
+  await unlink(tmp).catch(() => {});
 }
 
 export const hashOf = (x: unknown) => createHash('sha1').update(JSON.stringify(x)).digest('hex');
