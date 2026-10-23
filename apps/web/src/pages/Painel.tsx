@@ -94,9 +94,14 @@ function Deferred({ h, children }: { h: number; children: ReactNode }) {
     const el = ref.current;
     if (!el || on) return;
     if (!('IntersectionObserver' in window)) return setOn(true);
+    // rede de segurança: se o observer não disparar (aba em segundo plano, webviews), monta assim mesmo
+    const t = setTimeout(() => setOn(true), 2500);
     const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && (setOn(true), io.disconnect()), { rootMargin: '400px' });
     io.observe(el);
-    return () => io.disconnect();
+    return () => {
+      clearTimeout(t);
+      io.disconnect();
+    };
   }, [on]);
   return <div ref={ref}>{on ? <Suspense fallback={<SectionSkeleton h={h} />}>{children}</Suspense> : <SectionSkeleton h={h} />}</div>;
 }
