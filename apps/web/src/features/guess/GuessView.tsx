@@ -5,6 +5,7 @@ import { ChartColumn, Download, Link2, Medal, Share2, Trophy } from 'lucide-reac
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'wouter';
 import { CandidateAvatar, candOf } from '@/components/core/candidate';
+import { DataTip } from '@/components/core/datatip';
 import { LiveDot } from '@/components/core/live';
 import { Empty, Skeleton, toast } from '@/components/ui';
 import { Badge } from '@/components/ui/badge';
@@ -223,14 +224,33 @@ function DistanceSpark({ trail, className }: { trail: TrailPoint[]; className?: 
   const d = trail.map((p, i) => `${i ? 'L' : 'M'}${x(p.pst).toFixed(1)},${y(p.dist).toFixed(1)}`).join(' ');
   const best = trail.reduce((a, b) => (b.dist < a.dist ? b : a));
   const last = trail[trail.length - 1];
+  const summary = `Menor distância da noite: ${fmtPct(best.dist, 2)} pontos com ${fmtPct(best.pst, 0)}% apurado. Agora: ${fmtPct(last.dist, 2)} pontos`;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={cn('h-9 w-[120px] overflow-visible', className)} role="img" aria-label={`Menor distância da noite: ${fmtPct(best.dist, 2)} pontos com ${fmtPct(best.pst, 0)}% apurado`}>
+    <DataTip
+      className="inline-block"
+      label={summary}
+      tip={
+        <div className="num space-y-0.5">
+          <div className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-live" />
+            Melhor: {fmtPct(best.dist, 2)} pts com {fmtPct(best.pst, 0)}% apurado
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-foreground" />
+            Agora: {fmtPct(last.dist, 2)} pts
+          </div>
+          <div className="text-[11px] text-muted-foreground">quanto mais alto, mais perto do parcial</div>
+        </div>
+      }
+    >
+    <svg viewBox={`0 0 ${W} ${H}`} className={cn('h-9 w-[120px] overflow-visible', className)} aria-hidden>
       {/* em cima = perto do parcial */}
       <line x1={0} x2={W} y1={2} y2={2} stroke="var(--foreground)" strokeOpacity={0.15} />
       <path d={d} fill="none" stroke="var(--foreground)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={x(best.pst)} cy={y(best.dist)} r={2.5} fill="var(--live)" />
       <circle cx={x(last.pst)} cy={y(last.dist)} r={2.5} fill="var(--foreground)" />
     </svg>
+    </DataTip>
   );
 }
 

@@ -58,7 +58,7 @@ export function MomentsTimeline({ board, limit = 6, className }: { board: Board;
       className={className}
     >
       {!list.length ? (
-        <Empty title="Ainda nada por aqui">Marcos da apuração, viradas e cidades grandes apuradas aparecem aqui assim que acontecem.</Empty>
+        <Empty title="Nada ainda">Marcos e viradas aparecem aqui.</Empty>
       ) : (
         <>
           <ol className="relative" aria-live="polite">

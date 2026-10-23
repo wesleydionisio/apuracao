@@ -11,6 +11,7 @@ import { fmtCompact, fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Section } from './Section';
 import { Fill } from '@/components/core/bars';
+import { DataTip, SplitTip, splitLabel } from '@/components/core/datatip';
 
 type SortKey = 'rem' | 'pst' | 'margin';
 const SORTS: { k: SortKey; label: string }[] = [
@@ -81,7 +82,7 @@ export function RemainingTable({ board, limit = 7, className }: { board: Board; 
                 <Link
                   href={`/mapa/${r.uf}`}
                   className={cn('press -mx-1 grid min-h-14 items-center gap-2 rounded-lg px-1 hover:bg-accent/60', COLS)}
-                  aria-label={`${ufName(r.uf)}: ${fmtPct(r.pst, 0)}% apurado, faltam ${fmtCompact(r.rem)} votos${r.lead && r.margin !== null ? `, ${r.lead.short} lidera por ${fmtPct(r.margin, 1)} pontos` : ''}`}
+                  aria-label={`${ufName(r.uf)}: ${fmtPct(r.pst, 0)}% apurado, faltam ${fmtCompact(r.rem)} votos${r.lead && r.margin !== null ? `, ${r.lead.short} lidera por ${fmtPct(r.margin, 1)} pontos` : ''}${r.pa1 !== null ? `. ${splitLabel([ca, cb], r.pa1, '1º turno')}` : ''}`}
                 >
                   <div className="min-w-0">
                     <div className="flex items-baseline gap-1.5">
@@ -112,10 +113,17 @@ export function RemainingTable({ board, limit = 7, className }: { board: Board; 
                     {r.pa1 === null ? (
                       <span className="text-[11px] text-muted-foreground" title="sem dado">n/d</span>
                     ) : (
-                      <div className="flex h-1.5 w-full overflow-hidden rounded-full" title={`1º turno: ${ca.short} ${fmtPct(r.pa1, 1)}%`}>
-                        <div style={{ width: `${r.pa1}%`, background: ca.color }} />
-                        <div className="flex-1" style={{ background: cb.color }} />
-                      </div>
+                      <DataTip
+                        nested
+                        className="w-full"
+                        label={splitLabel([ca, cb], r.pa1, '1º turno')}
+                        tip={<SplitTip cands={[ca, cb]} pa={r.pa1} title={`${ufName(r.uf)} · 1º turno`} />}
+                      >
+                        <div className="flex h-1.5 w-full overflow-hidden rounded-full" aria-hidden>
+                          <div style={{ width: `${r.pa1}%`, background: ca.color }} />
+                          <div className="flex-1" style={{ background: cb.color }} />
+                        </div>
+                      </DataTip>
                     )}
                   </div>
                 </Link>
@@ -128,7 +136,7 @@ export function RemainingTable({ board, limit = 7, className }: { board: Board; 
               <ChevronDown className={cn('size-4 transition-transform', all && 'rotate-180')} aria-hidden />
             </Button>
           )}
-          <p className="mt-1 text-[12px] text-muted-foreground">Margem em pontos sobre os votos válidos. 1º turno: só os dois finalistas.</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">Margem em pontos dos votos válidos</p>
         </>
       )}
     </Section>

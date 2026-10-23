@@ -2,7 +2,7 @@
 // do seu palpite e do parcial ao vivo. Dado de /api/guesses/hist; no modo demo, uma distribuição sintética.
 import type { CandidateDef } from '@apuracao/shared';
 import { fmtPct } from '@apuracao/shared';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { getJSON, HttpError } from '@/lib/api';
 import { MOCK } from '@/lib/env';
@@ -95,16 +95,42 @@ export function GuessHistogram({
 
   const bw = W / hist.bins.length;
   const mineBin = mine != null ? Math.floor((mine - LO) / STEP) : -1;
+  // barra sob o mouse (ou tocada): mostra a faixa e quantos palpites caíram nela
+  const [hot, setHot] = useState<number | null>(null);
+  const svg = useRef<SVGSVGElement>(null);
+  const binAt = (clientX: number) => {
+    const r = svg.current?.getBoundingClientRect();
+    if (!r) return null;
+    const i = Math.floor((((clientX - r.left) / r.width) * W) / bw);
+    return i >= 0 && i < hist.bins.length ? i : null;
+  };
+  const hb = hot !== null ? hist.bins[hot] : null;
 
   return (
-    <figure className={cn('w-full', className)}>
-      <svg viewBox={`0 0 ${W} ${H + 16}`} className="block h-auto w-full overflow-visible" role="img" aria-label={`Distribuição de ${fmtInt(hist.total)} palpites. ${fmtPct(stats.aWins, 0)}% apostam em ${ca.short}.`}>
+    <figure className={cn('relative w-full', className)}>
+      <svg
+        ref={svg}
+        viewBox={`0 0 ${W} ${H + 16}`}
+        className="block h-auto w-full cursor-crosshair touch-pan-y overflow-visible"
+        role="img"
+        aria-label={`Distribuição de ${fmtInt(hist.total)} palpites. ${fmtPct(stats.aWins, 0)}% apostam em ${ca.short}.`}
+        onPointerMove={(e) => e.pointerType === 'mouse' && setHot(binAt(e.clientX))}
+        onPointerDown={(e) => {
+          if (e.pointerType === 'mouse') return;
+          const i = binAt(e.clientX);
+          setHot((cur) => (cur === i ? null : i));
+        }}
+        onPointerLeave={(e) => e.pointerType === 'mouse' && setHot(null)}
+      >
         {hist.bins.map((b, i) => {
           const h = b.n ? Math.max(1.5, (b.n / stats.max) * (H - 4)) : 0;
           const c = b.pa + STEP / 2 > 50 ? ca.color : cb.color;
           const isMine = i === mineBin;
-          return <rect key={b.pa} x={i * bw + 0.5} y={H - h} width={Math.max(1, bw - 1)} height={h} rx={1} fill={c} opacity={isMine ? 1 : mine != null ? 0.6 : 0.8} />;
+          const dim = hot !== null ? (i === hot ? 1 : 0.35) : isMine ? 1 : mine != null ? 0.6 : 0.8;
+          return <rect key={b.pa} x={i * bw + 0.5} y={H - h} width={Math.max(1, bw - 1)} height={h} rx={1} fill={c} opacity={dim} />;
         })}
+        {/* área inteira capta o ponteiro, inclusive onde não há barra */}
+        <rect x={0} y={0} width={W} height={H} fill="transparent" />
         {/* linha dos 50% */}
         <line x1={X(50)} x2={X(50)} y1={0} y2={H} stroke="var(--foreground)" strokeOpacity={0.25} strokeDasharray="2 3" />
         {live != null && live >= LO && live <= HI && (
@@ -127,6 +153,20 @@ export function GuessHistogram({
           </text>
         ))}
       </svg>
+      {hb && (
+        <div
+          className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 -translate-y-[calc(100%+6px)] rounded-lg border bg-popover px-2.5 py-1.5 text-[12px] whitespace-nowrap shadow-lg"
+          style={{ left: `clamp(70px, ${((hot! + 0.5) / hist.bins.length) * 100}%, calc(100% - 70px))` }}
+          role="tooltip"
+        >
+          <div className="num font-semibold">
+            {fmtInt(hb.n)} {hb.n === 1 ? 'palpite' : 'palpites'}
+          </div>
+          <div className="num text-muted-foreground">
+            {ca.short.split(' ')[0]} {fmtPct(hb.pa, 1)}–{fmtPct(hb.pa + STEP, 1)}%
+          </div>
+        </div>
+      )}
       {/* o eixo é o % de A: à esquerda dos 50% quem vence é B — dito com todas as letras */}
       <div className="mt-1 flex items-center justify-between text-[11px] font-medium">
         <span className="inline-flex items-center gap-1.5" style={{ color: cb.color }}>

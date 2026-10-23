@@ -79,8 +79,8 @@ export function NeedMeter({ board, snap, className }: { board: Board; snap: Snap
           <p className="text-[14px] leading-relaxed">
             {snap.status === 'definido' ? (
               <>
-                <strong>Não vira mais.</strong> A vantagem de {lead.short} ({fmtCompact(Math.abs(snap.a - snap.b))} votos) já é maior que
-                todo o eleitorado que falta apurar ({fmtCompact(snap.rmax)}). O resultado oficial é o da totalização do TSE.
+                <strong>Não vira mais.</strong> Vantagem de {lead.short}: {fmtCompact(Math.abs(snap.a - snap.b))} votos, mais que os{' '}
+                {fmtCompact(snap.rmax)} eleitores que faltam.
               </>
             ) : (
               <>Apuração encerrada pelo TSE.</>
@@ -118,15 +118,10 @@ export function NeedMeter({ board, snap, className }: { board: Board; snap: Snap
       <div className="mt-1 flex items-center gap-2.5">
         <CandidateAvatar c={trail} size="sm" />
         <p className="text-[13px] leading-snug">
-          <strong style={{ color: trail.color }}>{trail.short}</strong> tem <strong className="num">{fmtPct(trailNow, 1)}%</strong> até agora. Para
-          virar, precisa de {need === null ? '—' : out ? 'mais do que todos' : `${fmtPct(need, 1)}%`} dos ~{fmtCompact(snap.rem)} votos válidos que faltam.
+          <strong style={{ color: trail.color }}>{trail.short}</strong> tem <strong className="num">{fmtPct(trailNow, 1)}%</strong>.{' '}
+          {`Faltam ~${fmtCompact(snap.rem)} votos válidos.`}
         </p>
       </div>
-      <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
-        {out
-          ? 'Pela estimativa, não alcança mais. Só é impossível de fato quando a vantagem supera todo o eleitorado que falta.'
-          : 'Estimativa pelo comparecimento de cada estado. Quanto mais o ponteiro passa do arco colorido, mais o ritmo precisa mudar.'}
-      </p>
     </Section>
   );
 }

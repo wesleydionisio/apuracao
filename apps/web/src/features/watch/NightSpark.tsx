@@ -85,6 +85,32 @@ export function NightSpark({
   const a22 = g22 ? path(g22.map((p) => [x(p.pst), y(p.pa)])) : '';
   const b22 = g22 ? path(g22.map((p) => [x(p.pst), y(100 - p.pa)])) : '';
 
+  // leitura por ponto: mouse por cima ou dedo (tocar/arrastar) mostra hoje e 2022 naquele % apurado
+  const [probe, setProbe] = useState<number | null>(null);
+  const release = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pstAt = (clientX: number) => {
+    const r = ref.current?.getBoundingClientRect();
+    return r ? Math.max(0, Math.min(100, ((clientX - r.left - padL) / iw) * 100)) : null;
+  };
+  const onPointer = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'mouse' && e.type === 'pointermove' && !e.buttons) return;
+    if (release.current) clearTimeout(release.current);
+    setProbe(pstAt(e.clientX));
+  };
+  const nowAt =
+    probe !== null && last && probe <= last.pst + 1
+      ? pts.reduce((b, p) => (Math.abs(p.pst - probe) < Math.abs(b.pst - probe) ? p : b), pts[0])
+      : null;
+  const at22 = (pst: number) => {
+    if (!g22) return null;
+    const i = g22.findIndex((p) => p.pst >= pst);
+    if (i <= 0) return i === 0 ? g22[0].pa : g22[g22.length - 1].pa;
+    const [p0, p1] = [g22[i - 1], g22[i]];
+    return p0.pa + ((p1.pa - p0.pa) * (pst - p0.pst)) / (p1.pst - p0.pst || 1);
+  };
+  const xAt = nowAt ? nowAt.pst : probe;
+  const pa22 = xAt !== null ? at22(xAt) : null;
+
   // rótulos nas pontas, sem sobrepor
   let ya = last ? y(last.pa) : 0;
   let yb = last ? y(100 - last.pa) : 0;
@@ -96,7 +122,15 @@ export function NightSpark({
   }
 
   return (
-    <div ref={ref} className={cn('relative w-full select-none', className)} style={{ height }}>
+    <div
+      ref={ref}
+      className={cn('relative w-full cursor-crosshair touch-pan-y select-none', className)}
+      style={{ height }}
+      onPointerDown={onPointer}
+      onPointerMove={onPointer}
+      onPointerLeave={(e) => e.pointerType === 'mouse' && setProbe(null)}
+      onPointerUp={(e) => e.pointerType !== 'mouse' && (release.current = setTimeout(() => setProbe(null), 1800))}
+    >
       <svg width={w} height={height} className="block overflow-visible" role="img" aria-label={last ? `Evolução da noite: com ${fmt(last.pst)}% apurado, ${ca.short} ${fmt(last.pa)}% e ${cb.short} ${fmt(100 - last.pa)}%` : 'Evolução da noite'}>
         <defs>
           <pattern id="spark-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -141,7 +175,7 @@ export function NightSpark({
             </g>
           ))}
         {g22 && (
-          <g opacity={0.55}>
+          <g opacity={0.4}>
             <path d={a22} fill="none" stroke={ca.color} strokeWidth={1.5} strokeDasharray="3 3" />
             <path d={b22} fill="none" stroke={cb.color} strokeWidth={1.5} strokeDasharray="3 3" />
           </g>
@@ -166,6 +200,16 @@ export function NightSpark({
             ))}
           </>
         )}
+        {xAt !== null && (
+          <g aria-hidden>
+            <line x1={x(xAt)} x2={x(xAt)} y1={padT} y2={padT + ih} className="stroke-foreground/40" />
+            {nowAt &&
+              [
+                { c: ca, v: nowAt.pa },
+                { c: cb, v: 100 - nowAt.pa },
+              ].map(({ c, v }) => <circle key={c.key} cx={x(nowAt.pst)} cy={y(v)} r={3.5} fill={c.color} className="stroke-background" strokeWidth={1.5} />)}
+          </g>
+        )}
         <text x={padL} y={height - 2} className="fill-muted-foreground text-[11px] tabular-nums">
           0%
         </text>
@@ -178,6 +222,35 @@ export function NightSpark({
           </text>
         )}
       </svg>
+      {xAt !== null && (nowAt || pa22 !== null) && (
+        <div
+          className="pointer-events-none absolute top-0 z-10 min-w-36 -translate-x-1/2 rounded-lg border bg-popover/95 px-2.5 py-1.5 text-[12px] shadow-lg backdrop-blur"
+          style={{ left: `clamp(76px, ${x(xAt)}px, calc(100% - 76px))` }}
+          role="tooltip"
+        >
+          <div className="num mb-0.5 flex justify-between gap-3 text-[11px] text-muted-foreground">
+            <span>{fmt(xAt)}% apurado</span>
+            {pa22 !== null && (
+              <span className="flex gap-3">
+                <span className="w-10 text-right">hoje</span>
+                <span className="w-9 text-right">2022</span>
+              </span>
+            )}
+          </div>
+          {[ca, cb].map((c) => (
+            <div key={c.key} className="num flex items-center justify-between gap-3">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="size-2 shrink-0 rounded-full" style={{ background: c.color }} />
+                <span className="truncate">{c.short.split(' ')[0]}</span>
+              </span>
+              <span className="flex gap-3">
+                <span className="w-10 text-right font-semibold">{nowAt ? `${fmt(c.key === 'a' ? nowAt.pa : 100 - nowAt.pa)}%` : '—'}</span>
+                {pa22 !== null && <span className="w-9 text-right text-muted-foreground">{fmt(c.key === 'a' ? pa22 : 100 - pa22)}</span>}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {!pts.length && (
         <div className="absolute inset-0 flex items-center justify-center text-[12px] text-muted-foreground">
           A linha começa a se formar com as primeiras urnas.

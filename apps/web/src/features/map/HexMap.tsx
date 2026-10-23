@@ -21,6 +21,9 @@ export interface HexHit {
   /** posição relativa ao mapa, em px CSS */
   x: number;
   y: number;
+  /** % de A e % apurado da cidade na camada do mapa (para a ficha de quem usa o mapa) */
+  pa: number | null;
+  pst: number | null;
 }
 
 const ease = (t: number) => 1 - (1 - t) ** 3;
@@ -211,7 +214,9 @@ export default function HexMap({
     const h = hexUnder(L, (sx - tx) / T, (sy - ty) / T);
     const c = h >= 0 ? L.city[h] : -1;
     if (c < 0 || (scope !== 'BR' && dots.uf[c] !== scope)) return null;
-    return { city: c, ibge: dots.mun[c], uf: dots.uf[c], x: sx, y: sy };
+    const pa = cityVals && !Number.isNaN(cityVals.pa[c]) ? cityVals.pa[c] : null;
+    const pst = cityVals && !Number.isNaN(cityVals.pst[c]) ? cityVals.pst[c] : null;
+    return { city: c, ibge: dots.mun[c], uf: dots.uf[c], x: sx, y: sy, pa, pst };
   };
 
   const vp = useViewport(canvas, cssW, cssH, kick, (x, y) => onPick?.(hitAt(x, y)), zoomable);

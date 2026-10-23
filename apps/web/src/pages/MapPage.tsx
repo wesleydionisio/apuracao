@@ -2,7 +2,7 @@
 // Camadas: Agora | 1º turno | 2022. Com "Agora", dá para comparar com uma referência e pintar o deslocamento.
 import type { Board } from '@apuracao/shared';
 import { fmtPct } from '@apuracao/shared';
-import { GitCompareArrows, Grip, Hexagon, Map as MapIcon, Rows3 } from 'lucide-react';
+import { GitCompareArrows, Hexagon, Map as MapIcon, Rows3 } from 'lucide-react';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { SourceStamp } from '@/components/core/live';
@@ -19,7 +19,7 @@ import type { HexHit } from '@/features/map/HexMap';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 
-type View = 'hex' | 'dots' | 'map' | 'list';
+type View = 'hex' | 'map' | 'list';
 const VIEW_KEY = 'map:view';
 const CityMap = lazy(() => import('@/features/map/CityMap'));
 const HexMap = lazy(() => import('@/features/map/HexMap'));
@@ -27,8 +27,8 @@ const HexMap = lazy(() => import('@/features/map/HexMap'));
 function savedView(): View {
   try {
     const v = localStorage.getItem(VIEW_KEY);
-    // 'heat' era o mapa de calor, trocado pela grade de hexágonos
-    return v === 'map' || v === 'list' || v === 'dots' || v === 'hex' ? v : 'hex';
+    // 'heat' (mapa de calor) e 'dots' (pontos por cidade) saíram: caem na grade de hexágonos
+    return v === 'map' || v === 'list' || v === 'hex' ? v : 'hex';
   } catch {
     return 'hex';
   }
@@ -82,7 +82,7 @@ function MapView({ board }: { board: Board }) {
   };
   const live = !!board.released && !!board.br;
   /** grade e pontos: mapas por cidade (a comparação por estado não se aplica) */
-  const byCity = view === 'hex' || view === 'dots';
+  const byCity = view === 'hex';
   // sem escolha do usuário a camada acompanha a liberação (17h); escolhida, fica
   const [layer, setLayer] = useState<MapLayer | null>(null);
   const effective: MapLayer = layer === null || (layer === 'live' && !live) ? (live ? 'live' : 't1') : layer;
@@ -154,9 +154,6 @@ function MapView({ board }: { board: Board }) {
           <ToggleGroupItem value="hex" aria-label="Grade de hexágonos">
             <Hexagon />
           </ToggleGroupItem>
-          <ToggleGroupItem value="dots" aria-label="Pontos por cidade">
-            <Grip />
-          </ToggleGroupItem>
           <ToggleGroupItem value="map" aria-label="Estados">
             <MapIcon />
           </ToggleGroupItem>
@@ -224,7 +221,7 @@ function MapView({ board }: { board: Board }) {
       {byCity ? (
         <section className="rounded-2xl border bg-card p-3 sm:p-5">
           <Suspense fallback={<Skeleton className="aspect-[1000/1051] w-full rounded-xl" />}>
-            <CityMap mode={view === 'hex' ? 'hex' : 'dots'} layer={effective} cands={cands} className="mx-auto max-w-[620px]" />
+            <CityMap layer={effective} cands={cands} className="mx-auto max-w-[620px]" />
           </Suspense>
         </section>
       ) : view === 'map' ? (

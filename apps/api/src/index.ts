@@ -17,7 +17,10 @@ import {
   type CandidateDef,
   type Municipality,
 } from '@apuracao/shared';
-import { AID_COOKIE, clientIp, newAid, verifyAid } from '@apuracao/shared/server';
+import { AID_COOKIE, clientIp, newAid, SESSION_COOKIE, signToken, verifyAid, verifySession, verifyToken } from '@apuracao/shared/server';
+import { OAuth2Client } from 'google-auth-library';
+import pg from 'pg';
+import { FileAccounts, PgAccounts, type Account, type AccountStore } from './accounts';
 import { config } from './config';
 import { board, cityPayload, munBoard, municipalities } from './data';
 import { renderHtml, type Meta } from './html';
@@ -29,6 +32,10 @@ const mod = new Moderator();
 const store: GuessStore = config.databaseUrl
   ? new PgStore(config.databaseUrl, path.join(config.repo, 'infra/schema.sql'))
   : new FileStore(config.varDir);
+const accounts: AccountStore = config.databaseUrl
+  ? new PgAccounts(new pg.Pool({ connectionString: config.databaseUrl, max: 4 }))
+  : new FileAccounts(config.varDir);
+const google = config.googleClientId ? new OAuth2Client(config.googleClientId) : null;
 const redis = config.redisUrl ? new Redis(config.redisUrl, { maxRetriesPerRequest: 2, enableOfflineQueue: false }) : null;
 redis?.on('error', (e) => app.log.warn({ err: e.message }, 'redis'));
 
@@ -127,6 +134,104 @@ app.get('/api/me', async (req, reply) => {
   const id = identity(req, reply);
   reply.header('cache-control', 'private, no-store');
   return { id, nick: nickFor(id), hue: hueOf(id) };
+});
+
+// ---------- contas do chat (login com o Google) ----------
+// Entrar: o Google devolve um ID token; conta existente → cookie `sid`. Conta nova → um token curto
+// assinado com os dados do Google, trocado por conta + cookie no cadastro (nome, celular, usuário).
+interface Pending {
+  sub: string;
+  email: string;
+  name: string;
+  exp: number;
+}
+
+const userOf = (a: Account) => ({ username: a.username, hue: hueOf(a.id) });
+
+function startSession(reply: FastifyReply, a: Account) {
+  reply.setCookie(SESSION_COOKIE, signToken({ uid: a.id, user: a.username }, config.secret), {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: config.publicUrl.startsWith('https'),
+    maxAge: 60 * 60 * 24 * 180,
+  });
+  return { user: userOf(a) };
+}
+
+async function signIn(reply: FastifyReply, sub: string, email: string, name: string) {
+  const a = await accounts.bySub(sub);
+  if (a) return startSession(reply, a);
+  const token = signToken({ sub, email, name, exp: Date.now() + 30 * 60_000 } satisfies Pending, config.secret);
+  return { signup: { token, name, email } };
+}
+
+/** celular brasileiro com DDD: 10 ou 11 dígitos (aceita +55) */
+function cleanPhone(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  let d = v.replace(/\D/g, '');
+  if (d.length > 11 && d.startsWith('55')) d = d.slice(2);
+  return /^[1-9]{2}9?\d{8}$/.test(d) ? d : null;
+}
+
+// sem GOOGLE_CLIENT_ID e fora de produção: entrar com um e-mail qualquer, para testar o fluxo localmente
+const devLogin = !config.googleClientId && process.env.NODE_ENV !== 'production';
+
+app.get('/api/auth/me', async (req, reply) => {
+  reply.header('cache-control', 'private, no-store');
+  const s = verifySession(req.cookies[SESSION_COOKIE], config.secret);
+  return { user: s ? { username: s.user, hue: hueOf(s.uid) } : null, google: config.googleClientId || null, dev: devLogin };
+});
+
+app.post<{ Body: Record<string, unknown> }>('/api/auth/google', async (req, reply) => {
+  if (!google) return reply.code(404).send({ error: 'off' });
+  if (!allow(`auth:${ipOf(req)}`, 10, 0.2)) return reply.code(429).send({ error: 'rate' });
+  const credential = req.body?.credential;
+  if (typeof credential !== 'string') return reply.code(400).send({ error: 'invalid' });
+  try {
+    const t = await google.verifyIdToken({ idToken: credential, audience: config.googleClientId });
+    const p = t.getPayload();
+    if (!p?.sub || !p.email || p.email_verified === false) return reply.code(401).send({ error: 'google' });
+    return await signIn(reply, `google:${p.sub}`, p.email, p.name ?? '');
+  } catch {
+    return reply.code(401).send({ error: 'google' });
+  }
+});
+
+app.post<{ Body: Record<string, unknown> }>('/api/auth/dev', async (req, reply) => {
+  if (!devLogin) return reply.code(404).send({ error: 'off' });
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  if (!/^[^@\s]+@[^@\s]+$/.test(email)) return reply.code(400).send({ error: 'invalid' });
+  return signIn(reply, `dev:${email}`, email, email.split('@')[0]);
+});
+
+app.post<{ Body: Record<string, unknown> }>('/api/auth/signup', async (req, reply) => {
+  if (!allow(`signup:${ipOf(req)}`, 10, 0.1)) return reply.code(429).send({ error: 'rate' });
+  const b = req.body ?? {};
+  const p = verifyToken<Pending>(typeof b.token === 'string' ? b.token : null, config.secret);
+  if (!p?.sub) return reply.code(401).send({ error: 'expired' });
+  const name = typeof b.name === 'string' ? b.name.replace(/\s+/g, ' ').trim() : '';
+  if (name.length < 2 || name.length > 80) return reply.code(400).send({ error: 'name' });
+  const phone = cleanPhone(b.phone);
+  if (!phone) return reply.code(400).send({ error: 'phone' });
+  const username = cleanNick(b.username, mod);
+  if (!username) return reply.code(400).send({ error: 'username' });
+  const existing = await accounts.bySub(p.sub);
+  if (existing) return startSession(reply, existing);
+  if (await accounts.usernameTaken(username)) return reply.code(409).send({ error: 'taken' });
+  const a: Account = { id: newId(), googleSub: p.sub, email: p.email, name, phone, username, createdAt: new Date().toISOString() };
+  if (!(await accounts.create(a))) return reply.code(409).send({ error: 'taken' });
+  return startSession(reply, a);
+});
+
+app.get<{ Querystring: { u?: string } }>('/api/auth/username', async (req) => {
+  const u = cleanNick(req.query.u, mod);
+  return { ok: !!u && !(await accounts.usernameTaken(u)), valid: !!u };
+});
+
+app.post('/api/auth/logout', async (_req, reply) => {
+  reply.clearCookie(SESSION_COOKIE, { path: '/' });
+  return { ok: true };
 });
 
 app.post<{ Body: Record<string, unknown> }>('/api/guess', async (req, reply) => {
@@ -401,6 +506,7 @@ app.get('/metrics', async (_req, reply) => {
 });
 
 await store.init();
+await accounts.init();
 app.log.info(`palpites carregados: ${store.index.byId.size}`);
 await app.listen({ port: config.port, host: config.host });
 

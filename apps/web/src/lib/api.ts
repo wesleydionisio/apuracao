@@ -8,6 +8,8 @@ export interface Me {
   hue: number;
   /** lado da torcida no chat */
   side?: 'a' | 'b' | null;
+  /** entrou com o Google (só assim manda mensagem); o apelido é o nome de usuário */
+  auth?: boolean;
 }
 
 export interface Stats {

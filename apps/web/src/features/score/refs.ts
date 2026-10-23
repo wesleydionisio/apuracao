@@ -12,7 +12,8 @@ export interface Refs {
 
 const KEY = 'refs';
 const EVT = 'refs-change';
-const DEFAULT: Refs = { t1: false, y22: false };
+// 2022 ligado por padrão: a curva da noite anterior é a melhor régua para ler a virada
+const DEFAULT: Refs = { t1: false, y22: true };
 
 let cache: Refs | null = null;
 let raw: string | null = null;
@@ -28,7 +29,7 @@ function read(): Refs {
   raw = s;
   try {
     const p = s ? JSON.parse(s) : {};
-    cache = { t1: !!p.t1, y22: !!p.y22 };
+    cache = { t1: !!p.t1, y22: p.y22 === undefined ? DEFAULT.y22 : !!p.y22 };
   } catch {
     cache = DEFAULT;
   }

@@ -1,10 +1,12 @@
 // Números da apuração em grade 3×2 (celular) — cada célula: rótulo, valor e um contexto/micro-visual.
 import type { Board, HistRow, Snap } from '@apuracao/shared';
+import { ufName } from '@apuracao/shared';
 import NumberFlow from '@number-flow/react';
 import type { ReactNode } from 'react';
 import { fmtCompact, fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Fill } from '@/components/core/bars';
+import { DataTip, SplitTip } from '@/components/core/datatip';
 
 const TWO = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
 const ONE = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
@@ -23,17 +25,34 @@ function Cell({ label, value, sub, className }: { label: string; value: ReactNod
 function DecidedStrip({ board }: { board: Board }) {
   const [ca, cb] = board.candidates;
   const ufs = Object.values(board.ufs).sort((x, y) => y.el - x.el);
+  const doneBy = (k: 'a' | 'b') => ufs.filter((s) => (s.status === 'definido' || s.status === 'totalizado') && s.lead === k).length;
   return (
-    <div className="flex flex-wrap gap-[2px]" aria-hidden>
+    // cada quadradinho é um estado: passar o mouse ou tocar mostra qual e como está
+    <div className="flex flex-wrap gap-[2px]" role="img" aria-label={`Decididos: ${doneBy('a')} para ${ca.short}, ${doneBy('b')} para ${cb.short}`}>
       {ufs.map((s) => {
         const done = s.status === 'definido' || s.status === 'totalizado';
         const c = s.lead === 'a' ? ca : s.lead === 'b' ? cb : null;
+        const uf = s.s.slice(3);
         return (
-          <span
+          <DataTip
             key={s.s}
-            className="size-[7px] rounded-[2px]"
-            style={{ background: done && c ? c.color : c ? `color-mix(in oklab, ${c.color} 28%, var(--muted))` : 'var(--muted)' }}
-          />
+            nested
+            className="p-[1px] -m-[1px]"
+            label={`${ufName(uf)}: ${done ? 'decidido' : 'em apuração'}`}
+            tip={
+              <SplitTip
+                cands={board.candidates}
+                pa={s.valid ? s.pa : null}
+                title={ufName(uf)}
+                extra={`${fmtPct(s.pst, 0)}% apurado · ${done ? 'decidido' : 'em aberto'}`}
+              />
+            }
+          >
+            <span
+              className="block size-[7px] rounded-[2px]"
+              style={{ background: done && c ? c.color : c ? `color-mix(in oklab, ${c.color} 28%, var(--muted))` : 'var(--muted)' }}
+            />
+          </DataTip>
         );
       })}
     </div>

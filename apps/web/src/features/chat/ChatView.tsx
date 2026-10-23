@@ -1,28 +1,27 @@
 // Chat de live: uma linha por mensagem, torcida no topo, selos de partido, emoji embutido.
 // layout "shell": tela cheia no celular, entre cabeçalho e abas (acompanha o teclado — html.kb/.chat-shell).
 // layout "panel": coluna lateral no desktop.
-import type { ChatMsg, Reaction, Room } from '@apuracao/shared';
-import { EMOJI_REACTIONS, MAX_BODY } from '@apuracao/shared';
-import { ArrowDown, SendHorizontal, Smile, WifiOff, X } from 'lucide-react';
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import type { ChatMsg, Room } from '@apuracao/shared';
+import { MAX_BODY } from '@apuracao/shared';
+import { ArrowDown, Heart, SendHorizontal, Smile, UserRound, WifiOff, X } from 'lucide-react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useCandidates } from '@/components/core/candidate';
 import { Button } from '@/components/ui/button';
-import { live } from '@/lib/live';
+import { live, savedSide } from '@/lib/live';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 import { useChat } from '@/store/chat';
 import { EmojiPanel } from './emoji';
 import { FloatLayer, spawnFloat } from './floats';
+import { LoginGate, SideGate } from './gates';
 import { useKeyboardOpen } from '@/features/watch/hooks';
 import { useMountOnce } from './lazy';
 import { ChatLine, ModLine, NICK_CLS, NickAvatar, nickColor, PartyBadge, renderBody, SystemLine } from './parts';
-import { read, write } from './rooms';
-import { markOwn, ownRecent, TorcidaBar } from './torcida';
+import { BumpButton, ownRecent, TorcidaBar } from './torcida';
 
 // gavetas (vaul) fora do bundle inicial
 const MessageActions = lazy(() => import('./drawers').then((m) => ({ default: m.MessageActions })));
 const ProfileDrawer = lazy(() => import('./drawers').then((m) => ({ default: m.ProfileDrawer })));
-const SideDrawer = lazy(() => import('./drawers').then((m) => ({ default: m.SideDrawer })));
 
 const EMPTY: ChatMsg[] = [];
 
@@ -40,12 +39,7 @@ const ERR_TEXT: Record<string, string> = {
   closed: 'Esta sala foi fechada pela moderação.',
   invalid: 'Mensagem inválida (até 240 caracteres).',
   off: 'O chat está desligado no momento.',
-};
-
-const LS_REACT = 'react:default';
-const savedReaction = (): Reaction => {
-  const v = read(LS_REACT);
-  return (EMOJI_REACTIONS as readonly string[]).includes(v ?? '') ? (v as Reaction) : '🔥';
+  auth: 'Entre com o Google para comentar.',
 };
 
 export default function ChatView({
@@ -81,11 +75,14 @@ export default function ChatView({
   const [picked, setPicked] = useState<ChatMsg | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [ask, setAsk] = useState<{ then: () => void } | null>(null);
+  // entrar com o Google: pedido ao mandar a primeira mensagem; a mensagem segue depois de entrar
+  const [login, setLogin] = useState(false);
+  // a escolha de lado pode ser fechada (tocar fora): volta ao torcer, comentar ou entrar
+  const [sideClosed, setSideClosed] = useState(false);
+  const sendAfterLogin = useRef(false);
   const [stuck, setStuck] = useState(true);
   const actionsMounted = useMountOnce(!!picked);
   const profileMounted = useMountOnce(profileOpen);
-  const sideMounted = useMountOnce(!!ask);
   const [unseen, setUnseen] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -141,19 +138,15 @@ export default function ChatView({
     if (err?.wait) setCool(Math.ceil(err.wait));
     // censurado: limpa o que estava digitado para o aviso com o tempo ficar à vista
     if (err?.code === 'muted') setText('');
+    // a sessão caiu no servidor: entra de novo e manda
+    if (err?.code === 'auth' && Date.now() - err.at < 5000) {
+      sendAfterLogin.current = true;
+      setLogin(true);
+    }
   }, [err]);
 
   const degraded = link !== 'live' && link !== 'demo';
   const disabled = degraded || !enabled || closed;
-
-  /** pergunta o lado uma única vez, antes da primeira torcida ou mensagem */
-  const ensureSide = useCallback(
-    (then: () => void) => {
-      if (useBoard.getState().me?.side || read('side:asked')) return then();
-      setAsk({ then });
-    },
-    [],
-  );
 
   function jumpToEnd() {
     const el = listRef.current;
@@ -165,6 +158,12 @@ export default function ChatView({
   function doSend() {
     const body = text.trim();
     if (!body || disabled || cool) return;
+    if (!mySide) return setSideClosed(false);
+    if (!useBoard.getState().me?.auth) {
+      sendAfterLogin.current = true;
+      setLogin(true);
+      return;
+    }
     if (live.chat(room, body)) {
       setText('');
       setStuck(true);
@@ -173,6 +172,15 @@ export default function ChatView({
       if (slow) setCool(slow);
     }
   }
+
+  // entrou (o WS reconectou com a conta): manda o que estava esperando
+  const authed = !!me?.auth;
+  useEffect(() => {
+    if (!authed || !sendAfterLogin.current) return;
+    sendAfterLogin.current = false;
+    doSend();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed]);
 
   function insert(t: string) {
     const el = inputRef.current;
@@ -198,7 +206,8 @@ export default function ChatView({
       : cool
         ? `Aguarde ${cool}s para a próxima`
         : 'Comente a apuração…';
-  const mySide = me?.side ? cands?.find((c) => c.key === me.side) : null;
+  const sideKey = me ? (me.side ?? null) : savedSide();
+  const mySide = sideKey ? cands?.find((c) => c.key === sideKey) : null;
   const counts = { a: reacts?.['cheer:a'] ?? 0, b: reacts?.['cheer:b'] ?? 0 };
 
   return (
@@ -207,179 +216,202 @@ export default function ChatView({
         'flex flex-col bg-background',
         layout === 'shell'
           ? 'chat-shell fixed inset-x-0 z-20 mx-auto max-w-3xl lg:border-x'
-          : 'h-full min-h-0 overflow-hidden rounded-2xl border bg-card',
+          : 'relative h-full min-h-0 overflow-hidden rounded-2xl border bg-card',
       )}
     >
       {top}
-      <div className={cn('border-b', layout === 'panel' && 'bg-card')}>
-        {roomBar}
-        {cands && !(kb && layout === 'shell') && (
-          <TorcidaBar room={room} cands={cands} counts={counts} disabled={degraded} ensureSide={ensureSide} />
-        )}
-      </div>
-      {disabled && (
-        <div className="flex items-center gap-2 border-b bg-muted px-4 py-1.5 text-[12px] text-muted-foreground" role="status">
-          <WifiOff className="size-3.5 shrink-0" aria-hidden />
-          {closed
-            ? 'Esta sala foi fechada pela moderação.'
-            : !enabled
-              ? 'Chat desligado no momento. O placar segue ao vivo.'
-              : 'Reconectando o chat… o placar continua atualizando.'}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className={cn('border-b', layout === 'panel' && 'bg-card')}>
+          {roomBar}
+          {cands && !(kb && layout === 'shell') && <TorcidaBar cands={cands} counts={counts} />}
         </div>
-      )}
-      {slow > 0 && !disabled && (
-        <div className="border-b bg-muted/60 px-4 py-1 text-[11.5px] text-muted-foreground" role="status">
-          Modo lento: 1 mensagem a cada <span className="num font-medium text-foreground">{slow}s</span>
-        </div>
-      )}
-
-      <div className="relative min-h-0 flex-1">
-        <div
-          ref={listRef}
-          onScroll={(e) => {
-            const el = e.currentTarget;
-            const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
-            setStuck(atEnd);
-            if (atEnd) setUnseen(0);
-          }}
-          className="h-full overflow-y-auto overscroll-contain py-1.5"
-          role="log"
-          aria-label="Mensagens do chat"
-          aria-live="polite"
-        >
-          {!msgs.length && <EmptyChat disabled={disabled} cands={cands} />}
-          {msgs.map((m) =>
-            m.sys ? (
-              <SystemLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
-            ) : m.mod ? (
-              <ModLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
-            ) : (
-              <ChatLine
-                key={m.id}
-                m={m}
-                cands={cands}
-                fresh={!!initial.current && !initial.current.has(m.id)}
-                mine={!!me && m.nick === me.nick && m.hue === me.hue}
-                onPick={setPicked}
-              />
-            ),
-          )}
-        </div>
-        <FloatLayer cands={cands} />
-        {!stuck && msgs.length > 0 && (
-          <button
-            type="button"
-            onClick={jumpToEnd}
-            className="absolute bottom-2.5 left-1/2 z-10 inline-flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[12.5px] font-medium text-background shadow-lg animate-in fade-in-0 slide-in-from-bottom-2"
-          >
-            <ArrowDown className="size-3.5" aria-hidden />
-            {unseen ? `${unseen} nova${unseen > 1 ? 's' : ''}` : 'Ao vivo'}
-          </button>
-        )}
-      </div>
-
-      {emojiOpen && <EmojiPanel cands={cands} onPick={insert} />}
-      <div className={cn('border-t', layout === 'panel' ? 'bg-card' : 'bg-background')}>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            ensureSide(doSend);
-          }}
-          className="flex items-center gap-2 px-3 pt-2"
-        >
-          <button
-            type="button"
-            onClick={() => setProfileOpen(true)}
-            className="relative shrink-0 rounded-full"
-            aria-label={me ? `Seu perfil: ${me.nick}${mySide ? `, torce ${mySide.n}` : ''}. Editar` : 'Seu perfil'}
-          >
-            {me ? <NickAvatar m={me} className="size-9" /> : <span className="block size-9 rounded-full bg-muted" />}
-            {mySide && <PartyBadge c={mySide} className="absolute -right-1.5 -bottom-1 h-[15px] px-1 text-[11px] ring-2 ring-background" />}
-          </button>
-          <div className="relative min-w-0 flex-1">
-            <input
-              ref={inputRef}
-              value={text}
-              onChange={(e) => setText(e.target.value.slice(0, MAX_BODY))}
-              maxLength={MAX_BODY}
-              enterKeyHint="send"
-              placeholder={placeholder}
-              disabled={disabled || mutedNow}
-              className={cn('h-10 w-full rounded-full border border-input bg-muted/50 pl-4 outline-none transition-[box-shadow,border-color,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/30 disabled:opacity-60', mutedNow ? 'pr-4 placeholder:text-[13px]' : 'pr-11')}
-              aria-label="Mensagem"
-              aria-describedby="chat-status"
-            />
-            {!mutedNow && <button
-              type="button"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={() => setEmojiOpen((o) => !o)}
-              className={cn(
-                'absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground',
-                emojiOpen && 'bg-accent text-foreground',
-              )}
-              aria-label={emojiOpen ? 'Fechar emojis' : 'Emojis e selos de torcida'}
-              aria-expanded={emojiOpen}
-            >
-              {emojiOpen ? <X className="size-[18px]" /> : <Smile className="size-[18px]" />}
-            </button>}
+        {disabled && (
+          <div className="flex items-center gap-2 border-b bg-muted px-4 py-1.5 text-[12px] text-muted-foreground" role="status">
+            <WifiOff className="size-3.5 shrink-0" aria-hidden />
+            {closed
+              ? 'Esta sala foi fechada pela moderação.'
+              : !enabled
+                ? 'Chat desligado no momento. O placar segue ao vivo.'
+                : 'Reconectando o chat… o placar continua atualizando.'}
           </div>
-          {text.trim() ? (
-            <Button
-              type="submit"
-              size="icon"
-              disabled={disabled || cool > 0}
-              className="size-10 shrink-0 rounded-full"
-              onPointerDown={(e) => e.preventDefault()}
-              aria-label={cool ? `Aguarde ${cool} segundos` : 'Enviar'}
-            >
-              {cool && !mutedNow ? <span className="num text-[12px] font-semibold">{cool}</span> : <SendHorizontal className="size-[18px]" aria-hidden />}
-            </Button>
-          ) : (
-            <ReactButton room={room} disabled={degraded} />
-          )}
-        </form>
-        <div
-          id="chat-status"
-          className="flex min-h-6 items-center justify-between gap-3 px-4 pt-1 pb-1.5 text-[11px] text-muted-foreground"
-          aria-live="polite"
-        >
-          {errText ? (
-            <span className="font-medium text-foreground/80">{errText}</span>
-          ) : text.length > 180 ? (
-            <span className={cn('num', MAX_BODY - text.length < 20 && 'text-destructive')}>{MAX_BODY - text.length} caracteres</span>
-          ) : (
-            <span className="min-w-0 truncate">
-              {me ? (
-                <>
-                  como{' '}
-                  <button type="button" onClick={() => setProfileOpen(true)} className={cn('font-semibold hover:underline', NICK_CLS)} style={nickColor(me.hue)}>
-                    {me.nick}
-                  </button>
-                </>
+        )}
+        {slow > 0 && !disabled && (
+          <div className="border-b bg-muted/60 px-4 py-1 text-[11.5px] text-muted-foreground" role="status">
+            Modo lento: 1 mensagem a cada <span className="num font-medium text-foreground">{slow}s</span>
+          </div>
+        )}
+
+        <div className="relative min-h-0 flex-1">
+          <div
+            ref={listRef}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+              setStuck(atEnd);
+              if (atEnd) setUnseen(0);
+            }}
+            className="h-full overflow-y-auto overscroll-contain py-1.5"
+            role="log"
+            aria-label="Mensagens do chat"
+            aria-live="polite"
+          >
+            {!msgs.length && <EmptyChat disabled={disabled} cands={cands} />}
+            {msgs.map((m) =>
+              m.sys ? (
+                <SystemLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
+              ) : m.mod ? (
+                <ModLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
               ) : (
-                'conectando…'
-              )}
-            </span>
+                <ChatLine
+                  key={m.id}
+                  m={m}
+                  cands={cands}
+                  fresh={!!initial.current && !initial.current.has(m.id)}
+                  mine={!!me && m.nick === me.nick && m.hue === me.hue}
+                  onPick={setPicked}
+                />
+              ),
+            )}
+          </div>
+          <FloatLayer cands={cands} />
+          {!stuck && msgs.length > 0 && (
+            <button
+              type="button"
+              onClick={jumpToEnd}
+              className="absolute bottom-2.5 left-1/2 z-10 inline-flex h-8 -translate-x-1/2 items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[12.5px] font-medium text-background shadow-lg animate-in fade-in-0 slide-in-from-bottom-2"
+            >
+              <ArrowDown className="size-3.5" aria-hidden />
+              {unseen ? `${unseen} nova${unseen > 1 ? 's' : ''}` : 'Ao vivo'}
+            </button>
           )}
-          <span className="shrink-0">sem links · seja gentil</span>
         </div>
+
+        {emojiOpen && <EmojiPanel cands={cands} onPick={insert} />}
+        <div className={cn('border-t', layout === 'panel' ? 'bg-card' : 'bg-background')}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              doSend();
+            }}
+            className="flex items-center gap-2 px-3 pt-2"
+          >
+            <button
+              type="button"
+              onClick={() => (me?.auth ? setProfileOpen(true) : mySide ? setLogin(true) : setSideClosed(false))}
+              className="relative shrink-0 rounded-full"
+              aria-label={me?.auth ? `Seu perfil: ${me.nick}${mySide ? `, torce ${mySide.n}` : ''}` : 'Entrar com o Google'}
+            >
+              {me?.auth ? <NickAvatar m={me} className="size-9" /> : (
+              <span className="flex size-9 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 bg-muted text-muted-foreground transition-colors hover:text-foreground">
+                <UserRound className="size-[18px]" aria-hidden />
+              </span>
+            )}
+              {mySide && <PartyBadge c={mySide} className="absolute -right-1.5 -bottom-1 h-[15px] px-1 text-[11px] ring-2 ring-background" />}
+            </button>
+            <div className="relative min-w-0 flex-1">
+              <input
+                ref={inputRef}
+                value={text}
+                onChange={(e) => setText(e.target.value.slice(0, MAX_BODY))}
+                maxLength={MAX_BODY}
+                enterKeyHint="send"
+                placeholder={placeholder}
+                disabled={disabled || mutedNow}
+                className={cn('h-10 w-full rounded-full border border-input bg-muted/50 pl-4 outline-none transition-[box-shadow,border-color,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/30 disabled:opacity-60', mutedNow ? 'pr-4 placeholder:text-[13px]' : 'pr-11')}
+                aria-label="Mensagem"
+                aria-describedby="chat-status"
+              />
+              {!mutedNow && <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => setEmojiOpen((o) => !o)}
+                className={cn(
+                  'absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground',
+                  emojiOpen && 'bg-accent text-foreground',
+                )}
+                aria-label={emojiOpen ? 'Fechar emojis' : 'Emojis e selos de torcida'}
+                aria-expanded={emojiOpen}
+              >
+                {emojiOpen ? <X className="size-[18px]" /> : <Smile className="size-[18px]" />}
+              </button>}
+            </div>
+            {text.trim() ? (
+              <Button
+                type="submit"
+                size="icon"
+                disabled={disabled || cool > 0}
+                className="size-10 shrink-0 rounded-full"
+                onPointerDown={(e) => e.preventDefault()}
+                aria-label={cool ? `Aguarde ${cool} segundos` : 'Enviar'}
+              >
+                {cool && !mutedNow ? <span className="num text-[12px] font-semibold">{cool}</span> : <SendHorizontal className="size-[18px]" aria-hidden />}
+              </Button>
+            ) : (
+              mySide ? (
+                <BumpButton room={room} c={mySide} disabled={degraded} />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSideClosed(false)}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 bg-muted text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="Escolher seu lado para torcer"
+                >
+                  <Heart className="size-[18px]" aria-hidden />
+                </button>
+              )
+            )}
+          </form>
+          <div
+            id="chat-status"
+            className="flex min-h-6 items-center justify-between gap-3 px-4 pt-1 pb-1.5 text-[11px] text-muted-foreground"
+            aria-live="polite"
+          >
+            {errText ? (
+              <span className="font-medium text-foreground/80">{errText}</span>
+            ) : text.length > 180 ? (
+              <span className={cn('num', MAX_BODY - text.length < 20 && 'text-destructive')}>{MAX_BODY - text.length} caracteres</span>
+            ) : (
+              <span className="min-w-0 truncate">
+                {me && !me.auth ? (
+                  <button type="button" onClick={() => setLogin(true)} className="font-semibold text-foreground hover:underline">
+                    Entre com o Google para comentar
+                  </button>
+                ) : me ? (
+                  <>
+                    como{' '}
+                    <button type="button" onClick={() => setProfileOpen(true)} className={cn('font-semibold hover:underline', NICK_CLS)} style={nickColor(me.hue)}>
+                      {me.nick}
+                    </button>
+                  </>
+                ) : (
+                  'conectando…'
+                )}
+              </span>
+            )}
+            <span className="shrink-0">sem links · seja gentil</span>
+          </div>
+        </div>
+
+        {cands && !mySide && !sideClosed && <SideGate cands={cands} onPick={(s) => live.side(s)} onClose={() => setSideClosed(true)} />}
       </div>
+
+      {/* o login cobre a coluna inteira (placar incluso): o cadastro precisa de espaço no celular */}
+      {login && mySide && (
+        <LoginGate
+          onClose={() => {
+            sendAfterLogin.current = false;
+            setLogin(false);
+          }}
+          onDone={() => {
+            setLogin(false);
+            live.reconnect();
+          }}
+        />
+      )}
 
       <Suspense fallback={null}>
         {actionsMounted && <MessageActions m={picked} room={room} cands={cands} onClose={() => setPicked(null)} />}
         {profileMounted && <ProfileDrawer open={profileOpen} onOpenChange={setProfileOpen} cands={cands} />}
-        {sideMounted && (
-          <SideDrawer
-            open={!!ask}
-            onOpenChange={(o) => !o && setAsk(null)}
-            cands={cands}
-            onDone={() => {
-              const then = ask?.then;
-              setAsk(null);
-              then?.();
-            }}
-          />
-        )}
       </Suspense>
     </div>
   );
@@ -404,81 +436,3 @@ function EmptyChat({ disabled, cands }: { disabled: boolean; cands: ReturnType<t
     </div>
   );
 }
-
-/**
- * Sem texto, o botão de enviar vira reação (como os corações de uma live): toque manda,
- * segurar abre a escolha do emoji.
- */
-function ReactButton({ room, disabled }: { room: Room; disabled: boolean }) {
-  const [cur, setCur] = useState<Reaction>(savedReaction);
-  const [choose, setChoose] = useState(false);
-  const [pop, setPop] = useState(0);
-  const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const held = useRef(false);
-  const send = (e: Reaction) => {
-    live.react(room, e);
-    markOwn(e);
-    spawnFloat(e, 1);
-    navigator.vibrate?.(8);
-    setPop((p) => p + 1);
-  };
-  return (
-    <div className="relative shrink-0">
-      {choose && (
-        <div
-          className="absolute right-0 bottom-12 z-20 flex gap-0.5 rounded-full border bg-popover p-1 shadow-xl animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2"
-          role="menu"
-          aria-label="Escolher reação"
-        >
-          {EMOJI_REACTIONS.map((e) => (
-            <button
-              key={e}
-              type="button"
-              role="menuitem"
-              onPointerDown={(ev) => ev.preventDefault()}
-              onClick={() => {
-                setCur(e);
-                write(LS_REACT, e);
-                setChoose(false);
-                send(e);
-              }}
-              className="flex size-10 items-center justify-center rounded-full text-[22px] transition-transform duration-100 hover:bg-accent active:scale-90"
-              aria-label={`Reagir com ${e}`}
-            >
-              {e}
-            </button>
-          ))}
-        </div>
-      )}
-      <button
-        type="button"
-        disabled={disabled}
-        onPointerDown={(e) => {
-          e.preventDefault();
-          held.current = false;
-          hold.current = setTimeout(() => {
-            held.current = true;
-            setChoose(true);
-            navigator.vibrate?.(12);
-          }, 420);
-        }}
-        onPointerUp={() => hold.current && clearTimeout(hold.current)}
-        onPointerLeave={() => hold.current && clearTimeout(hold.current)}
-        onContextMenu={(e) => e.preventDefault()}
-        onClick={() => {
-          if (held.current) return;
-          if (choose) return setChoose(false);
-          send(cur);
-        }}
-        className="flex size-10 items-center justify-center rounded-full border bg-card text-[20px] transition-transform duration-150 ease-out select-none active:scale-90 disabled:opacity-40"
-        aria-label={`Reagir com ${cur} (segure para escolher outro)`}
-        aria-haspopup="menu"
-      >
-        <span key={pop} className={cn(pop && 'animate-in zoom-in-75 duration-200')}>
-          {cur}
-        </span>
-      </button>
-    </div>
-  );
-}
-

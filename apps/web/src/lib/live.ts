@@ -31,6 +31,21 @@ class Live {
     });
   }
 
+  /** reconecta na hora, mesmo conectado: depois de entrar ou sair da conta, o WS precisa do cookie novo */
+  reconnect() {
+    if (MOCK) return;
+    if (this.timer) clearTimeout(this.timer);
+    if (this.ping) clearInterval(this.ping);
+    const old = this.ws;
+    this.ws = null;
+    if (old) {
+      old.onclose = null;
+      old.close();
+    }
+    this.attempt = 0;
+    this.connect();
+  }
+
   /** reconecta já se estiver caído (voltou a rede / voltou para a aba) */
   private kick() {
     if (this.ws && this.ws.readyState <= WebSocket.OPEN) return;
@@ -168,10 +183,12 @@ function handle(m: ServerMsg) {
       } catch {
         /* sem storage */
       }
+      // conta do Google: o apelido é o nome de usuário, sem personalizar
+      if (m.you.auth) custom = null;
       if (custom && custom !== m.you.nick) live.nick(custom);
       const side = savedSide();
       if (side && side !== m.you.side) live.side(side);
-      board.set({ online: m.online, me: { ...m.you, nick: custom || m.you.nick, side: side ?? m.you.side ?? null } });
+      board.set({ online: m.online, me: { ...m.you, nick: custom || m.you.nick, side: side ?? m.you.side ?? null, auth: !!m.you.auth } });
       chat.set({ enabled: m.flags.chat });
       board.setFlags(m.flags);
       break;

@@ -26,7 +26,7 @@ import {
   type ServerMsg,
   type Snap,
 } from '@apuracao/shared';
-import { AID_COOKIE, readCookie, verifyAid } from '@apuracao/shared/server';
+import { AID_COOKIE, readCookie, SESSION_COOKIE, verifyAid, verifySession } from '@apuracao/shared/server';
 import { BoardState } from './board';
 import { ChatStore } from './chat';
 import { config } from './config';
@@ -42,6 +42,8 @@ interface UD {
   nick: string;
   hue: number;
   side: 'a' | 'b' | null;
+  /** entrou com o Google: só assim manda mensagem, e o apelido é o nome de usuário da conta */
+  auth: boolean;
   ip: string;
   rooms: Set<Room>;
   msg: Bucket;
@@ -172,6 +174,7 @@ function applyDelete(room: Room, id: string) {
 
 async function setNick(ws: WS, raw: unknown) {
   const ud = ws.getUserData();
+  if (ud.auth) return; // o apelido de quem entrou é o nome de usuário da conta
   if (await strikes.muted(ud.pub, ud.ip)) return send(ws, { t: 'err', code: 'invalid' });
   const n = cleanNick(raw, mod);
   if (!n) return send(ws, { t: 'err', code: 'invalid' });
@@ -182,7 +185,7 @@ async function setNick(ws: WS, raw: unknown) {
     return send(ws, { t: 'err', code: 'invalid' });
   }
   ud.nick = n;
-  send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side }, online: Math.max(online, conns), flags });
+  send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side, auth: ud.auth }, online: Math.max(online, conns), flags });
 }
 
 /** recusa a mensagem, soma pontos na escada e avisa (bloqueio simples ou silêncio) */
@@ -224,6 +227,7 @@ async function rateStrike(ws: WS, room: Room): Promise<boolean> {
 async function postChat(ws: WS, room: Room, body: unknown) {
   const ud = ws.getUserData();
   if (!flags.chat) return send(ws, { t: 'err', code: 'off', r: room });
+  if (!ud.auth) return send(ws, { t: 'err', code: 'auth', r: room });
   if (!ud.rooms.has(room)) return send(ws, { t: 'err', code: 'invalid', r: room });
   if (closedRooms.has(room)) return send(ws, { t: 'err', code: 'closed', r: room });
   // 1. silêncio em vigor (por pessoa ou IP)
@@ -517,15 +521,18 @@ app.ws<UD>('/ws', {
       res.writeStatus('429 Too Many Requests').end('too many connections');
       return;
     }
-    const aid = verifyAid(readCookie(cookie, AID_COOKIE), config.secret) ?? `e-${randomBytes(12).toString('hex')}`;
+    // com sessão, a identidade é a conta (mesmo apelido e cor em qualquer aparelho); sem, o cookie anônimo
+    const session = verifySession(readCookie(cookie, SESSION_COOKIE), config.secret);
+    const aid = session ? `u-${session.uid}` : (verifyAid(readCookie(cookie, AID_COOKIE), config.secret) ?? `e-${randomBytes(12).toString('hex')}`);
     const pub = createHash('sha256').update(aid).digest('base64url').slice(0, 10);
     res.upgrade<UD>(
       {
         aid,
         pub,
-        nick: nickForId(aid),
-        hue: hueOf(aid),
+        nick: session ? session.user : nickForId(aid),
+        hue: hueOf(session ? session.uid : aid),
         side: null,
+        auth: !!session,
         ip,
         rooms: new Set(),
         msg: new Bucket(config.userBurst, config.userRefill),
@@ -549,7 +556,7 @@ app.ws<UD>('/ws', {
     ipConns.set(ud.ip, (ipConns.get(ud.ip) ?? 0) + 1);
     ws.subscribe(ALL);
     ws.subscribe(snapTopic('br'));
-    send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side }, online: Math.max(online, conns), flags });
+    send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side, auth: ud.auth }, online: Math.max(online, conns), flags });
     if (closedRooms.size) send(ws, { t: 'flags', flags, closedRooms: [...closedRooms] });
     const br = board.get('br');
     if (br) send(ws, { t: 'snap', s: 'br', d: br });
@@ -578,7 +585,7 @@ app.ws<UD>('/ws', {
         return void setNick(ws, msg.nick).catch(() => {});
       case 'side': {
         ud.side = msg.side === 'a' || msg.side === 'b' ? msg.side : null;
-        return send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side }, online: Math.max(online, conns), flags });
+        return send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side, auth: ud.auth }, online: Math.max(online, conns), flags });
       }
       case 'report':
         return void report(ws, msg.r, msg.id).catch(() => {});

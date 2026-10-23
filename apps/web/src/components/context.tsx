@@ -7,6 +7,7 @@ import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { TransferSankey } from '@/features/score/Sankey';
 import { MetaPill, Section } from '@/features/score/Section';
+import { DataTip, SplitTip, splitLabel } from '@/components/core/datatip';
 import { cn } from '@/lib/utils';
 import { fetchMunBoard, staticData } from '../lib/api';
 import { fmtCompact, fmtPct, signed } from '../lib/format';
@@ -53,15 +54,35 @@ function FlowBar({ board, snap, t1 }: { board: Board; snap: Snap; t1: HistRow })
         <span>Estoque do 1º turno</span>
         <span className="num">≈ {fmtCompact(t.stock)} votos</span>
       </div>
-      <div
-        className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full"
-        role="img"
-        aria-label={`${ca.short} ficou com ${fmtPct((ga / tot) * 100, 0)}% do estoque, ${cb.short} com ${fmtPct((gb / tot) * 100, 0)}%`}
+      <DataTip
+        label={`${ca.short} ficou com ${fmtPct((ga / tot) * 100, 0)}% do estoque, ${cb.short} com ${fmtPct((gb / tot) * 100, 0)}%, sem destino ${fmtPct((rest / tot) * 100, 0)}%`}
+        tip={
+          <div className="num min-w-40">
+            <div className="mb-1 font-semibold">Estoque do 1º turno</div>
+            {(
+              [
+                [ca.short, ga, ca.color],
+                [cb.short, gb, cb.color],
+                ['não votou, branco ou nulo', rest, 'var(--muted-foreground)'],
+              ] as [string, number, string][]
+            ).map(([l, v, color]) => (
+              <div key={l} className="flex items-center justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="size-2 shrink-0 rounded-full" style={{ background: color }} />
+                  <span className="truncate">{l}</span>
+                </span>
+                <span className="font-semibold">{fmtPct((v / tot) * 100, 0)}%</span>
+              </div>
+            ))}
+          </div>
+        }
       >
-        {seg.map((s) => (
-          <div key={s.k} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${s.w * 100}%`, background: s.color }} />
-        ))}
-      </div>
+        <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full" aria-hidden>
+          {seg.map((s) => (
+            <div key={s.k} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${s.w * 100}%`, background: s.color }} />
+          ))}
+        </div>
+      </DataTip>
       <dl className="mt-3 grid grid-cols-2 gap-3">
         {[
           { c: ca, gain: t.gainA, pct: t.pctA },
@@ -80,8 +101,7 @@ function FlowBar({ board, snap, t1 }: { board: Board; snap: Snap; t1: HistRow })
         ))}
       </dl>
       <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
-        Ganho de cada um sobre o 1º turno, como parte do estoque. Cinza: não votou ou votou branco/nulo
-        {t.scale < 1 ? `. Proporcional aos ${fmtPct(t.scale * 100, 0)}% do eleitorado já apurado` : ''}.
+        Cinza: não votou, branco ou nulo{t.scale < 1 ? ` · ${fmtPct(t.scale * 100, 0)}% do eleitorado apurado` : ''}
       </p>
     </div>
   );
@@ -111,17 +131,12 @@ export function TransferCard({ board, className }: { board: Board; className?: s
       {loading ? (
         <Skeleton h={220} />
       ) : !t ? (
-        <Empty title="Histórico do 1º turno indisponível">A comparação aparece assim que o histórico for publicado.</Empty>
+        <Empty title="1º turno indisponível">Aparece quando o histórico for publicado.</Empty>
       ) : (
         <>
-          <p className="mb-3 text-[13px] leading-snug text-muted-foreground">
-            Votos que ficaram livres depois do 1º turno (de quem foi eliminado, brancos, nulos e quem não votou) e para onde foram até
-            agora.
-          </p>
           <TransferSankey t={t} ca={ca} cb={cb} />
           <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
-            Ganho de cada um sobre o próprio 1º turno
-            {t.scale < 1 ? `, proporcional aos ${fmtPct(t.scale * 100, 0)}% do eleitorado já apurado` : ''}. Perdas contam como zero.
+            Ganho sobre o 1º turno{t.scale < 1 ? ` · ${fmtPct(t.scale * 100, 0)}% do eleitorado apurado` : ''}
           </p>
           {rows.length > 0 && (
             <table className="num mt-4 w-full text-[12px]">
@@ -188,13 +203,15 @@ export function UfTransfer({ board, uf }: { board: Board; uf: string }) {
 }
 
 /** barrinha A×B (A à esquerda) com a marca dos 50% */
-function Duel({ pa, ca, cb, faded = false }: { pa: number; ca: CandidateDef; cb: CandidateDef; faded?: boolean }) {
+function Duel({ pa, ca, cb, faded = false, title }: { pa: number; ca: CandidateDef; cb: CandidateDef; faded?: boolean; title: string }) {
   return (
-    <div className={cn('relative flex h-1.5 overflow-hidden rounded-full', faded && 'opacity-55')} aria-hidden>
-      <div style={{ width: `${pa}%`, background: ca.color }} />
-      <div className="flex-1" style={{ background: cb.color }} />
-      <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-card" />
-    </div>
+    <DataTip nested label={splitLabel([ca, cb], pa, title)} tip={<SplitTip cands={[ca, cb]} pa={pa} title={title} />}>
+      <div className={cn('relative flex h-1.5 overflow-hidden rounded-full', faded && 'opacity-55')} aria-hidden>
+        <div style={{ width: `${pa}%`, background: ca.color }} />
+        <div className="flex-1" style={{ background: cb.color }} />
+        <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-card" />
+      </div>
+    </DataTip>
   );
 }
 
@@ -235,7 +252,7 @@ export function FlipsCard({ board, className }: { board: Board; className?: stri
       ) : !y22 ? (
         <Empty title="Histórico de 2022 indisponível">A comparação aparece quando o arquivo de 2022 estiver publicado.</Empty>
       ) : !list.length ? (
-        <Empty title="Nenhum estado mudou de lado até agora">Contamos só estados com pelo menos 5% apurado. Pode mudar a qualquer momento.</Empty>
+        <Empty title="Nenhum estado mudou de lado">Só contam estados com 5% ou mais apurado.</Empty>
       ) : (
         <>
           <div className={cn('grid items-center gap-2 border-b pb-1.5 text-[11px] text-muted-foreground', FLIP_COLS)} aria-hidden>
@@ -252,7 +269,7 @@ export function FlipsCard({ board, className }: { board: Board; className?: stri
                   <Link
                     href={`/mapa/${uf}`}
                     className={cn('press -mx-1 grid min-h-13 items-center gap-2 rounded-lg px-1 hover:bg-accent/60', FLIP_COLS)}
-                    aria-label={`${ufName(uf)} virou para ${to.short}, com ${fmtPct(s.pst, 0)}% apurado`}
+                    aria-label={`${ufName(uf)} virou para ${to.short}, com ${fmtPct(s.pst, 0)}% apurado. ${splitLabel([ca, cb], pa22, '2022')}. ${splitLabel([ca, cb], s.pa, 'Agora')}`}
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <CandidateAvatar c={to} size="xs" />
@@ -262,14 +279,14 @@ export function FlipsCard({ board, className }: { board: Board; className?: stri
                       </div>
                     </div>
                     <div>
-                      {pa22 !== null && <Duel pa={pa22} ca={ca} cb={cb} faded />}
+                      {pa22 !== null && <Duel pa={pa22} ca={ca} cb={cb} faded title={`${ufName(uf)} · 2022`} />}
                       <div className="num mt-1 text-[11px] text-muted-foreground">
                         {pa22 === null ? '—' : `${fmtPct(Math.max(pa22, 100 - pa22), 0)}%`}
                       </div>
                     </div>
                     <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden />
                     <div>
-                      <Duel pa={s.pa} ca={ca} cb={cb} />
+                      <Duel pa={s.pa} ca={ca} cb={cb} title={`${ufName(uf)} · agora`} />
                       <div className="num mt-1 text-[11px] font-semibold" style={{ color: to.color }}>
                         {fmtPct(Math.max(s.pa, s.pb), 1)}%
                       </div>
@@ -281,7 +298,7 @@ export function FlipsCard({ board, className }: { board: Board; className?: stri
           </ul>
         </>
       )}
-      <p className="mt-2 text-[12px] text-muted-foreground">Parcial: pode desvirar até o fim da apuração. 2022 pelo partido de cada lado.</p>
+      <p className="mt-2 text-[12px] text-muted-foreground">Parcial · 2022 pelo partido</p>
     </Section>
   );
 }

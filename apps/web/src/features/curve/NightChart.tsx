@@ -254,9 +254,10 @@ export default function NightChart({
               </text>
             ))}
             {show22 && (
-              <g opacity={0.55}>
-                <path d={line(past, 'a')} fill="none" stroke={ca.color} strokeWidth={1.5} strokeDasharray="4 4" />
-                <path d={line(past, 'b')} fill="none" stroke={cb.color} strokeWidth={1.5} strokeDasharray="4 4" />
+              // 2022 é régua de fundo: tracejado fino e apagado, para não competir com a noite de hoje
+              <g opacity={0.4}>
+                <path d={line(past, 'a')} fill="none" stroke={ca.color} strokeWidth={1.25} strokeDasharray="3 4" />
+                <path d={line(past, 'b')} fill="none" stroke={cb.color} strokeWidth={1.25} strokeDasharray="3 4" />
                 {past
                   .filter((p) => p.src === 'fonte')
                   .map((p) => (
@@ -384,10 +385,10 @@ export default function NightChart({
         <span className="grid min-w-0 text-[11px] leading-tight text-muted-foreground [&>*]:col-start-1 [&>*]:row-start-1">
           {(
             [
-              ['both', show22 && showT1, 'Curva tracejada: 2022 (reconstrução). Linhas retas: 1º turno de 2026'],
-              ['y22', show22 && !showT1, '2022, reconstrução aproximada'],
-              ['t1', showT1 && !show22, '1º turno de 2026, só os dois finalistas'],
-              ['none', !show22 && !showT1, '% dos votos válidos conforme as urnas são apuradas'],
+              ['both', show22 && showT1, '2022 (curva) · 1º turno (reta)'],
+              ['y22', show22 && !showT1, flip22 !== null ? `2022 (reconstruída) · virou com ${fmtPct(flip22, 0)}%` : '2022 (reconstruída)'],
+              ['t1', showT1 && !show22, '1º turno'],
+              ['none', !show22 && !showT1, '% dos votos válidos'],
             ] as const
           ).map(([k, on, text]) => (
             <span key={k} className={on ? undefined : 'invisible'} aria-hidden={!on}>
@@ -417,21 +418,6 @@ export default function NightChart({
           </ToggleGroup>
         )}
       </figcaption>
-      {/* notas empilhadas no mesmo espaço (some a ativa, fica a altura da maior) */}
-      <div className="mt-2 grid text-[12px] leading-relaxed text-muted-foreground [&>*]:col-start-1 [&>*]:row-start-1">
-        <p className={show22 && c22 ? undefined : 'invisible'} aria-hidden={!(show22 && c22)}>
-          O TSE não publica a série da noite de 2022: os pontos marcados vêm de registros da imprensa e do TSE, o resto é
-          interpolado.{flip22 !== null && <> Em 2022, a virada veio com cerca de {fmtPct(flip22, 0)}% das urnas apuradas.</>}
-        </p>
-        <p className={showT1 && last && !show22 ? undefined : 'invisible'} aria-hidden={!(showT1 && last && !show22)}>
-          {last && t1 !== null && (
-            <>
-              Hoje {ca.short} está {fmtPct(Math.abs(last.a - t1), 1)} pts {last.a >= t1 ? 'acima' : 'abaixo'} do próprio 1º turno no confronto
-              direto. Fonte: TSE.
-            </>
-          )}
-        </p>
-      </div>
     </figure>
   );
 }

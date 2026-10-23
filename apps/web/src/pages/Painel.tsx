@@ -43,7 +43,7 @@ export function Loading({ error }: { error?: boolean }) {
     return (
       <Card className="mt-4">
         <p className="text-[14px] font-medium">Não foi possível carregar o placar.</p>
-        <p className="mt-1 text-[13px] text-muted-foreground">Tentamos de novo a cada 10 segundos. Confira sua conexão.</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">Tentando de novo a cada 10 s.</p>
       </Card>
     );
   return (
@@ -264,7 +264,7 @@ function Countdown({ board }: { board: Board }) {
         </div>
       </NumberFlowGroup>
       <p className="mt-2.5 text-[12px] text-muted-foreground">
-        {when.charAt(0).toUpperCase() + when.slice(1)}, horário de Brasília. Antes disso não mostramos placar nem projeção.
+        {when.charAt(0).toUpperCase() + when.slice(1)} (Brasília)
       </p>
     </>
   );
@@ -368,7 +368,6 @@ function Matchup({ board }: { board: Board }) {
               </div>
             ))}
           </dl>
-          <p className="mt-2.5 text-[12px] leading-relaxed text-muted-foreground">É esse o estoque em disputa no 2º turno.</p>
         </div>
       )}
     </Section>
@@ -404,9 +403,8 @@ function Context2022({ board, className }: { board: Board; className?: string })
         <div className="rounded-l-full" style={{ width: `${(va / tot) * 100}%`, background: ca.color }} />
         <div className="flex-1 rounded-r-full" style={{ background: cb.color }} />
       </div>
-      <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
-        Diferença de {fmtCompact(Math.abs(va - vb))} votos, a mais apertada desde a redemocratização. Quem liderou o começo da noite
-        perdeu: a virada só veio com cerca de dois terços das urnas apuradas.
+      <p className="num mt-3 text-[12px] text-muted-foreground">
+        {fmtCompact(Math.abs(va - vb))} votos de diferença · virada com ~2/3 apurado
       </p>
       <Button asChild variant="ghost" className="mt-1 -ml-3 h-11 text-[13px]">
         <Link href="/mapa">

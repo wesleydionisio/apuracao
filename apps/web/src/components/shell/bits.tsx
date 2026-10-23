@@ -57,8 +57,8 @@ export function LegalFooter() {
         sempre aparecem com o percentual apurado; o resultado oficial é o da totalização do TSE.
       </p>
       <p>
-        Chat: seja gentil. Sem links, ofensas ou ameaças; mensagens de até 240 caracteres. Guardamos apenas apelido, um
-        cookie anônimo e o IP (para limitar abuso). Mensagens podem ser removidas após denúncias.
+        Chat: seja gentil. Sem links, ofensas ou ameaças; mensagens de até 240 caracteres. Para escrever, entre com o Google.
+        No chat aparece só o seu nome de usuário. Mensagens podem ser removidas após denúncias.
       </p>
       <nav className="flex flex-wrap gap-x-4 gap-y-1 font-medium text-foreground/80" aria-label="Outros formatos">
         <Link href="/tv" className="inline-flex min-h-11 items-center hover:text-foreground">
@@ -70,6 +70,12 @@ export function LegalFooter() {
         <a href="https://resultados.tse.jus.br/" target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center hover:text-foreground">
           Resultados no TSE
         </a>
+        <Link href="/privacidade" className="inline-flex min-h-11 items-center hover:text-foreground">
+          Privacidade
+        </Link>
+        <Link href="/termos" className="inline-flex min-h-11 items-center hover:text-foreground">
+          Termos
+        </Link>
       </nav>
     </footer>
   );

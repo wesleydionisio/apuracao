@@ -75,3 +75,15 @@ create table if not exists chat_messages (
   body text not null,
   created_at timestamptz not null default now()
 );
+
+-- contas do chat (login com o Google). Nome e celular nunca saem da API; no chat só aparece o username.
+create table if not exists accounts (
+  id text primary key,
+  google_sub text not null unique,
+  email text not null,
+  name text not null,
+  phone text not null,
+  username text not null,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists accounts_username_idx on accounts (lower(username));

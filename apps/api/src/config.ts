@@ -23,5 +23,7 @@ export const config = {
   releaseAt: new Date(env.RELEASE_AT || DEFAULT_RELEASE_AT),
   /** em dev a API também serve /data (em produção quem serve é o Caddy/CDN) */
   serveData: env.SERVE_DATA ? env.SERVE_DATA === '1' : env.NODE_ENV !== 'production',
+  /** login com o Google no chat (Client ID web do Google Cloud). Vazio = só o login de teste em dev */
+  googleClientId: env.GOOGLE_CLIENT_ID ?? '',
   siteName: env.SITE_NAME ?? 'Apuração ao vivo',
 };

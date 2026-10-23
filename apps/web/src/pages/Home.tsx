@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui';
 import { LegalFooter } from '@/components/shell/bits';
 import ChatView from '@/features/chat/ChatView';
 import { useMountOnce } from '@/features/chat/lazy';
-import { read, RoomBar, write } from '@/features/chat/rooms';
+import { RoomBar } from '@/features/chat/rooms';
 import { useKeyboardOpen, useMedia } from '@/features/watch/hooks';
 import { LiveScore, LiveScoreCompact } from '@/features/watch/LiveScore';
 import { MomentTicker } from '@/features/watch/MomentTicker';
@@ -18,9 +18,6 @@ import { useBoard } from '@/store/board';
 const MapCard = lazy(() => import('@/features/map/MapCard'));
 const InfoDrawerLazy = lazy(() => import('@/features/chat/drawers').then((m) => ({ default: m.InfoDrawer })));
 
-const LS_UF = 'chat:uf';
-const LS_ROOM = 'chat:room';
-
 function Watching() {
   const online = useBoard((s) => s.online);
   if (!online) return null;
@@ -30,28 +27,6 @@ function Watching() {
       <span className="font-semibold text-foreground">{fmtCompact(online)}</span>
     </span>
   );
-}
-
-/** Salas públicas (#brasil, #uf) com a escolha guardada no aparelho. */
-function usePublicRoom(): [Room, ReactNode] {
-  const [uf, setUf] = useState(() => read(LS_UF) ?? '');
-  const [room, setRoom] = useState(() => read(LS_ROOM) ?? 'br');
-  const bar = (
-    <RoomBar
-      room={room}
-      uf={uf}
-      onRoom={(r) => {
-        setRoom(r);
-        write(LS_ROOM, r);
-      }}
-      onUf={(u) => {
-        setUf(u);
-        write(LS_UF, u);
-      }}
-      right={<Watching />}
-    />
-  );
-  return [room, bar];
 }
 
 function InfoDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -138,6 +113,5 @@ export function LiveScreen({ room, roomBar }: { room: Room; roomBar: ReactNode }
 }
 
 export default function Home() {
-  const [room, bar] = usePublicRoom();
-  return <LiveScreen room={room} roomBar={bar} />;
+  return <LiveScreen room="br" roomBar={<RoomBar right={<Watching />} />} />;
 }

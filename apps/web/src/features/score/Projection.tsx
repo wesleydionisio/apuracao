@@ -23,7 +23,7 @@ export function ProjectionBand({ board, className }: { board: Board; className?:
     <Section icon={TrendingUp} title="Para onde vai" meta={<Estimate pst={p.basedOnPst} />} className={className}>
       <div className="flex items-end justify-between gap-3">
         <div>
-          <div className="text-[12px] text-muted-foreground">Faixa estimada para {ca.short}</div>
+          <div className="text-[12px] text-muted-foreground">{ca.short}</div>
           <div className="display mt-1 text-[24px] leading-none font-semibold">
             {fmtPct(lo, 1)}% a {fmtPct(hi, 1)}%
           </div>
@@ -31,7 +31,7 @@ export function ProjectionBand({ board, className }: { board: Board; className?:
         {winner ? (
           <div className="flex items-center gap-2 text-right">
             <div className="text-[12px] leading-tight text-muted-foreground">
-              termina à frente
+              à frente
               <div className="text-[13px] font-semibold" style={{ color: winner.color }}>
                 {winner.short}
               </div>
@@ -39,7 +39,7 @@ export function ProjectionBand({ board, className }: { board: Board; className?:
             <CandidateAvatar c={winner} size="sm" />
           </div>
         ) : (
-          <div className="max-w-36 text-right text-[12px] leading-tight text-muted-foreground">a faixa cruza 50%: dá para os dois lados</div>
+          <div className="text-right text-[12px] font-medium text-muted-foreground">indefinido</div>
         )}
       </div>
       <div className="relative mt-4 h-9" role="img" aria-label={`Intervalo estimado para ${ca.short}: ${fmtPct(lo, 1)}% a ${fmtPct(hi, 1)}%`}>
@@ -60,9 +60,8 @@ export function ProjectionBand({ board, className }: { board: Board; className?:
         <span className="font-medium text-foreground">50%</span>
         <span>{B}%</span>
       </div>
-      <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
-        Se o que falta seguir o padrão de cada estado até aqui. Modelo simples, sem pesquisa, que pode errar: o resultado é o da
-        totalização do TSE. {cb.short} fica com o complemento ({fmtPct(100 - hi, 1)}% a {fmtPct(100 - lo, 1)}%).
+      <p className="num mt-2 text-[12px] text-muted-foreground">
+        {cb.short}: {fmtPct(100 - hi, 1)}% a {fmtPct(100 - lo, 1)}%
       </p>
     </Section>
   );

@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { SourceStamp } from '@/components/core/live';
+import { DataTip } from '@/components/core/datatip';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
@@ -178,9 +179,11 @@ function WhereLeft({ rows }: { rows: MunRow[] }) {
             <Link href={cityHref(r.m)} className="press flex min-h-12 items-center gap-3 py-2">
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{r.m.name}</span>
-                <span className="mt-1.5 block h-1 max-w-40 overflow-hidden rounded-full bg-muted" aria-hidden>
-                  <span className="block h-full rounded-full bg-foreground/60" style={{ width: `${r.s!.pst}%` }} />
-                </span>
+                <DataTip nested className="mt-1.5 max-w-40" label={`${fmtPct(r.s!.pst, 0)}% apurado`} tip={<span className="num">{fmtPct(r.s!.pst, 1)}% apurado</span>}>
+                  <span className="block h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+                    <span className="block h-full rounded-full bg-foreground/60" style={{ width: `${r.s!.pst}%` }} />
+                  </span>
+                </DataTip>
               </span>
               <span className="text-right">
                 <span className="num block text-sm font-semibold">{fmtCompact(rem)}</span>
@@ -249,7 +252,7 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
 
       {!abroad && (
         <div className="relative">
-          <HexMap cands={cands} layer={layer} scope={uf} highlight={hit?.ibge} onPick={setHit} maxHeight={380} label={`Mapa ${inUf(uf)} em hexágonos, na cor de quem lidera em cada região`} />
+          <HexMap cands={cands} layer={layer} scope={uf} highlight={hit?.ibge} onPick={setHit} onHover={(h) => h && setHit(h)} maxHeight={380} label={`Mapa ${inUf(uf)} em hexágonos, na cor de quem lidera em cada região`} />
           {hit && hitRow && (
             <div
               className="absolute z-10 w-56 -translate-x-1/2 rounded-xl border bg-popover p-3 shadow-lg"
@@ -316,7 +319,7 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
                         {fmtCompact(r.m.el)} eleitores
                         {layer === 'live' && r.s && ` · ${fmtPct(r.s.pst, 0)}% apurado`}
                       </span>
-                      {pa != null && <VersusBar pa={pa} cands={cands} h="h-1" className="mt-1.5 max-w-40" />}
+                      {pa != null && <VersusBar pa={pa} cands={cands} h="h-1" className="mt-1.5 max-w-40" title={r.m.name} nested />}
                     </span>
                     {lead && pa != null ? (
                       <span className="flex shrink-0 items-center gap-2">

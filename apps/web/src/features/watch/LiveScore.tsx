@@ -14,6 +14,7 @@ import { flipOf, useCurve22, useHistRefs, type HistRefs } from './data';
 import { NightSpark } from './NightSpark';
 import { useRefs, type Refs } from './refs';
 import { Fill, SplitFill } from '@/components/core/bars';
+import { DataTip, SplitTip } from '@/components/core/datatip';
 
 const PCT2 = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
 const PCT1 = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
@@ -134,18 +135,15 @@ export function VersusBar({
           {m.label}
         </span>
       ))}
-      <div
-        className="relative flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-muted"
-        role="img"
-        aria-label={pa === null ? 'Apuração não iniciada' : `${ca.short} ${fmt1(w)}%, ${cb.short} ${fmt1(100 - w)}%`}
+      <DataTip
+        label={pa === null ? 'Apuração não iniciada' : `${ca.short} ${fmt1(w)}%, ${cb.short} ${fmt1(100 - w)}%`}
+        tip={<SplitTip cands={board.candidates} pa={pa} extra={marks.length ? marks.map((m) => `${m.label}: ${fmt1(m.v)}%`).join(' · ') : undefined} />}
       >
-        {pa !== null && (
-          <>
-            <SplitFill pa={w} colorA={ca.color} colorB={cb.color} gap={2} />
-          </>
-        )}
-        <div className="absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2 bg-background" aria-hidden />
-      </div>
+        <div className="relative flex h-3 w-full gap-[2px] overflow-hidden rounded-full bg-muted" aria-hidden>
+          {pa !== null && <SplitFill pa={w} colorA={ca.color} colorB={cb.color} gap={2} />}
+          <div className="absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2 bg-background" />
+        </div>
+      </DataTip>
       {marks.map((m) => (
         <span
           key={`t-${m.label}`}

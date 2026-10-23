@@ -46,6 +46,12 @@ Coordenadas arredondadas (3 casas), malha IBGE "qualidade mínima".
 | Rota | Resposta |
 |---|---|
 | `GET /api/me` | `{ id, nick, hue }` e seta cookie `aid` (assinado) |
+| `GET /api/auth/me` | `{ user: { username, hue } \| null, google: clientId \| null, dev }` |
+| `POST /api/auth/google` | body `{ credential }` (ID token do Google) → `{ user }` (conta existe, seta cookie `sid`) ou `{ signup: { token, name, email } }` |
+| `POST /api/auth/signup` | body `{ token, name, phone, username }` → `{ user }` e cookie `sid`. Erros: `name`, `phone`, `username`, `taken`, `expired` |
+| `GET /api/auth/username?u=` | `{ ok, valid }` (disponível / formato válido) |
+| `POST /api/auth/logout` | apaga o cookie `sid` |
+| `POST /api/auth/dev` | só sem `GOOGLE_CLIENT_ID` e fora de produção: body `{ email }`, mesmo retorno de `/google` |
 | `POST /api/guess` | body `{ nick, pa, uf?, ufPa?, mun?, munPa? }` → `{ guess: Guess, url }`. 1 por `aid` (repostar atualiza). 403 `closed` depois das 17h |
 | `GET /api/guess/:id` | `{ guess, live: { pa, dist, rank, total, ufRank?, ufTotal?, munRank?, munTotal? } \| null, final: boolean }` |
 | `GET /api/city/:ibge` | `{ mun: Municipality, now: Snap \| null, t1: HistRow \| null, y2022: HistRow \| null, uf: Snap \| null, br: Snap \| null }` |
@@ -62,6 +68,8 @@ Coordenadas arredondadas (3 casas), malha IBGE "qualidade mínima".
 Protocolo em `packages/shared/src/protocol.ts`. Regras:
 
 - Cookie `aid` validado com `verifyAid` (segredo `SECRET`); sem cookie → id efêmero.
+- Cookie `sid` (sessão da conta, `verifySession`): o apelido vira o nome de usuário (fixo) e `hello.you.auth = true`.
+  **Só quem tem sessão manda mensagem**; sem ela, `chat` responde `err` com `code: 'auth'`. Reações/torcida seguem abertas.
 - `join` → manda `snap` completo dos escopos das salas (`br` sempre; sala `sp` → `uf:SP`), `history` (últimas 50), `react` agregado.
 - Depois só manda `snap` dos escopos que mudaram. Reações agregadas, no máximo 1×/s por sala.
 - Antes de `released`: não manda `snap` nenhum.
@@ -87,3 +95,4 @@ Online: cada worker WS grava `online:<worker>` = conexões, `EX 15`, a cada 5s.
 | `CAND_A` / `CAND_B` | poller | ordem `seq` do TSE |
 | `SOURCE` | poller | `tse` \| `replay` (simulação acelerada) |
 | `PUBLIC_URL` | api | `http://localhost:5173` |
+| `GOOGLE_CLIENT_ID` | api | vazio = sem login com Google (em dev, login de teste por e-mail) |

@@ -6,7 +6,7 @@ import { Header } from '@/components/shell/Header';
 import { TabBar } from '@/components/shell/TabBar';
 import { Skeleton, Toaster } from './components/ui';
 import { api, fetchBoard } from './lib/api';
-import { live } from './lib/live';
+import { live, savedSide } from './lib/live';
 import Home from './pages/Home';
 import { useBoard } from './store/board';
 
@@ -16,6 +16,8 @@ const SalaPage = lazy(() => import('./pages/ChatPage').then((m) => ({ default: m
 const CityPage = lazy(() => import('./pages/CityPage'));
 const GuessPage = lazy(() => import('./pages/GuessPage'));
 const PalpitePage = lazy(() => import('./pages/GuessPage').then((m) => ({ default: m.PalpitePage })));
+const PrivacyPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.PrivacyPage })));
+const TermsPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.TermsPage })));
 const MomentPage = lazy(() => import('./pages/Standalone').then((m) => ({ default: m.MomentPage })));
 const TvPage = lazy(() => import('./pages/Standalone').then((m) => ({ default: m.TvPage })));
 const EmbedPage = lazy(() => import('./pages/Standalone').then((m) => ({ default: m.EmbedPage })));
@@ -49,14 +51,15 @@ function useIdentityAndStats() {
     api
       .me()
       .then((me) => {
+        // o "hello" do WS é a fonte da verdade (lado, conta do Google): se já chegou, não sobrescreve
+        if (useBoard.getState().me) return;
         let nick: string | null = null;
         try {
           nick = localStorage.getItem('nick');
         } catch {
           /* sem storage */
         }
-        useBoard.getState().set({ me: nick ? { ...me, nick } : me });
-        if (nick && nick !== me.nick) live.nick(nick);
+        useBoard.getState().set({ me: { ...me, nick: nick ?? me.nick, side: savedSide() } });
       })
       .catch(() => {});
     const load = () =>
@@ -127,6 +130,8 @@ function Frame() {
             <Route path="/palpite" component={PalpitePage} />
             <Route path="/p/:id" component={GuessPage} />
             <Route path="/m/:id" component={MomentPage} />
+            <Route path="/privacidade" component={PrivacyPage} />
+            <Route path="/termos" component={TermsPage} />
             <Route>
               <div className="py-16 text-center">
                 <p className="text-[15px] font-semibold">Página não encontrada</p>

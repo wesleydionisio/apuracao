@@ -42,3 +42,41 @@ export function clientIp(headers: Record<string, string | string[] | undefined>,
   };
   return h('cf-connecting-ip') || h('x-forwarded-for')?.split(',')[0].trim() || h('x-real-ip') || fallback;
 }
+
+// Sessão de quem entrou com o Google: cookie `sid` = "<json base64url>.<hmac>". Leva o nome de usuário,
+// então o WS confere a assinatura e já sabe o apelido sem consultar o banco.
+export const SESSION_COOKIE = 'sid';
+
+export interface Session {
+  /** id da conta */
+  uid: string;
+  /** nome de usuário (aparece no chat) */
+  user: string;
+}
+
+/** objeto assinado com o segredo; `exp` (ms) opcional */
+export function signToken(obj: object, secret: string): string {
+  const body = Buffer.from(JSON.stringify(obj)).toString('base64url');
+  return `${body}.${mac(body, secret)}`;
+}
+
+export function verifyToken<T>(value: string | undefined | null, secret: string): T | null {
+  if (!value) return null;
+  const i = value.lastIndexOf('.');
+  if (i <= 0) return null;
+  const body = value.slice(0, i);
+  const got = Buffer.from(value.slice(i + 1));
+  const want = Buffer.from(mac(body, secret));
+  if (got.length !== want.length || !timingSafeEqual(got, want)) return null;
+  try {
+    const obj = JSON.parse(Buffer.from(body, 'base64url').toString()) as T & { exp?: number };
+    return obj.exp && obj.exp < Date.now() ? null : obj;
+  } catch {
+    return null;
+  }
+}
+
+export function verifySession(value: string | undefined | null, secret: string): Session | null {
+  const s = verifyToken<Session>(value, secret);
+  return s && typeof s.uid === 'string' && typeof s.user === 'string' ? { uid: s.uid, user: s.user } : null;
+}

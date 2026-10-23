@@ -60,7 +60,7 @@ export type ClientMsg =
   | { t: 'ping' };
 
 export type ServerMsg =
-  | { t: 'hello'; you: { id: string; nick: string; hue: number; side?: Side | null }; online: number; flags: Flags }
+  | { t: 'hello'; you: { id: string; nick: string; hue: number; side?: Side | null; auth?: boolean }; online: number; flags: Flags }
   | { t: 'snap'; s: string; d: Snap }
   | { t: 'history'; r: Room; m: ChatMsg[] }
   | { t: 'chat'; r: Room; m: ChatMsg }
@@ -72,7 +72,7 @@ export type ServerMsg =
   | { t: 'slow'; r: Room; seconds: number }
   | {
       t: 'err';
-      code: 'rate' | 'slow' | 'blocked' | 'closed' | 'invalid' | 'off' | 'muted';
+      code: 'rate' | 'slow' | 'blocked' | 'closed' | 'invalid' | 'off' | 'muted' | 'auth';
       r?: Room;
       /** segundos até poder mandar de novo (rate, slow, muted) */
       wait?: number;

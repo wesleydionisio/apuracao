@@ -7,6 +7,7 @@ import { ArrowRightLeft, ChevronRight, MapPin, Scale, Shuffle, Users } from 'luc
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useParams } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
+import { SplitTip } from '@/components/core/datatip';
 import { SourceStamp } from '@/components/core/live';
 import { ShareButton } from '@/components/ui';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,7 +15,7 @@ import { CityCommand, CityPicker } from '@/features/city/CityCommand';
 import { loadCityIndex, pushRecent, type RecentCity } from '@/features/city/search';
 import { leaderOf, marginPts } from '@/features/map/colors';
 import { cityHref, pa2022, useUfMunicipalities, type MunRow } from '@/features/map/data';
-import HexMap from '@/features/map/HexMap';
+import HexMap, { type HexHit } from '@/features/map/HexMap';
 import {
   CompareRow,
   CountedBar,
@@ -235,15 +236,7 @@ function CitySheet({ board, view, onPick }: { board: Board; view: CityView; onPi
           Onde fica
         </SectionTitle>
         <WhenSeen h={220}>
-          <HexMap
-            cands={cands}
-            layer={now ? 'live' : 't1'}
-            scope={mun.uf}
-            highlight={mun.ibge}
-            dimOthers
-            maxHeight={260}
-            label={`Mapa ${ofUf(mun.uf)} em hexágonos, com ${mun.name} contornada`}
-          />
+          <PlaceMap board={board} mun={mun} cands={cands} live={!!now} />
         </WhenSeen>
         <p className="mt-2 text-center text-[12px] text-muted-foreground">
           {mun.name} contornada no mapa {ofUf(mun.uf)}; cada região na cor de quem lidera {now ? 'agora' : 'no 1º turno'}.
@@ -348,6 +341,42 @@ function PreLive({ live, name, pa1, cands }: { live: boolean; name: string; pa1:
   );
 }
 
+/** mapa da UF com a cidade contornada; mouse por cima ou toque numa região mostra a cidade e o placar dela */
+function PlaceMap({ board, mun, cands, live }: { board: Board; mun: Municipality; cands: CandidateDef[]; live: boolean }) {
+  const { data } = useUfMunicipalities(mun.uf, !!board.released && board.flags.map_mun);
+  const [hit, setHit] = useState<HexHit | null>(null);
+  const name = hit ? (data?.rows.find((r) => r.m.ibge === hit.ibge)?.m.name ?? null) : null;
+  return (
+    <div className="relative" onPointerLeave={(e) => e.pointerType === 'mouse' && setHit(null)}>
+      <HexMap
+        cands={cands}
+        layer={live ? 'live' : 't1'}
+        scope={mun.uf}
+        highlight={hit?.ibge ?? mun.ibge}
+        dimOthers
+        maxHeight={260}
+        onHover={setHit}
+        onPick={(h) => setHit((cur) => (h && cur?.ibge !== h.ibge ? h : null))}
+        label={`Mapa ${ofUf(mun.uf)} em hexágonos, com ${mun.name} contornada. Passe o mouse ou toque numa região para ver a cidade.`}
+      />
+      {hit && (
+        <div
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[calc(100%+10px)] rounded-lg border bg-popover px-2.5 py-2 text-[12px] shadow-lg"
+          style={{ left: `clamp(80px, ${hit.x}px, calc(100% - 80px))`, top: hit.y }}
+          role="tooltip"
+        >
+          <SplitTip
+            cands={cands}
+            pa={hit.pa}
+            title={name ?? 'Cidade'}
+            extra={live && hit.pst != null ? `${fmtPct(hit.pst, 0)}% apurado` : live ? undefined : '1º turno'}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Cidades da mesma UF com eleitorado parecido — atalhos para comparar vizinhas de porte */
 function SimilarCities({ board, mun }: { board: Board; mun: Municipality }) {
   const live = !!board.released && board.flags.map_mun;
@@ -392,7 +421,7 @@ function SimilarCities({ board, mun }: { board: Board; mun: Municipality }) {
                     <span className="text-[11px] text-muted-foreground" title="sem dado">n/d</span>
                   )}
                 </span>
-                {pa != null && <VersusBar pa={pa} cands={cands} h="h-1" className="mt-2" />}
+                {pa != null && <VersusBar pa={pa} cands={cands} h="h-1" className="mt-2" title={r.m.name} nested />}
               </Link>
             </li>
           );

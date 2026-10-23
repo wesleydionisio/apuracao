@@ -12,6 +12,7 @@ import { pair } from './colors';
 export { pair };
 import { fmtCompact } from '@/lib/format';
 import { Fill, SplitFill } from '@/components/core/bars';
+import { DataTip, SplitTip, splitLabel } from '@/components/core/datatip';
 
 const PCT1 = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
 
@@ -48,22 +49,46 @@ export function VersusBar({
   className,
   h = 'h-1.5',
   refs,
+  title,
+  nested = false,
 }: {
   pa: number;
   cands: CandidateDef[];
   className?: string;
   h?: string;
   refs?: RefMark[];
+  /** título da ficha (ex.: nome do estado) */
+  title?: string;
+  /** dentro de um link/botão de linha: ver DataTip */
+  nested?: boolean;
 }) {
+  // a barra não tem números: passar o mouse ou tocar mostra os dois % (e as referências)
+  const tip = (body: ReactNode) => (
+    <DataTip
+      nested={nested}
+      className={className}
+      label={[splitLabel(cands, pa, title), ...(refs ?? []).map((r) => splitLabel(cands, r.pa, r.label))].join('. ')}
+      tip={
+        <SplitTip
+          cands={cands}
+          pa={pa}
+          title={title}
+          extra={refs?.length ? refs.map((r) => `${r.label}: ${pair(r.pa)[0]} × ${pair(r.pa)[1]}`).join(' · ') : undefined}
+        />
+      }
+    >
+      {body}
+    </DataTip>
+  );
   const bar = (
-    <div className={cn('relative flex w-full overflow-hidden rounded-full bg-muted', h, !refs?.length && className)} aria-hidden>
+    <div className={cn('relative flex w-full overflow-hidden rounded-full bg-muted', h)} aria-hidden>
       <SplitFill pa={pa} colorA={cands[0].color} colorB={cands[1].color} />
       <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-card" />
     </div>
   );
-  if (!refs?.length) return bar;
-  return (
-    <div className={cn('relative', className)}>
+  if (!refs?.length) return tip(bar);
+  return tip(
+    <div className="relative">
       {bar}
       {refs.map((r, i) => (
         <span

@@ -1,8 +1,10 @@
 // Peças pequenas do palpite (cópia local para não depender de outras telas).
 import type { CandidateDef } from '@apuracao/shared';
 import NumberFlow from '@number-flow/react';
+import { fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { SplitFill } from '@/components/core/bars';
+import { DataTip, SplitTip, splitLabel } from '@/components/core/datatip';
 
 /** porcentagem ao vivo com transição de dígitos (NumberFlow), sempre pt-BR */
 export function Pct({ v, digits = 1, suffix = '%', className }: { v: number; digits?: number; suffix?: string; className?: string }) {
@@ -39,7 +41,12 @@ export function SplitBar({
 }) {
   const w = Math.max(0, Math.min(100, pa));
   return (
-    <div className={cn('relative h-2 w-full rounded-full bg-muted', className)} role="img" aria-label={`${ca.short} ${w.toFixed(1)}%, ${cb.short} ${(100 - w).toFixed(1)}%`}>
+    <DataTip
+      className={className}
+      label={`${splitLabel([ca, cb], w)}${marker != null && markerLabel ? `. ${markerLabel}` : ''}`}
+      tip={<SplitTip cands={[ca, cb]} pa={w} extra={marker != null ? markerLabel ?? `${ca.short} ${fmtPct(marker, 1)}%` : undefined} />}
+    >
+    <div className="relative h-2 w-full rounded-full bg-muted" aria-hidden>
       <div className="absolute inset-0 overflow-hidden rounded-full">
         <SplitFill pa={w} colorA={ca.color} colorB={cb.color} />
         <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-background" />
@@ -48,10 +55,10 @@ export function SplitBar({
         <div
           className="absolute -inset-y-1 w-1 -translate-x-1/2 rounded-full bg-foreground ring-2 ring-card"
           style={{ left: `${Math.max(0, Math.min(100, marker))}%` }}
-          title={markerLabel}
         />
       )}
     </div>
+    </DataTip>
   );
 }
 

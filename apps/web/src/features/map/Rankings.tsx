@@ -3,6 +3,7 @@ import type { CandidateDef } from '@apuracao/shared';
 import { fmtPct, ufName } from '@apuracao/shared';
 import { Scale, TrendingUp } from 'lucide-react';
 import { CandidateAvatar } from '@/components/core/candidate';
+import { DataTip } from '@/components/core/datatip';
 import { cn } from '@/lib/utils';
 import { fillFor, leaderOf, marginPts } from './colors';
 import type { UfValue } from './data';
@@ -69,7 +70,7 @@ export function MapRankings({
                     <UfChip uf={uf} pa={pa} cands={cands} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-medium">{ufName(uf)}</span>
-                      <VersusBar pa={pa} cands={cands} h="h-1" className="mt-1.5 max-w-36" />
+                      <VersusBar pa={pa} cands={cands} h="h-1" className="mt-1.5 max-w-36" title={ufName(uf)} nested />
                     </span>
                     <CandidateAvatar c={lead} size="xs" />
                     <span className="num w-11 text-right text-[13px] font-semibold" style={{ color: lead.color }}>
@@ -100,13 +101,29 @@ export function MapRankings({
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-medium">{ufName(uf)}</span>
                       {/* barra divergente: para a esquerda = rumo a A, para a direita = rumo a B */}
-                      <span className="relative mt-1.5 block h-1 max-w-36 rounded-full bg-muted" aria-hidden>
-                        <span className="absolute inset-y-0 left-1/2 w-px bg-foreground/40" />
-                        <span
-                          className="absolute inset-y-0 rounded-full"
-                          style={{ background: c.color, width: `${w}%`, [d > 0 ? 'right' : 'left']: '50%' }}
-                        />
-                      </span>
+                      <DataTip
+                        nested
+                        className="mt-1.5 max-w-36"
+                        label={`${ufName(uf)}: ${fmtPct(Math.abs(d), 1)} pontos rumo a ${c.short} desde ${refLabel}`}
+                        tip={
+                          <div className="num">
+                            <div className="font-semibold">{ufName(uf)}</div>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="size-2 rounded-full" style={{ background: c.color }} />
+                              {fmtPct(Math.abs(d), 1)} pts rumo a {c.short}
+                            </span>
+                            <div className="text-[11px] text-muted-foreground">desde {refLabel}</div>
+                          </div>
+                        }
+                      >
+                        <span className="relative block h-1 rounded-full bg-muted" aria-hidden>
+                          <span className="absolute inset-y-0 left-1/2 w-px bg-foreground/40" />
+                          <span
+                            className="absolute inset-y-0 rounded-full"
+                            style={{ background: c.color, width: `${w}%`, [d > 0 ? 'right' : 'left']: '50%' }}
+                          />
+                        </span>
+                      </DataTip>
                     </span>
                     <Swing v={d} cands={cands} className="w-14 justify-end text-[13px]" />
                   </button>
