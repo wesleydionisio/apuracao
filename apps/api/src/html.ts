@@ -11,10 +11,12 @@ function template(): string {
   const mtime = existsSync(file) ? statSync(file).mtimeMs : 0;
   if (!tpl || tpl.file !== file || tpl.mtime !== mtime) {
     const html = existsSync(file) ? readFileSync(file, 'utf8') : '<!doctype html><html><head><!--OG--></head><body></body></html>';
-    // as metas padrão do template saem: quem manda é a rota
+    // as metas padrão do template (bloco <!--OG-->…<!--/OG-->) saem: quem manda é a rota
     const clean = html
+      .replace(/<!--OG-->[\s\S]*?<!--\/OG-->/, '<!--OG-->')
       .replace(/<meta\s+(property|name)="(og:|twitter:)[^"]*"[^>]*>\s*/g, '')
-      .replace(/<meta\s+name="description"[^>]*>\s*/g, '');
+      .replace(/<meta\s+name="description"[^>]*>\s*/g, '')
+      .replace(/<link\s+rel="canonical"[^>]*>\s*/g, '');
     tpl = { file, mtime, html: clean.includes('<!--OG-->') ? clean : clean.replace('</head>', '<!--OG--></head>') };
   }
   return tpl.html;

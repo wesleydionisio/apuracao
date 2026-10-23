@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-soft: var(--soft);
+  --color-warn: var(--warn);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Neutro de propósito: as únicas cores fortes da tela são as dos candidatos. */
+:root {
+  --bg: #eef0f2;
+  --fg: #15181d;
+  --muted: #5b6470;
+  --card: #ffffff;
+  --line: #dfe3e8;
+  --soft: #f1f3f5;
+  --warn: #8a5a00;
+  --tabbar-h: 60px;
+  --vvh: 100dvh;
+  --tabbar-total: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  /* beautiful-shadows: md para superfícies, sm para controles */
+  --shadow-md: 0px 0px 0px 1px rgba(0,0,0,0.06), 0px 1px 1px -0.5px rgba(0,0,0,0.06), 0px 3px 3px -1.5px rgba(0,0,0,0.06), 0px 6px 6px -3px rgba(0,0,0,0.06), 0px 12px 12px -6px rgba(0,0,0,0.06), 0px 24px 24px -12px rgba(0,0,0,0.06);
+  --shadow-sm: 0px 2px 3px -1px rgba(0,0,0,0.1), 0px 1px 0px 0px rgba(25,28,33,0.02), 0px 0px 0px 1px rgba(25,28,33,0.08);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1013;
+    --fg: #e9ecef;
+    --muted: #98a1ab;
+    --card: #181b20;
+    --line: #2a2f36;
+    --soft: #20242a;
+    --warn: #e3b341;
+    /* no escuro, sombra some: a borda carrega a elevação */
+    --shadow-md: 0 0 0 1px var(--line);
+    --shadow-sm: 0 0 0 1px var(--line);
+    color-scheme: dark;
+  }
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-optical-sizing: auto;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  button, a, input, select, [role="button"] { touch-action: manipulation; }
+  /* 16px evita o zoom automático do iOS ao focar um campo */
+  input, select, textarea { font-size: 16px; }
+  :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; border-radius: 8px; }
+}
+
+@utility num { font-variant-numeric: tabular-nums; }
+/* números grandes: tracking negativo (cresce o tamanho, aperta o espaço) */
+@utility display { font-variant-numeric: tabular-nums; letter-spacing: -0.035em; }
+@utility surface { background: var(--card); box-shadow: var(--shadow-md); }
+@utility control { background: var(--card); box-shadow: var(--shadow-sm); }
+/* resposta ao toque: só transform, curto, ease-out */
+@utility press {
+  transition: transform 160ms var(--ease-out), opacity 160ms var(--ease-out);
+  &:active:not(:disabled) { transform: scale(0.97); }
+}
+@utility safe-b { padding-bottom: env(safe-area-inset-bottom); }
+@utility safe-t { padding-top: env(safe-area-inset-top); }
+@utility pb-tabbar { padding-bottom: calc(var(--tabbar-total) + 16px); }
+
+@keyframes floatup {
+  from { transform: translateY(0) scale(1); opacity: 1; }
+  to { transform: translateY(-140px) scale(1.4); opacity: 0; }
+}
+.float-emoji { animation: floatup 1.2s var(--ease-out) forwards; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+.live-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
+@keyframes toast-in { from { transform: translateY(12px); opacity: 0 } to { transform: none; opacity: 1 } }
+.toast-in { animation: toast-in 200ms var(--ease-out); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* chat em tela cheia entre o cabeçalho e as abas; acompanha o teclado virtual */
+html.kb { --tabbar-total: 0px; }
+html.kb nav[aria-label="Navegação"] { display: none; }
+.chat-shell {
+  top: calc(var(--vvtop, 0px) + var(--header-total, 120px));
+  height: calc(var(--vvh) - var(--header-total, 120px) - var(--tabbar-total));
+}
