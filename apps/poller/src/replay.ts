@@ -37,7 +37,7 @@ export class ReplaySource implements Source {
   private t0 = Date.now();
   private ufs = new Map<string, Area>();
   private mun = new Map<string, Area & { uf: string }>();
-  private cands: { n: string; name: string; seq: number }[];
+  private cands: { n: string; name: string; seq: number; sq?: string; party?: string }[];
 
   constructor(
     private cfg: Config,
@@ -46,7 +46,7 @@ export class ReplaySource implements Source {
     const fx = (f: string) => JSON.parse(readFileSync(path.join(cfg.repo, 'packages/data/fixtures', f), 'utf8'));
     const t2 = parseResult(fx('t2-br.json'));
     this.cands = Object.entries(t2.names)
-      .map(([n, v]) => ({ n, name: v.name, seq: v.seq }))
+      .map(([n, v]) => ({ n, name: v.name, seq: v.seq, sq: v.sq, party: v.party }))
       .sort((x, y) => x.seq - y.seq);
     const cd: CandidateDef[] = this.cands.map((c, i) => ({
       key: i === 0 ? 'a' : 'b', n: c.n, name: c.name, short: c.name, color: '',
@@ -166,7 +166,7 @@ function fakeTse(o: {
   cdabr: string;
   clock: Date;
   done: boolean;
-  cands: { n: string; name: string; seq: number; vap: number }[];
+  cands: { n: string; name: string; seq: number; sq?: string; party?: string; vap: number }[];
   pst: number;
   el: number;
   elc: number;
@@ -184,7 +184,7 @@ function fakeTse(o: {
     tf: o.done ? 's' : 'n', and: o.done ? 'f' : o.pst > 0 ? 'p' : 'n',
     carg: [{
       cd: '1', agr: o.cands.map((c) => ({
-        par: [{ cand: [{ n: c.n, nmu: c.name, nm: c.name, seq: String(c.seq), vap: s(c.vap),
+        par: [{ sg: c.party ?? '', cand: [{ n: c.n, nmu: c.name, nm: c.name, seq: String(c.seq), sqcand: c.sq, vap: s(c.vap),
           pvapn: pc(o.valid ? (c.vap / o.valid) * 100 : 0) }] }],
       })),
     }],

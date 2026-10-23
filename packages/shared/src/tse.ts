@@ -47,14 +47,30 @@ export function tseDate(d?: string, h?: string): string | null {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
-function* candidatesOf(raw: Any): Generator<Any> {
+function* candidatesOf(raw: Any): Generator<[Any, string]> {
   for (const carg of raw?.carg ?? []) {
     for (const agr of carg?.agr ?? []) {
       for (const par of agr?.par ?? []) {
-        for (const cand of par?.cand ?? []) yield cand;
+        for (const cand of par?.cand ?? []) yield [cand, String(par?.sg ?? '')];
       }
     }
   }
+}
+
+/** cores fixas por número de urna; o resto cai no par padrão */
+export const DEFAULT_CAND_COLORS: Record<string, string> = {
+  '13': '#e5484d', // vermelho
+  '22': '#3b82f6', // azul
+};
+
+/** "13:#e5484d,22:#3b82f6" -> mapa */
+export function parseColorMap(s: string | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of (s ?? '').split(',')) {
+    const [n, c] = part.split(':').map((x) => x.trim());
+    if (n && /^#[0-9a-f]{6}$/i.test(c ?? '')) out[n] = c;
+  }
+  return out;
 }
 
 export function parseResult(raw: Any): ParsedResult {
@@ -63,10 +79,16 @@ export function parseResult(raw: Any): ParsedResult {
   const scope: ParsedResult['scope'] = tpabr === 'mu' ? 'mun' : tpabr === 'uf' ? 'uf' : 'br';
   const votes: ParsedResult['votes'] = {};
   const names: ParsedResult['names'] = {};
-  for (const c of candidatesOf(raw)) {
+  for (const [c, party] of candidatesOf(raw)) {
     const n = String(c.n);
     votes[n] = num(c.vap);
-    names[n] = { name: String(c.nmu ?? c.nm ?? n), full: String(c.nm ?? ''), seq: num(c.seq) };
+    names[n] = {
+      name: String(c.nmu ?? c.nm ?? n),
+      full: String(c.nm ?? ''),
+      seq: num(c.seq),
+      sq: c.sqcand ? String(c.sqcand) : undefined,
+      party: party || undefined,
+    };
   }
   const s = raw.s ?? {};
   const e = raw.e ?? {};
@@ -143,18 +165,24 @@ export function parseMunicipalities(raw: Any): TseMunicipality[] {
  */
 export function detectCandidates(
   br: ParsedResult,
-  opts: { a?: string; b?: string; colors?: [string, string] } = {},
+  opts: { a?: string; b?: string; colors?: [string, string]; colorByNum?: Record<string, string>; photo?: (n: string) => string | undefined } = {},
 ): CandidateDef[] {
   const nums = Object.keys(br.names).sort((x, y) => br.names[x].seq - br.names[y].seq);
   const na = opts.a ?? nums[0];
   const nb = opts.b ?? nums.find((n) => n !== na);
   if (!na || !nb) throw new Error('TSE: não encontrei dois candidatos no arquivo do 2º turno');
-  const [ca, cb] = opts.colors ?? ['#2f6fde', '#e8743b'];
-  const short = (n: string) => titleCase(br.names[n]?.name ?? n);
-  return [
-    { key: 'a', n: na, name: br.names[na]?.name ?? na, short: short(na), color: ca },
-    { key: 'b', n: nb, name: br.names[nb]?.name ?? nb, short: short(nb), color: cb },
-  ];
+  const [ca, cb] = opts.colors ?? ['#3b82f6', '#e5484d'];
+  const byNum = { ...DEFAULT_CAND_COLORS, ...opts.colorByNum };
+  const def = (key: 'a' | 'b', n: string, fallback: string): CandidateDef => ({
+    key,
+    n,
+    name: br.names[n]?.name ?? n,
+    short: titleCase(br.names[n]?.name ?? n),
+    color: byNum[n] ?? fallback,
+    photo: opts.photo?.(n),
+    party: br.names[n]?.party,
+  });
+  return [def('a', na, ca), def('b', nb, cb)];
 }
 
 export function titleCase(s: string): string {

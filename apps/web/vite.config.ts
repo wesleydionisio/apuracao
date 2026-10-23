@@ -39,6 +39,7 @@ function localData(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), localData()],
+  resolve: { alias: { '@': resolve(__dirname, 'src') } },
   server: {
     port: 5173,
     proxy: {

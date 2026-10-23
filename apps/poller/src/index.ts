@@ -1,9 +1,11 @@
 // Poller singleton: TSE (ou replay) → normaliza → JSON estático + Redis + Postgres.
 // Ciclo de ~12s com jitter, backoff exponencial em erro, grava só quando o conteúdo muda.
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import path from 'node:path';
 import {
   detectCandidates,
+  parseColorMap,
   isReleased,
   parseResult,
   tsePaths,
@@ -47,7 +49,13 @@ async function cycle() {
   const br = await fetchResult('br');
   if (!br) throw new Error('arquivo BR do 2º turno indisponível');
   if (!cands) {
-    cands = detectCandidates(br, { a: config.cand.a, b: config.cand.b, colors: config.colors });
+    cands = detectCandidates(br, {
+      a: config.cand.a,
+      b: config.cand.b,
+      colors: config.colors,
+      colorByNum: parseColorMap(config.colorByNum),
+      photo: (n) => (existsSync(path.join(config.photoDir, `${n}.jpg`)) ? `/cand/${n}.jpg` : undefined),
+    });
     y2022Map = { a: config.y2022.a ?? cands[0].n, b: config.y2022.b ?? cands[1].n };
     console.log(`[poller] A=${cands[0].n} ${cands[0].name} | B=${cands[1].n} ${cands[1].name}`);
   }

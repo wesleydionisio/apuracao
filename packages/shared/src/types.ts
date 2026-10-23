@@ -12,6 +12,10 @@ export interface CandidateDef {
   /** nome curto para cards e chat */
   short: string;
   color: string;
+  /** foto oficial do TSE (caminho público no site), se baixada pelo ETL */
+  photo?: string;
+  /** partido/federação, ex.: "PT" */
+  party?: string;
 }
 
 export type ElectionStatus =
@@ -48,7 +52,7 @@ export interface ParsedResult {
   nulls: number;
   /** votos por número de candidato */
   votes: Record<string, number>;
-  names: Record<string, { name: string; full: string; seq: number }>;
+  names: Record<string, { name: string; full: string; seq: number; sq?: string; party?: string }>;
 }
 
 /** Snapshot compacto que vai para o cliente (JSON estático e WS). */
