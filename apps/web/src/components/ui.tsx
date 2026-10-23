@@ -101,7 +101,7 @@ export function ShareButton({
         setBusy(true);
         const r = await share(input);
         setBusy(false);
-        if (r === 'copied') toast('Link copiado — cole no WhatsApp');
+        if (r === 'copied') toast('Link copiado. Cole no WhatsApp');
         else if (r === 'failed') toast('Não deu para compartilhar daqui');
       }}
       className={cn('press', iconOnly ? 'size-11 rounded-full text-muted-foreground' : 'h-11 rounded-xl px-4', className)}

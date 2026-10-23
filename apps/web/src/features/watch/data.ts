@@ -36,6 +36,23 @@ export function useHistRefs(board: Board | null): HistRefs {
   return r;
 }
 
+/**
+ * Virada de 2022: último cruzamento das linhas. Se o ponto logo depois da troca vem de fonte
+ * (67,76% às 18h44), usa ele; senão interpola entre as duas amostras.
+ */
+export function flipOf(pts: { pst: number; pa: number; src?: string }[] | null): { pst: number; lead: 'a' | 'b' } | null {
+  if (!pts) return null;
+  let flip: { pst: number; lead: 'a' | 'b' } | null = null;
+  for (let i = 1; i < pts.length; i++) {
+    const d0 = pts[i - 1].pa - 50;
+    const d1 = pts[i].pa - 50;
+    if (d0 === 0 || Math.sign(d0) === Math.sign(d1)) continue;
+    const pst = pts[i].src === 'fonte' ? pts[i].pst : pts[i - 1].pst + ((pts[i].pst - pts[i - 1].pst) * Math.abs(d0)) / (Math.abs(d0) + Math.abs(d1));
+    flip = { pst, lead: d1 > 0 ? 'a' : 'b' };
+  }
+  return flip;
+}
+
 /** curva de 2022 em % de A por % apurado (reconstrução) */
 export function useCurve22(board: Board | null, enabled: boolean) {
   const [pts, setPts] = useState<{ pst: number; pa: number; src?: string }[] | null>(null);

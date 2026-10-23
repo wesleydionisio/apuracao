@@ -6,6 +6,7 @@ import { CandidateAvatar } from '@/components/core/candidate';
 import { live } from '@/lib/live';
 import { cn } from '@/lib/utils';
 import { spawnFloat } from './floats';
+import { SplitFill } from '@/components/core/bars';
 
 const fmtCount = (n: number) =>
   n >= 1_000_000
@@ -43,7 +44,7 @@ function CheerButton({ c, onCheer, disabled, align }: { c: CandidateDef; onCheer
     >
       <CandidateAvatar c={c} size="sm" className="rounded-full" />
       <span key={pop} className={cn('flex flex-col leading-none', align === 'r' ? 'items-end' : 'items-start', pop && 'animate-in zoom-in-90 duration-150')}>
-        <span className="text-[10px] font-medium text-muted-foreground">manda um</span>
+        <span className="text-[11px] font-medium text-muted-foreground">manda um</span>
         <span className="num text-[15px] font-bold" style={{ color: `color-mix(in oklab, ${c.color} 85%, var(--foreground))` }}>
           {c.n}
         </span>
@@ -83,7 +84,7 @@ export function TorcidaBar({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between text-[11px] font-semibold tabular-nums">
           <span style={{ color: `color-mix(in oklab, ${ca.color} 85%, var(--foreground))` }}>{fmtCount(counts.a)}</span>
-          <span className="truncate px-1 text-[10px] font-medium text-muted-foreground">torcida do chat</span>
+          <span className="truncate px-1 text-[11px] font-medium text-muted-foreground">torcida do chat</span>
           <span style={{ color: `color-mix(in oklab, ${cb.color} 85%, var(--foreground))` }}>{fmtCount(counts.b)}</span>
         </div>
         <div
@@ -93,13 +94,12 @@ export function TorcidaBar({
         >
           {total > 0 && (
             <>
-              <div className="h-full transition-[width] duration-700 ease-out" style={{ width: `${share}%`, background: ca.color }} />
-              <div className="h-full flex-1" style={{ background: cb.color }} />
+              <SplitFill pa={share} colorA={ca.color} colorB={cb.color} />
             </>
           )}
           <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-background" aria-hidden />
         </div>
-        <div className="mt-0.5 text-center text-[9.5px] text-muted-foreground/80">não é pesquisa</div>
+        <div className="mt-0.5 text-center text-[11px] text-muted-foreground/80">não é pesquisa</div>
       </div>
       <CheerButton c={cb} align="r" disabled={disabled} onCheer={() => cheer('b')} />
     </div>

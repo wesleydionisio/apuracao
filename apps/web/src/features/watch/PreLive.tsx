@@ -70,7 +70,7 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
         <div className="mt-2 flex items-center justify-between gap-2">
           {[ca, cb].map((c, i) => (
             <div key={c.key} className={cn('flex min-w-0 items-center gap-2', i === 1 && 'flex-row-reverse text-right')}>
-              <CandidateAvatar c={c} size="md" ring={t1 !== null && (i === 0 ? t1 > 50 : t1 < 50)} />
+              <CandidateAvatar c={c} size="md" ring={t1 !== null && (i === 0 ? t1 > 50 : t1 < 50)} priority />
               <div className="min-w-0">
                 <div className="truncate text-[13px] font-semibold">{c.short}</div>
                 <div className="display text-[20px] leading-tight font-semibold">

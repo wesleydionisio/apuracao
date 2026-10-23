@@ -212,7 +212,7 @@ export function GuessTicket({ board }: { board: Board }) {
             autoComplete="nickname"
             className="mt-2 h-11 rounded-xl"
           />
-          <p className="mt-1.5 text-[11px] text-muted-foreground">Não precisa ser seu nome real.</p>
+          <p className="mt-1.5 text-[12px] text-muted-foreground">Não precisa ser seu nome real.</p>
         </div>
       </div>
 
@@ -220,9 +220,13 @@ export function GuessTicket({ board }: { board: Board }) {
         <Button type="submit" size="lg" disabled={busy} className={cn('h-12 w-full rounded-xl text-[15px] font-semibold', busy && 'opacity-70')}>
           {busy ? 'Salvando…' : mine ? 'Atualizar palpite' : 'Cravar palpite e gerar meu card'}
         </Button>
-        <p className="text-center text-[11px] text-muted-foreground">
-          Um palpite por aparelho · dá para mudar até as 17h de domingo
-          {stats?.guesses ? <> · <span className="num">{fmtInt(stats.guesses)}</span> palpites feitos</> : null}
+        <p className="text-center text-[12px] text-muted-foreground">
+          Um palpite por aparelho. Dá para mudar até as 17h de domingo.
+          {stats?.guesses ? (
+            <span className="block">
+              <span className="num">{fmtInt(stats.guesses)}</span> palpites feitos
+            </span>
+          ) : null}
         </p>
       </div>
 

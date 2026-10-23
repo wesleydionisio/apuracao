@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { fmtInt, fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { Fill } from '@/components/core/bars';
 
 const PCT2 = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
 const WINDOW_MS = 5 * 60_000;
@@ -114,7 +115,9 @@ function Row({
         </div>
       </div>
       <div className="relative mt-3 h-1.5 rounded-full bg-muted" aria-hidden>
-        <div className="h-full rounded-full transition-[width] duration-700 ease-out" style={{ width: `${pct}%`, background: c.color }} />
+        <div className="absolute inset-0 overflow-hidden rounded-full">
+          <Fill pct={pct} className="rounded-full" style={{ background: c.color }} />
+        </div>
         <div className="absolute inset-y-0 left-1/2 w-px bg-foreground/35" />
         {refs.map((r) => (
           <span

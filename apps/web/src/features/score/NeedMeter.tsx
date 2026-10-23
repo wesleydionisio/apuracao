@@ -46,7 +46,7 @@ function Arc({ have, need, color }: { have: number; need: number | null; color: 
       {have > 0.2 && <path d={arc(0, have)} fill="none" stroke={color} strokeWidth={SW} strokeLinecap="round" />}
       {/* 50%: a linha de chegada */}
       <line x1={CX} y1={CY - R - SW / 2 - 2} x2={CX} y2={CY - R + SW / 2 + 2} stroke="var(--card)" strokeWidth={2} />
-      <text x={CX} y={CY - R - SW / 2 - 8} textAnchor="middle" className="num fill-muted-foreground text-[10px]">
+      <text x={CX} y={CY - R - SW / 2 - 8} textAnchor="middle" className="num fill-muted-foreground text-[11px]">
         50%
       </text>
       {n !== null && (
@@ -55,10 +55,10 @@ function Arc({ have, need, color }: { have: number; need: number | null; color: 
           <line x1={ix} y1={iy} x2={ox} y2={oy} stroke="var(--foreground)" strokeWidth={3.5} strokeLinecap="round" />
         </g>
       )}
-      <text x={CX - R} y={CY + 17} textAnchor="middle" className="num fill-muted-foreground text-[10px]">
+      <text x={CX - R} y={CY + 17} textAnchor="middle" className="num fill-muted-foreground text-[11px]">
         0%
       </text>
-      <text x={CX + R} y={CY + 17} textAnchor="middle" className="num fill-muted-foreground text-[10px]">
+      <text x={CX + R} y={CY + 17} textAnchor="middle" className="num fill-muted-foreground text-[11px]">
         100%
       </text>
     </svg>
@@ -102,9 +102,9 @@ export function NeedMeter({ board, snap, className }: { board: Board; snap: Snap
       className={className}
     >
       <div
-        className="relative"
+        className="chart relative"
         role="img"
-        aria-label={`${trail.short} tem ${fmtPct(trailNow, 1)}% até agora e precisa de ${need === null ? 'dado indisponível' : out ? 'mais de 100' : fmtPct(need, 1)}% dos votos que faltam`}
+        aria-label={`Gráfico do vira ou não vira: ${trail.short} tem ${fmtPct(trailNow, 1)}% até agora e precisa de ${need === null ? 'dado indisponível' : out ? 'mais de 100' : fmtPct(need, 1)}% dos votos que faltam`}
       >
         <Arc have={trailNow} need={need} color={trail.color} />
         <div className="pointer-events-none absolute inset-x-0 bottom-[14%] flex flex-col items-center text-center">

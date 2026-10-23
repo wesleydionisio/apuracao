@@ -48,7 +48,7 @@ function CityHome({ onPick }: { onPick: (m: RecentCity | Municipality) => void }
   return (
     <div className="space-y-5 pb-2 pt-1">
       <header>
-        <p className="text-xs text-muted-foreground">Presidente · 2º turno · por município</p>
+        <p className="text-xs text-muted-foreground">Presidente, 2º turno, por município</p>
         <h1 className="text-[22px] font-semibold leading-tight tracking-tight">Sua cidade</h1>
         <p className="mt-1 text-sm text-muted-foreground text-pretty">A parcial do seu município comparada com o estado, o Brasil, o 1º turno e 2022.</p>
       </header>
@@ -213,7 +213,7 @@ function CitySheet({ board, view, onPick }: { board: Board; view: CityView; onPi
           <CompareRow label={`${mun.name} no 1º turno`} hint="só os votos dos dois finalistas" pa={pa1} cands={cands} delta={d(pa1)} />
           <CompareRow label={`${mun.name} em 2022`} hint="2º turno, mesmos partidos" pa={p22} cands={cands} delta={d(p22)} />
         </ul>
-        {base !== null && <p className="pb-3 text-[11px] text-muted-foreground">À direita: quantos pontos {mun.name} está mais perto de cada um do que a referência.</p>}
+        {base !== null && <p className="pb-3 text-[12px] text-muted-foreground">À direita: quantos pontos {mun.name} está mais perto de cada um do que a referência.</p>}
       </section>
 
       {now && view.t1 && (
@@ -237,7 +237,7 @@ function CitySheet({ board, view, onPick }: { board: Board; view: CityView; onPi
         <WhenSeen h={220}>
           <MunMap uf={mun.uf} values={{ [mun.ibge]: now ? now.pa : pa1 }} cands={cands} highlight={mun.ibge} dim maxHeight={240} />
         </WhenSeen>
-        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+        <p className="mt-2 text-center text-[12px] text-muted-foreground">
           {mun.name} em destaque no mapa {ofUf(mun.uf)}, na cor de quem lidera {now ? 'agora' : 'no 1º turno'}.
         </p>
       </section>
@@ -381,7 +381,7 @@ function SimilarCities({ board, mun }: { board: Board; mun: Municipality }) {
                       </span>
                     </span>
                   ) : (
-                    <span className="text-[11px] text-muted-foreground">—</span>
+                    <span className="text-[11px] text-muted-foreground" title="sem dado">n/d</span>
                   )}
                 </span>
                 {pa != null && <VersusBar pa={pa} cands={cands} h="h-1" className="mt-2" />}

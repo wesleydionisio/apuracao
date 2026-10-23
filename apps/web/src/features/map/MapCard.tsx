@@ -32,7 +32,7 @@ export default function MapCard() {
             {live ? (board.br ? `Parcial com ${fmtPct(board.br.pst, 1)}% apurado` : 'Parcial') : '1º turno, só os dois finalistas'}
           </p>
         </div>
-        <Link href="/mapa" className="press inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+        <Link href="/mapa" className="press inline-flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground">
           Abrir mapa <ArrowRight className="size-4" />
         </Link>
       </div>
@@ -46,7 +46,7 @@ export default function MapCard() {
           { c: cands[0], n: a },
           { c: cands[1], n: b },
         ].map(({ c, n }, i) => (
-          <div key={c.key} className={i ? 'order-3 flex items-center gap-2 text-right' : 'order-1 flex items-center gap-2'}>
+          <div key={c.key} className={i ? 'order-3 flex shrink-0 items-center gap-2 text-right' : 'order-1 flex shrink-0 items-center gap-2'}>
             {!i && <CandidateAvatar c={c} size="sm" />}
             <div>
               <div className="num text-base font-semibold leading-none" style={{ color: c.color }}>

@@ -11,6 +11,7 @@ import { pair } from './colors';
 
 export { pair };
 import { fmtCompact } from '@/lib/format';
+import { Fill, SplitFill } from '@/components/core/bars';
 
 const PCT1 = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
 
@@ -56,8 +57,7 @@ export function VersusBar({
 }) {
   const bar = (
     <div className={cn('relative flex w-full overflow-hidden rounded-full bg-muted', h, !refs?.length && className)} aria-hidden>
-      <div className="transition-[width] duration-500 ease-out" style={{ width: `${pa}%`, background: cands[0].color }} />
-      <div className="flex-1" style={{ background: cands[1].color }} />
+      <SplitFill pa={pa} colorA={cands[0].color} colorB={cands[1].color} />
       <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-card" />
     </div>
   );
@@ -68,7 +68,7 @@ export function VersusBar({
       {refs.map((r, i) => (
         <span
           key={r.tag}
-          className="absolute -top-1.5 -bottom-1.5 w-0 transition-[left] duration-500 ease-out"
+          className="absolute -top-1.5 -bottom-1.5 w-0"
           style={{ left: `${Math.max(0, Math.min(100, r.pa))}%` }}
           title={`${r.label}: ${fmtPct(r.pa, 1)}%`}
           aria-hidden
@@ -103,7 +103,7 @@ export const ofUf = (uf: string) => inUf(uf).replace(/^no /, 'do ').replace(/^na
 
 /** deslocamento em pontos de A: "+3,2" na cor de quem ganhou terreno (o ponto colorido repete a informação sem depender só da cor) */
 export function Swing({ v, cands, className, digits = 1 }: { v: number | null; cands: CandidateDef[]; className?: string; digits?: number }) {
-  if (v === null || !Number.isFinite(v)) return <span className={cn('num text-muted-foreground', className)}>—</span>;
+  if (v === null || !Number.isFinite(v)) return <span className={cn('num text-muted-foreground', className)} title="sem dado">n/d</span>;
   if (Math.abs(v) < 0.05) return <span className={cn('num text-muted-foreground', className)}>=</span>;
   const c = v > 0 ? cands[0] : cands[1];
   return (
@@ -142,7 +142,7 @@ export function CountedBar({ pst, className }: { pst: number; className?: string
   return (
     <div className={cn('flex items-center gap-2', className)}>
       <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pst} aria-valuemin={0} aria-valuemax={100} aria-label="Urnas apuradas">
-        <div className="h-full rounded-full bg-foreground/70 transition-[width] duration-500 ease-out" style={{ width: `${pst}%` }} />
+        <Fill pct={pst} className="rounded-full bg-foreground/70" />
       </div>
       <span className="num shrink-0 text-xs text-muted-foreground">{fmtPct(pst, 1)}% apurado</span>
     </div>
@@ -176,7 +176,7 @@ export function CandidateLines({ cands, snap, size = 'md' }: { cands: CandidateD
             </div>
           </div>
           <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full transition-[width] duration-500 ease-out" style={{ width: `${pct}%`, background: c.color }} />
+            <Fill pct={pct} className="rounded-full" style={{ background: c.color }} />
           </div>
         </li>
       ))}
@@ -317,7 +317,7 @@ export function TransferBlock({ snap, t1, cands, place }: { snap: Snap; t1: Hist
           </li>
         ))}
       </ul>
-      {lost > 1 && <p className="num mt-2 text-[11px] text-muted-foreground">{fmtPct(lost, 0)}% do estoque não foi para nenhum dos dois até agora.</p>}
+      {lost > 1 && <p className="num mt-2 text-[12px] text-muted-foreground">{fmtPct(lost, 0)}% do estoque não foi para nenhum dos dois até agora.</p>}
     </div>
   );
 }

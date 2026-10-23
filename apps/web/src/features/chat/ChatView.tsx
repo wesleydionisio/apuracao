@@ -274,7 +274,7 @@ export default function ChatView({
             aria-label={me ? `Seu perfil: ${me.nick}${mySide ? `, torce ${mySide.n}` : ''}. Editar` : 'Seu perfil'}
           >
             {me ? <NickAvatar m={me} className="size-9" /> : <span className="block size-9 rounded-full bg-muted" />}
-            {mySide && <PartyBadge c={mySide} className="absolute -right-1.5 -bottom-1 h-[15px] px-1 text-[9.5px] ring-2 ring-background" />}
+            {mySide && <PartyBadge c={mySide} className="absolute -right-1.5 -bottom-1 h-[15px] px-1 text-[11px] ring-2 ring-background" />}
           </button>
           <div className="relative min-w-0 flex-1">
             <input
@@ -285,7 +285,7 @@ export default function ChatView({
               enterKeyHint="send"
               placeholder={placeholder}
               disabled={disabled}
-              className="h-10 w-full rounded-full border bg-muted/50 pr-11 pl-4 outline-none transition-[box-shadow,border-color,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/30 disabled:opacity-60"
+              className="h-10 w-full rounded-full border border-input bg-muted/50 pr-11 pl-4 outline-none transition-[box-shadow,border-color,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/30 disabled:opacity-60"
               aria-label="Mensagem"
               aria-describedby="chat-status"
             />

@@ -79,7 +79,7 @@ function FlowBar({ board, snap, t1 }: { board: Board; snap: Snap; t1: HistRow })
           </div>
         ))}
       </dl>
-      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+      <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
         Ganho de cada um sobre o 1º turno, como parte do estoque. Cinza: não votou ou votou branco/nulo
         {t.scale < 1 ? `. Proporcional aos ${fmtPct(t.scale * 100, 0)}% do eleitorado já apurado` : ''}.
       </p>
@@ -119,7 +119,7 @@ export function TransferCard({ board, className }: { board: Board; className?: s
             agora.
           </p>
           <TransferSankey t={t} ca={ca} cb={cb} />
-          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
             Ganho de cada um sobre o próprio 1º turno
             {t.scale < 1 ? `, proporcional aos ${fmtPct(t.scale * 100, 0)}% do eleitorado já apurado` : ''}. Perdas contam como zero.
           </p>
@@ -281,7 +281,7 @@ export function FlipsCard({ board, className }: { board: Board; className?: stri
           </ul>
         </>
       )}
-      <p className="mt-2 text-[11px] text-muted-foreground">Parcial: pode desvirar até o fim da apuração. 2022 pelo partido de cada lado.</p>
+      <p className="mt-2 text-[12px] text-muted-foreground">Parcial: pode desvirar até o fim da apuração. 2022 pelo partido de cada lado.</p>
     </Section>
   );
 }

@@ -29,7 +29,7 @@ const initials = (name: string) => {
 };
 
 const SIZES = {
-  xs: 'size-6 rounded-md text-[10px]',
+  xs: 'size-6 rounded-md text-[11px]',
   sm: 'size-8 rounded-lg text-xs',
   md: 'size-11 rounded-xl text-sm',
   lg: 'size-14 rounded-2xl text-base',
@@ -44,11 +44,14 @@ export function CandidateAvatar({
   c,
   size = 'md',
   ring = false,
+  priority = false,
   className,
 }: {
   c: CandidateDef;
   size?: keyof typeof SIZES;
   ring?: boolean;
+  /** foto na primeira tela (placar): carrega já e com prioridade, é o maior elemento visível */
+  priority?: boolean;
   className?: string;
 }) {
   return (
@@ -59,7 +62,7 @@ export function CandidateAvatar({
         ring && 'ring-2 ring-offset-2 ring-offset-background',
         className,
       )}
-      style={{ ...(ring ? { ['--tw-ring-color' as string]: c.color } : {}), background: c.photo ? '#fff' : c.color }}
+      style={{ ...(ring ? { ['--tw-ring-color' as string]: c.color } : {}), background: c.photo ? 'var(--photo-bg)' : c.color }}
       aria-hidden
     >
       {c.photo ? (
@@ -68,8 +71,9 @@ export function CandidateAvatar({
           alt=""
           width={161}
           height={225}
-          loading="lazy"
+          loading={priority ? 'eager' : 'lazy'}
           decoding="async"
+          {...(priority ? { fetchpriority: 'high' } : {})}
           className="size-full object-cover object-[50%_18%]"
           draggable={false}
         />

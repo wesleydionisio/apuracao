@@ -35,7 +35,7 @@ export function fillFor(pa: number | null | undefined, cands: CandidateDef[]): s
 
 /** rótulo sobre o preenchimento: branco nas faixas fortes, texto normal nas claras */
 export const inkFor = (pa: number | null | undefined) =>
-  pa === null || pa === undefined || bandOf(pa) < 2 ? 'var(--foreground)' : '#fff';
+  pa === null || pa === undefined || bandOf(pa) < 2 ? 'var(--foreground)' : 'var(--on-fill)';
 
 export function bandSwatch(c: CandidateDef, band: number) {
   return `color-mix(in srgb, ${c.color} ${MIX[band]}%, var(--card))`;
@@ -77,12 +77,12 @@ const readVars = (): ThemeColors => {
   };
 };
 
-/** cores do tema em hex, atualizadas quando a classe .dark muda */
+/** cores do tema em hex, atualizadas quando o data-theme muda */
 export function useThemeColors(): ThemeColors {
   const [c, setC] = useState(readVars);
   useEffect(() => {
     const mo = new MutationObserver(() => setC(readVars()));
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => mo.disconnect();
   }, []);
   return c;

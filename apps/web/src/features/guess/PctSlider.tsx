@@ -51,13 +51,13 @@ export function PctSlider({
         <span className="pointer-events-none absolute left-1/2 h-5 w-0.5 -translate-x-1/2 rounded-full bg-background" aria-hidden />
         <Slider.Thumb
           className={cn(
-            'block rounded-full border-2 border-background bg-white shadow-[0_1px_2px_rgba(0,0,0,0.25),0_4px_12px_rgba(0,0,0,0.2)] outline-none transition-transform duration-150 ease-out focus-visible:ring-4 focus-visible:ring-ring/50 active:scale-110',
+            'block rounded-full border-2 border-background bg-[var(--on-fill)] shadow-[var(--shadow-thumb)] outline-none transition-transform duration-150 ease-out focus-visible:ring-4 focus-visible:ring-ring/50 active:scale-110',
             big ? 'size-7' : 'size-6',
           )}
           aria-valuetext={`${ca.short} ${value.toLocaleString('pt-BR')}%, ${cb.short} ${(100 - value).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`}
         />
       </Slider.Root>
-      <div className="relative mt-0.5 h-4 text-[10px] text-muted-foreground" aria-hidden>
+      <div className="relative mt-0.5 h-4 text-[11px] text-muted-foreground" aria-hidden>
         <span className="absolute left-0">{MIN}%</span>
         <span className="absolute left-1/2 -translate-x-1/2">50%</span>
         <span className="absolute right-0">{MAX}%</span>
@@ -72,7 +72,7 @@ export function PctSlider({
         <Fine onClick={() => set(value + 0.1)} label={`${ca.short} mais 0,1 ponto`}>+0,1</Fine>
         <Fine onClick={() => set(value + 1)} label={`${ca.short} mais 1 ponto`}>+1</Fine>
       </div>
-      <p className="mt-1.5 text-center text-[11px] text-muted-foreground">ajuste fino do % de {ca.short}</p>
+      <p className="mt-1.5 text-center text-[12px] text-muted-foreground">ajuste fino do % de {ca.short}</p>
     </div>
   );
 }

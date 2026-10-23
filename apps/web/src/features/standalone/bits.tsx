@@ -4,6 +4,7 @@ import NumberFlow from '@number-flow/react';
 import { Bell, Calculator, CircleCheck, Flag, Repeat2, Zap, type LucideIcon } from 'lucide-react';
 import { ogUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { SplitFill } from '@/components/core/bars';
 
 /** porcentagem ao vivo com transição de dígitos (NumberFlow), sempre pt-BR */
 export function Pct({
@@ -55,8 +56,7 @@ export function SplitBar({
   const w = Math.max(0, Math.min(100, pa));
   return (
     <div className={cn('relative h-2 w-full overflow-hidden rounded-full bg-muted', className)} role="img" aria-label={`${ca.short} ${w.toFixed(1)}%, ${cb.short} ${(100 - w).toFixed(1)}%`}>
-      <div className="absolute inset-y-0 left-0 transition-[width] duration-700 ease-out" style={{ width: `${w}%`, background: ca.color }} />
-      <div className="absolute inset-y-0 right-0 transition-[width] duration-700 ease-out" style={{ width: `${100 - w}%`, background: cb.color }} />
+      <SplitFill pa={w} colorA={ca.color} colorB={cb.color} />
       <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-background" />
       {marker != null && (
         <div

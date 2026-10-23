@@ -12,7 +12,7 @@ export function EmbedPage() {
   useCandidateCssVars();
   useEffect(() => {
     const t = new URLSearchParams(location.search).get('tema');
-    if (t === 'claro' || t === 'escuro') document.documentElement.classList.toggle('dark', t === 'escuro');
+    if (t === 'claro' || t === 'escuro') document.documentElement.dataset.theme = t === 'escuro' ? 'dark' : 'light';
     document.body.style.background = 'transparent';
   }, []);
   const site = location.origin;

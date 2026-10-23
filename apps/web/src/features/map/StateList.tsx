@@ -69,7 +69,7 @@ export function StateList({
               >
                 <span
                   className="grid h-8 w-9 shrink-0 place-items-center rounded-md text-[11px] font-semibold"
-                  style={{ background: fillFor(v?.pa, cands), color: v?.pa != null && marginPts(v.pa) >= 5 ? '#fff' : 'var(--foreground)' }}
+                  style={{ background: fillFor(v?.pa, cands), color: v?.pa != null && marginPts(v.pa) >= 5 ? 'var(--on-fill)' : 'var(--foreground)' }}
                 >
                   {uf}
                 </span>
@@ -104,7 +104,7 @@ export function StateList({
           );
         })}
       </ul>
-      <p className="mt-2 text-[11px] text-muted-foreground">
+      <p className="mt-2 text-[12px] text-muted-foreground">
         "+8,2" = vantagem de quem lidera, em pontos percentuais dos votos válidos.
         {swing && swingLabel && ` Última coluna: quanto o estado andou na direção de cada um desde ${swingLabel}.`}
       </p>

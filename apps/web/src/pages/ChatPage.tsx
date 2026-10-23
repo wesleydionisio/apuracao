@@ -41,7 +41,7 @@ export function SalaPage() {
         onPointerDown={() => prefetchImage()}
         onClick={async () => {
           const r = await share(inviteShare(name));
-          if (r === 'copied') toast('Link da sala copiado — cole no grupo');
+          if (r === 'copied') toast('Link da sala copiado. Cole no grupo');
           else if (r === 'failed') toast('Não deu para compartilhar daqui');
         }}
       >

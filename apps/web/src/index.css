@@ -1,10 +1,20 @@
+/* Hallmark · checked: 2026-10-23 · genre: modern-minimal (inferred) · scope: app
+ * floor: polish pass after the audit in .hallmark/before.txt
+ * built: the project · redesign: polish · v2.0.0 */
+/* Hallmark · reworded "Link copiado — cole no WhatsApp" to "Link copiado. Cole no WhatsApp" · 19 names the dash */
+/* Hallmark · reworded "Link da sala copiado — cole no grupo" to "Link da sala copiado. Cole no grupo" · 19 names the dash */
+/* Hallmark · dismissed F18 · data-slot here is the shadcn component marker (badge, toggle-group), not an image slot */
+/* Hallmark · dismissed F25 · the map card and the desktop column are desktop extras; the phone has the Mapa tab */
+/* Hallmark · dismissed kept 15:34 · the TV clock is live and changes every second */
+/* Hallmark · note 30a · the flagged emoji are chat content (the picker's list and the reaction the button sends), not icons */
+/* Hallmark · note 39b · a chat line is a 28px tappable row (copy, report), dense on purpose like a live chat */
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 
-/* tema escuro por classe (.dark no <html>), definida antes do primeiro paint em index.html */
-@custom-variant dark (&:is(.dark *));
+/* tema escuro por atributo (data-theme="dark" no <html>), definido antes do primeiro paint em index.html */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
  * Paleta sóbria: grafite + cinzas frios. As únicas cores saturadas da tela são as dos
@@ -28,13 +38,21 @@
   --accent-foreground: #0f1419;
   --destructive: #d93036;
   --border: #e3e6eb;
-  --input: #dde1e7;
-  --ring: #94a0b0;
+  /* borda de campo com 3:1 sobre cartão e fundo */
+  --input: #7b8693;
+  /* anel de foco: 5:1 ou mais sobre qualquer superfície do tema */
+  --focus: #5f6b7a;
+  --ring: var(--focus);
   --live: #16a34a;
   --warning: #b45309;
-  /* candidatos: sobrescritos em runtime a partir de board.candidates */
-  --cand-a: #e5484d;
-  --cand-b: #3b82f6;
+  /* candidatos: sobrescritos em runtime a partir de board.candidates (misturados em OKLCH) */
+  --cand-a: #e74948;
+  --cand-b: #4084e7;
+  /* tinta sobre preenchimentos fortes (cor de candidato) e fundo das fotos oficiais do TSE */
+  --on-fill: #ffffff;
+  --photo-bg: #ffffff;
+  --shadow-thumb: 0 1px 2px rgb(0 0 0 / 0.25), 0 4px 12px rgb(0 0 0 / 0.2);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 8px 24px -8px rgb(0 0 0 / 0.35);
 
   --tabbar-h: 60px;
   --vvh: 100dvh;
@@ -42,7 +60,7 @@
   color-scheme: light;
 }
 
-.dark {
+[data-theme="dark"] {
   --background: #0f1216;
   --foreground: #eef1f5;
   --card: #161a20;
@@ -59,8 +77,9 @@
   --accent-foreground: #eef1f5;
   --destructive: #f2555a;
   --border: #262c35;
-  --input: #2c333d;
-  --ring: #4b5664;
+  --input: #626d7a;
+  --focus: #9aa4b1;
+  --ring: var(--focus);
   --live: #22c55e;
   --warning: #f5a524;
   color-scheme: dark;
@@ -99,10 +118,18 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   html {
     -webkit-text-size-adjust: 100%;
+  }
+  html,
+  body {
+    /* nunca rolagem lateral: um bloco largo demais é cortado, não empurra a página */
+    overflow-x: clip;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--foreground) 22%, transparent);
   }
   body {
     @apply bg-background text-foreground antialiased;
@@ -125,6 +152,15 @@
   textarea {
     font-size: 16px;
   }
+}
+
+/*
+ * Foco visível e instantâneo em tudo que é interativo. Fora de @layer de propósito:
+ * vence o outline-none dos componentes (camada utilities) sem !important.
+ */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 /* números: sempre tabulares; os grandes com tracking negativo */

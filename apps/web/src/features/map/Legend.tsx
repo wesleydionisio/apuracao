@@ -23,31 +23,35 @@ export function MapLegend({
   const [a, b] = cands;
   const bands = [4, 3, 2, 1, 0];
   return (
-    <div className={cn('flex flex-col items-center gap-1.5', className)} aria-label="Legenda: cor de quem lidera, mais forte quanto maior a diferença">
-      <div className="flex items-center gap-2">
+    <div
+      className={cn('flex min-w-0 flex-col items-center gap-1.5', compact ? 'max-w-[10rem] flex-1' : 'w-full', className)}
+      aria-label="Legenda: cor de quem lidera, mais forte quanto maior a diferença"
+    >
+      {/* faixas flexíveis: dividem a largura disponível (nunca empurram a página em 320px) */}
+      <div className="flex w-full max-w-[22rem] min-w-0 items-center gap-2">
         {!bare && <CandidateAvatar c={a} size="xs" />}
-        <div className="flex items-end gap-0.5">
+        <div className="flex min-w-0 flex-1 items-end gap-0.5">
           {bands.map((band, i) => (
-            <div key={`a${band}`} className="flex flex-col items-center gap-1">
-              <span className={cn('block h-2.5 rounded-[3px]', compact ? 'w-3' : 'w-6')} style={{ background: bandSwatch(a, band) }} />
-              {!compact && <span className="num text-[10px] leading-none text-muted-foreground">{TICKS[i]}</span>}
+            <div key={`a${band}`} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+              <span className="block h-2.5 w-full rounded-[3px]" style={{ background: bandSwatch(a, band) }} />
+              {!compact && <span className="num text-[11px] leading-none text-muted-foreground">{TICKS[i]}</span>}
             </div>
           ))}
-          <span className="w-1" />
+          <span className="w-1 shrink-0" />
           {[...bands].reverse().map((band, i) => (
-            <div key={`b${band}`} className="flex flex-col items-center gap-1">
-              <span className={cn('block h-2.5 rounded-[3px]', compact ? 'w-3' : 'w-6')} style={{ background: bandSwatch(b, band) }} />
-              {!compact && <span className="num text-[10px] leading-none text-muted-foreground">{TICKS[4 - i]}</span>}
+            <div key={`b${band}`} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+              <span className="block h-2.5 w-full rounded-[3px]" style={{ background: bandSwatch(b, band) }} />
+              {!compact && <span className="num text-[11px] leading-none text-muted-foreground">{TICKS[4 - i]}</span>}
             </div>
           ))}
         </div>
         {!bare && <CandidateAvatar c={b} size="xs" />}
       </div>
       {!compact && (
-        <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          {caption}
+        <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
+          <span>{caption}</span>
           <span className="inline-flex items-center gap-1">
-            · <span className="inline-block size-2.5 rounded-[3px] bg-border" /> sem dados
+            <span className="inline-block size-2.5 rounded-[3px] bg-border" /> sem dados
           </span>
         </p>
       )}

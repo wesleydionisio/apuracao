@@ -29,8 +29,8 @@ export const config = {
     userAgent: env.TSE_UA ?? 'apuracao-viral/1.0 (+contato no site)',
   },
   cand: { a: env.CAND_A || undefined, b: env.CAND_B || undefined },
-  colors: [env.COLOR_A || '#3b82f6', env.COLOR_B || '#e5484d'] as [string, string],
-  /** cor por número de urna, ex.: "13:#e5484d,22:#3b82f6" (vence COLOR_A/B) */
+  colors: [env.COLOR_A || '#4084e7', env.COLOR_B || '#e74948'] as [string, string],
+  /** cor por número de urna, ex.: "13:#e74948,22:#4084e7" (vence COLOR_A/B) */
   colorByNum: env.CAND_COLORS || '',
   /** fotos baixadas pelo ETL ficam em apps/web/public/cand/<n>.jpg */
   photoDir: env.PHOTO_DIR ?? path.join(repo, 'apps/web/public/cand'),

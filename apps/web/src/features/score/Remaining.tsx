@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { fmtCompact, fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Section } from './Section';
+import { Fill } from '@/components/core/bars';
 
 type SortKey = 'rem' | 'pst' | 'margin';
 const SORTS: { k: SortKey; label: string }[] = [
@@ -60,7 +61,7 @@ export function RemainingTable({ board, limit = 7, className }: { board: Board; 
                 aria-pressed={sort === s.k}
                 onClick={() => setSort(s.k)}
                 className={cn(
-                  'press relative h-7 rounded-full px-2.5 text-[12px] font-medium before:absolute before:-inset-y-2 before:inset-x-0',
+                  'press relative h-8 rounded-full px-3 text-[12px] font-medium before:absolute before:-inset-y-1.5 before:inset-x-0',
                   sort === s.k ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
                 )}
               >
@@ -89,7 +90,7 @@ export function RemainingTable({ board, limit = 7, className }: { board: Board; 
                     </div>
                     <div className="mt-1.5 flex items-center gap-2">
                       <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-foreground/70 transition-[width] duration-700" style={{ width: `${r.pst}%` }} />
+                        <Fill pct={r.pst} className="rounded-full bg-foreground/70" />
                       </div>
                       <span className="num w-8 text-right text-[11px] text-muted-foreground">{fmtPct(r.pst, 0)}%</span>
                     </div>
@@ -104,12 +105,12 @@ export function RemainingTable({ board, limit = 7, className }: { board: Board; 
                         <CandidateAvatar c={r.lead} size="xs" />
                       </>
                     ) : (
-                      <span className="text-[11px] text-muted-foreground">—</span>
+                      <span className="text-[11px] text-muted-foreground" title="sem dado">n/d</span>
                     )}
                   </div>
                   <div className="flex justify-end">
                     {r.pa1 === null ? (
-                      <span className="text-[11px] text-muted-foreground">—</span>
+                      <span className="text-[11px] text-muted-foreground" title="sem dado">n/d</span>
                     ) : (
                       <div className="flex h-1.5 w-full overflow-hidden rounded-full" title={`1º turno: ${ca.short} ${fmtPct(r.pa1, 1)}%`}>
                         <div style={{ width: `${r.pa1}%`, background: ca.color }} />
@@ -127,7 +128,7 @@ export function RemainingTable({ board, limit = 7, className }: { board: Board; 
               <ChevronDown className={cn('size-4 transition-transform', all && 'rotate-180')} aria-hidden />
             </Button>
           )}
-          <p className="mt-1 text-[11px] text-muted-foreground">Margem em pontos sobre os votos válidos. 1º turno: só os dois finalistas.</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">Margem em pontos sobre os votos válidos. 1º turno: só os dois finalistas.</p>
         </>
       )}
     </Section>

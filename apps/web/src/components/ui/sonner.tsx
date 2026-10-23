@@ -8,7 +8,7 @@ import {
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { useIsDark } from "@/components/shell/theme"
 
-// Tema pela classe .dark do app (sem next-themes).
+// Tema pelo data-theme do app (sem next-themes).
 const Toaster = ({ ...props }: ToasterProps) => {
   const dark = useIsDark()
 

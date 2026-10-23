@@ -88,7 +88,7 @@ export function MessageActions({
                 <Flag className="size-4" aria-hidden />
                 Denunciar mensagem
               </Button>
-              <p className="px-1 text-[11px] text-muted-foreground">
+              <p className="px-1 text-[12px] text-muted-foreground">
                 Mensagens com 3 denúncias de pessoas diferentes saem do ar automaticamente.
               </p>
             </DrawerFooter>
@@ -333,7 +333,7 @@ export function InviteDrawer({ open, onOpenChange }: { open: boolean; onOpenChan
               onOpenChange(false);
               nav(`/sala/${slug}`);
               const r = await share(inviteShare(slug));
-              if (r === 'copied') toast('Link da sala copiado — cole no grupo');
+              if (r === 'copied') toast('Link da sala copiado. Cole no grupo');
             }}
           >
             <Plus className="size-4" aria-hidden />

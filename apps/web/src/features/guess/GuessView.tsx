@@ -73,7 +73,7 @@ function GuessDetail({ board, v, mine }: { board: Board; v: View; mine: boolean 
   const top = live ? topPct(live.rank, live.total) : null;
   const shareText =
     state === 'final' && live
-      ? `Errei por ${fmtPct(live.dist, 2)} ${pts(live.dist)} o 2º turno${top! <= 50 ? ` — top ${fmtTop(top!)}% do Brasil` : ''}. E você?`
+      ? `Errei por ${fmtPct(live.dist, 2)} ${pts(live.dist)} o 2º turno${top! <= 50 ? `, top ${fmtTop(top!)}% do Brasil` : ''}. E você?`
       : `Meu palpite pro 2º turno: ${ca.short} ${fmtPct(g.pa, 1)}% × ${fmtPct(100 - g.pa, 1)}% ${cb.short}. Qual é o seu?`;
   const story = ogUrl.guess(g.id, 'story');
 
@@ -269,7 +269,7 @@ function Ticker({ live, state, g, pst }: { live: GuessLive; state: 'live' | 'fin
           <div className="shrink-0 text-right">
             <DistanceSpark trail={trail} />
             {best && (
-              <div className="num mt-1 text-[10px] text-muted-foreground">
+              <div className="num mt-1 text-[11px] text-muted-foreground">
                 <span className="mr-1 inline-block size-1.5 rounded-full bg-live align-middle" aria-hidden />
                 mais perto: {fmtPct(best.dist, 2)} com {fmtPct(best.pst, 0)}%
               </div>
@@ -315,7 +315,7 @@ function ShareBlock({ story, text, url, final }: { id: string; story: string; te
             height={1350}
             loading="lazy"
             decoding="async"
-            className="aspect-[1080/1350] w-[38%] max-w-44 shrink-0 rounded-xl border bg-muted object-cover shadow-[0_1px_2px_rgba(0,0,0,0.12),0_8px_24px_-8px_rgba(0,0,0,0.35)]"
+            className="aspect-[1080/1350] w-[38%] max-w-44 shrink-0 rounded-xl border bg-muted object-cover shadow-[var(--shadow-card)]"
           />
         )}
         <div className="flex min-w-0 flex-1 flex-col">
@@ -336,7 +336,7 @@ function ShareBlock({ story, text, url, final }: { id: string; story: string; te
             setBusy(true);
             const r = await share({ title: 'Meu palpite', text, url, image: story, filename: 'palpite.png' });
             setBusy(false);
-            if (r === 'copied') toast('Link copiado — cole no WhatsApp');
+            if (r === 'copied') toast('Link copiado. Cole no WhatsApp');
             else if (r === 'failed') toast('Não deu para compartilhar daqui');
           }}
         >

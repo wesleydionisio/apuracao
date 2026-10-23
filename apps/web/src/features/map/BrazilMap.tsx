@@ -123,8 +123,7 @@ export function BrazilMap({
                   textAnchor="middle"
                   dominantBaseline="central"
                   className="pointer-events-none text-[15px] font-semibold tracking-wide"
-                  fill={inkFor(values[s.uf]?.pa)}
-                  fillOpacity={0.9}
+                  style={{ fill: inkFor(values[s.uf]?.pa), fillOpacity: 0.9 }}
                   aria-hidden
                 >
                   {s.uf}

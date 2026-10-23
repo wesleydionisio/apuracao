@@ -13,7 +13,7 @@ export function UfChip({ uf, pa, cands, className }: { uf: string; pa: number | 
   return (
     <span
       className={cn('grid h-7 w-8 shrink-0 place-items-center rounded-md text-[11px] font-semibold', className)}
-      style={{ background: fillFor(pa, cands), color: pa != null && marginPts(pa) >= 5 ? '#fff' : 'var(--foreground)' }}
+      style={{ background: fillFor(pa, cands), color: pa != null && marginPts(pa) >= 5 ? 'var(--on-fill)' : 'var(--foreground)' }}
       aria-hidden
     >
       {uf}
@@ -114,7 +114,7 @@ export function MapRankings({
               );
             })}
           </ol>
-          <p className="mt-2 text-[11px] text-muted-foreground">Pontos que cada estado andou na direção de um dos dois, comparado a {refLabel}.</p>
+          <p className="mt-2 text-[12px] text-muted-foreground">Pontos que cada estado andou na direção de um dos dois, comparado a {refLabel}.</p>
         </section>
       )}
     </div>

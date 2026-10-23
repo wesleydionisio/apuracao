@@ -100,7 +100,7 @@ function MapView({ board }: { board: Board }) {
     <div className="space-y-4 pb-2">
       <header className="flex items-end justify-between gap-3 pt-1">
         <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">Presidente · 2º turno · por estado</p>
+          <p className="text-xs text-muted-foreground">Presidente, 2º turno, por estado</p>
           <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-balance">{title}</h1>
         </div>
         <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como">

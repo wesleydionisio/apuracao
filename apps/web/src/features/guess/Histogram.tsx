@@ -110,7 +110,7 @@ export function GuessHistogram({
         {live != null && live >= LO && live <= HI && (
           <g>
             <line x1={X(live)} x2={X(live)} y1={-2} y2={H} stroke="var(--foreground)" strokeWidth={1.5} strokeDasharray="3 2" />
-            <text x={X(live)} y={-6} textAnchor="middle" className="fill-muted-foreground text-[9px]">
+            <text x={X(live)} y={-6} textAnchor="middle" className="fill-muted-foreground text-[11px]">
               parcial
             </text>
           </g>
@@ -122,7 +122,7 @@ export function GuessHistogram({
           </g>
         )}
         {[35, 40, 45, 50, 55, 60, 65].map((t) => (
-          <text key={t} x={X(t)} y={H + 12} textAnchor="middle" className="num fill-muted-foreground text-[9px]">
+          <text key={t} x={X(t)} y={H + 12} textAnchor="middle" className="num fill-muted-foreground text-[11px]">
             {t}
           </text>
         ))}

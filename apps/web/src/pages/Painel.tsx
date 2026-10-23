@@ -26,6 +26,7 @@ import { Card, useNow } from '../components/ui';
 import { staticData } from '../lib/api';
 import { fmtCompact, fmtInt, fmtPct } from '../lib/format';
 import { useBoard } from '../store/board';
+import { Fill } from '@/components/core/bars';
 
 const MapCard = lazy(() => import('@/features/map/MapCard'));
 
@@ -130,7 +131,7 @@ function TopBar({ board, snap }: { board: Board; snap: Snap }) {
       </div>
       <div className="mt-3 flex items-center gap-3">
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
-          <div className="h-full rounded-full bg-foreground transition-[width] duration-700 ease-out" style={{ width: `${snap.pst}%` }} />
+          <Fill pct={snap.pst} className="rounded-full bg-foreground" />
         </div>
         <span className="display shrink-0 text-[15px] font-semibold">
           <NumberFlow value={snap.pst} format={{ minimumFractionDigits: 2, maximumFractionDigits: 2 }} locales="pt-BR" suffix="%" />
@@ -262,8 +263,8 @@ function Countdown({ board }: { board: Board }) {
           ))}
         </div>
       </NumberFlowGroup>
-      <p className="mt-2.5 text-[12px] text-muted-foreground first-letter:uppercase">
-        {when}, horário de Brasília. Antes disso não mostramos placar nem projeção.
+      <p className="mt-2.5 text-[12px] text-muted-foreground">
+        {when.charAt(0).toUpperCase() + when.slice(1)}, horário de Brasília. Antes disso não mostramos placar nem projeção.
       </p>
     </>
   );

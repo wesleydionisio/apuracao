@@ -10,6 +10,7 @@ import { fmtCompact, fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 import { countdown, momentParts, Pct, SplitBar } from './bits';
+import { Fill } from '@/components/core/bars';
 
 const STATUS: Record<Snap['status'], string> = {
   nao_iniciada: 'Apuração não iniciada',
@@ -28,7 +29,7 @@ export function TvPage() {
     document.title = 'Apuração ao vivo · Modo TV';
   }, []);
   return (
-    <div className="dark">
+    <div data-theme="dark">
       <div className="flex min-h-dvh flex-col gap-[2.4vh] overflow-hidden bg-background p-[3vw] text-foreground">
         <header className="flex items-center justify-between text-[1.5vw]">
           <div className="flex items-center gap-[1.2vw]">
@@ -63,8 +64,8 @@ function Countdown({ board, now }: { board: Board; now: number }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-[3vh] text-center">
       <div className="flex -space-x-[1.5vw]">
-        <CandidateAvatar c={ca} size="xl" className="size-[11vw] rounded-[2.2vw] ring-[0.4vw] ring-background" />
-        <CandidateAvatar c={cb} size="xl" className="size-[11vw] rounded-[2.2vw] ring-[0.4vw] ring-background" />
+        <CandidateAvatar c={ca} size="xl" priority className="size-[11vw] rounded-[2.2vw] ring-[0.4vw] ring-background" />
+        <CandidateAvatar c={cb} size="xl" priority className="size-[11vw] rounded-[2.2vw] ring-[0.4vw] ring-background" />
       </div>
       <div className="text-[2.4vw] text-muted-foreground">A apuração do 2º turno começa às 17h (Brasília)</div>
       <div className="display text-[11vw] leading-none font-semibold">
@@ -90,7 +91,7 @@ function Live({ board, br }: { board: Board; br: Snap }) {
       <div className="flex items-center gap-[1.6vw]">
         <span className="text-[1.6vw] font-medium">{STATUS[br.status]}</span>
         <div className="h-[0.9vh] flex-1 overflow-hidden rounded-full bg-muted">
-          <div className="h-full rounded-full bg-foreground transition-[width] duration-700 ease-out" style={{ width: `${br.pst}%` }} />
+          <Fill pct={br.pst} className="rounded-full bg-foreground" />
         </div>
         <span className="text-[1.6vw] text-muted-foreground">
           <Pct v={br.pst} digits={2} className="font-semibold text-foreground" /> das urnas
@@ -138,7 +139,7 @@ function TvStat({ label, value }: { label: string; value: React.ReactNode }) {
 function Side({ c, pct, votes, lead }: { c: CandidateDef; pct: number; votes: number; lead: boolean }) {
   return (
     <div className="flex items-center gap-[1.8vw]">
-      <CandidateAvatar c={c} size="xl" ring={lead} className="size-[9vw] rounded-[1.8vw]" />
+      <CandidateAvatar c={c} size="xl" ring={lead} priority className="size-[9vw] rounded-[1.8vw]" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[2.3vw] leading-tight font-semibold">{c.short}</div>
         <div className="num mt-[0.3vh] flex items-baseline gap-[0.8vw] text-[1.4vw] text-muted-foreground">

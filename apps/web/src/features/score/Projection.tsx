@@ -25,7 +25,7 @@ export function ProjectionBand({ board, className }: { board: Board; className?:
         <div>
           <div className="text-[12px] text-muted-foreground">Faixa estimada para {ca.short}</div>
           <div className="display mt-1 text-[24px] leading-none font-semibold">
-            {fmtPct(lo, 1)}–{fmtPct(hi, 1)}%
+            {fmtPct(lo, 1)}% a {fmtPct(hi, 1)}%
           </div>
         </div>
         {winner ? (
@@ -49,7 +49,7 @@ export function ProjectionBand({ board, className }: { board: Board; className?:
           <div className="h-full flex-1" style={{ background: `color-mix(in oklab, ${ca.color} 22%, transparent)` }} />
         </div>
         <div
-          className="absolute top-1.5 h-6 rounded-full border-2 border-card transition-[left,width] duration-700 ease-out"
+          className="absolute top-1.5 h-6 rounded-full border-2 border-card"
           style={{ left: `${x(lo)}%`, width: `${Math.max(2, x(hi) - x(lo))}%`, background: ca.color }}
         />
         <div className="absolute top-0.5 h-8 w-[3px] -translate-x-1/2 rounded-full bg-card" style={{ left: `${x(mid)}%` }} />
@@ -62,7 +62,7 @@ export function ProjectionBand({ board, className }: { board: Board; className?:
       </div>
       <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
         Se o que falta seguir o padrão de cada estado até aqui. Modelo simples, sem pesquisa, que pode errar: o resultado é o da
-        totalização do TSE. {cb.short} fica com o complemento ({fmtPct(100 - hi, 1)}–{fmtPct(100 - lo, 1)}%).
+        totalização do TSE. {cb.short} fica com o complemento ({fmtPct(100 - hi, 1)}% a {fmtPct(100 - lo, 1)}%).
       </p>
     </Section>
   );

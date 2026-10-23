@@ -41,7 +41,7 @@ export function detectMoments(i: MomentInput): Moment[] {
         id: `milestone:br:${mark}`,
         kind: 'milestone',
         scope: 'br',
-        title: `🔔 Brasil: ${mark}% das urnas apuradas — ${lineOf(i.br)}`,
+        title: `🔔 Brasil, ${mark}% das urnas apuradas: ${lineOf(i.br)}`,
         payload: { mark, pa: i.br.pa, pb: i.br.pb },
       });
     }
@@ -69,7 +69,7 @@ export function detectMoments(i: MomentInput): Moment[] {
       id: 'totalizado:br',
       kind: 'totalizado',
       scope: 'br',
-      title: `✅ TSE concluiu a totalização — ${lineOf(i.br)}`,
+      title: `✅ TSE concluiu a totalização: ${lineOf(i.br)}`,
       payload: { pa: i.br.pa, pb: i.br.pb },
     });
   }
@@ -84,7 +84,7 @@ export function detectMoments(i: MomentInput): Moment[] {
           id: `uf_milestone:${uf}:${mark}`,
           kind: 'uf_milestone',
           scope: key,
-          title: `🔔 ${ufName(uf)}: ${mark}% apurado — ${lineOf(s)}`,
+          title: `🔔 ${ufName(uf)}, ${mark}% apurado: ${lineOf(s)}`,
           payload: { mark, pa: s.pa },
         });
       }
@@ -112,7 +112,7 @@ export function detectMoments(i: MomentInput): Moment[] {
         id: `mun_final:${ibge}`,
         kind: 'mun_final',
         scope: key,
-        title: `🏁 ${info.name} (${info.uf}) 100% apurada — ${lineOf(s)}`,
+        title: `🏁 ${info.name} (${info.uf}) 100% apurada: ${lineOf(s)}`,
         payload: { pa: s.pa, ibge },
       });
       const before = i.lead2022?.[ibge];

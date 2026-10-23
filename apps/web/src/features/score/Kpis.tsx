@@ -4,6 +4,7 @@ import NumberFlow from '@number-flow/react';
 import type { ReactNode } from 'react';
 import { fmtCompact, fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { Fill } from '@/components/core/bars';
 
 const TWO = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
 const ONE = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
@@ -56,7 +57,7 @@ export function Kpis({ board, snap, t1, className }: { board: Board; snap: Snap;
         value={<NumberFlow value={snap.pst} format={TWO} locales="pt-BR" suffix="%" />}
         sub={
           <div className="h-1 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-foreground transition-[width] duration-700 ease-out" style={{ width: `${snap.pst}%` }} />
+            <Fill pct={snap.pst} className="rounded-full bg-foreground" />
           </div>
         }
       />

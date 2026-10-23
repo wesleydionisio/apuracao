@@ -196,7 +196,7 @@ export default function NightChart({
               <g>
                 <rect x={sx(pst)} y={PAD.t} width={Math.max(0, sx(xMax) - sx(pst))} height={ih} fill="url(#falta)" opacity={0.6} />
                 {sx(xMax) - sx(pst) > 70 && !labels?.right && (
-                  <text x={(sx(pst) + sx(xMax)) / 2} y={PAD.t + ih - 8} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+                  <text x={(sx(pst) + sx(xMax)) / 2} y={PAD.t + ih - 8} textAnchor="middle" className="fill-muted-foreground text-[11px]">
                     a apurar
                   </text>
                 )}
@@ -214,7 +214,7 @@ export default function NightChart({
                   strokeDasharray={v === 50 ? undefined : '2 4'}
                   strokeWidth={v === 50 ? 1.25 : 1}
                 />
-                <text x={PAD.l + iw + 8} y={sy(v) + 3.5} className={cn('num text-[10px]', v === 50 ? 'fill-foreground font-medium' : 'fill-muted-foreground')}>
+                <text x={PAD.l + iw + 8} y={sy(v) + 3.5} className={cn('num text-[11px]', v === 50 ? 'fill-foreground font-medium' : 'fill-muted-foreground')}>
                   {v}%
                 </text>
               </g>
@@ -235,7 +235,7 @@ export default function NightChart({
                   <g key={`t1-${k}`}>
                     <line x1={PAD.l} x2={PAD.l + iw} y1={y} y2={y} stroke={c.color} strokeOpacity={0.7} strokeWidth={1.25} strokeDasharray="5 4" />
                     {/* à direita, junto da grade: o começo da curva costuma ser a parte mais agitada */}
-                    <text x={PAD.l + iw - 4} y={above ? y - 5 : y + 12} textAnchor="end" className="num text-[10px] font-medium" fill={c.color}>
+                    <text x={PAD.l + iw - 4} y={above ? y - 5 : y + 12} textAnchor="end" className="num text-[11px] font-medium" fill={c.color}>
                       1º turno {fmtPct(v, 1)}%
                     </text>
                   </g>
@@ -248,7 +248,7 @@ export default function NightChart({
                 x={sx(v)}
                 y={height - 8}
                 textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}
-                className="num fill-muted-foreground text-[10px]"
+                className="num fill-muted-foreground text-[11px]"
               >
                 {v.toLocaleString('pt-BR')}%{i === xTicks.length - 1 && xMax < 100 ? ' apurado' : ''}
               </text>
@@ -422,13 +422,13 @@ export default function NightChart({
         )}
       </figcaption>
       {show22 && c22 && (
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+        <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
           O TSE não publica a série da noite de 2022: os pontos marcados vêm de registros da imprensa e do TSE, o resto é
           interpolado.{flip22 !== null && <> Em 2022, a virada veio com cerca de {fmtPct(flip22, 0)}% das urnas apuradas.</>}
         </p>
       )}
       {showT1 && last && !show22 && (
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+        <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
           Hoje {ca.short} está {fmtPct(Math.abs(last.a - t1!), 1)} pts {last.a >= t1! ? 'acima' : 'abaixo'} do próprio 1º turno no confronto
           direto. Fonte: TSE.
         </p>

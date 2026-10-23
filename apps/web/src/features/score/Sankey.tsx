@@ -43,7 +43,7 @@ export function TransferSankey({ t, ca, cb }: { t: Transfer; ca: CandidateDef; c
     `M4,${l0} C50,${l0} 50,${r0} 96,${r0} L96,${r1} C50,${r1} 50,${l1} 4,${l1} Z`;
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,11rem)] items-stretch gap-3">
-      <div className="relative" style={{ height: H }}>
+      <div className="chart relative" style={{ height: H }} role="img" aria-label="Gráfico de fluxo: para onde foi o estoque de votos do 1º turno">
         <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden>
           <rect x={0} y={0} width={4} height={H} rx={1.5} fill="var(--foreground)" opacity={0.85} />
           {laid.map((n) => (

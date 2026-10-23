@@ -9,10 +9,11 @@ import { SourceStamp } from '@/components/core/live';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { fmtCompact } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { useCurve22, useHistRefs, type HistRefs } from './data';
+import { flipOf, useCurve22, useHistRefs, type HistRefs } from './data';
 
 import { NightSpark } from './NightSpark';
 import { useRefs, type Refs } from './refs';
+import { SplitFill } from '@/components/core/bars';
 
 const PCT2 = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
 const PCT1 = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
@@ -43,7 +44,7 @@ function Side({
   return (
     <div className={cn('flex min-w-0 flex-1 flex-col', align === 'r' && 'items-end text-right')}>
       <div className={cn('flex max-w-full items-center gap-2.5', align === 'r' && 'flex-row-reverse')}>
-        <CandidateAvatar c={c} size={size === 'lg' ? 'xl' : 'md'} ring={lead} />
+        <CandidateAvatar c={c} size={size === 'lg' ? 'xl' : 'md'} ring={lead} priority />
         <div className="min-w-0">
           <div className="truncate text-[14px] leading-tight font-semibold tracking-[-0.01em]">{c.short}</div>
           <div className="num mt-0.5 truncate text-[11.5px] text-muted-foreground">
@@ -113,7 +114,7 @@ export function VersusBar({
       {labels.map((m) => (
         <span
           key={m.label}
-          className="num absolute top-0 -translate-x-1/2 text-[9.5px] leading-none font-semibold whitespace-nowrap text-muted-foreground"
+          className="num absolute top-0 -translate-x-1/2 text-[11px] leading-none font-semibold whitespace-nowrap text-muted-foreground"
           style={{ left: `${Math.max(6, Math.min(94, m.v))}%` }}
         >
           {m.label}
@@ -126,8 +127,7 @@ export function VersusBar({
       >
         {pa !== null && (
           <>
-            <div className="h-full rounded-l-full transition-[width] duration-700 ease-out" style={{ width: `${w}%`, background: ca.color }} />
-            <div className="h-full flex-1 rounded-r-full" style={{ background: cb.color }} />
+            <SplitFill pa={w} colorA={ca.color} colorB={cb.color} gap={2} />
           </>
         )}
         <div className="absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2 bg-background" aria-hidden />
@@ -147,7 +147,8 @@ export function VersusBar({
 function RefChips({ refs, set, hist, showChart }: { refs: Refs; set: (p: Partial<Refs>) => void; hist: HistRefs; showChart: boolean }) {
   const value = [refs.t1 && 't1', refs.y22 && 'y22', showChart && refs.chart && 'chart'].filter(Boolean) as string[];
   const item =
-    'h-7 rounded-full border border-border bg-transparent px-2.5 text-[12px] font-medium text-muted-foreground shadow-none hover:bg-accent hover:text-foreground data-[state=on]:border-foreground data-[state=on]:bg-foreground data-[state=on]:text-background';
+    // 32px visíveis + alvo de toque de 44px (pseudo-elemento), sem engordar o placar
+    'relative h-8 rounded-full border border-border bg-transparent px-3 before:absolute before:-inset-y-1.5 before:inset-x-0 text-[12px] font-medium text-muted-foreground shadow-none hover:bg-accent hover:text-foreground data-[state=on]:border-foreground data-[state=on]:bg-foreground data-[state=on]:text-background';
   return (
     <ToggleGroup
       type="multiple"
@@ -190,7 +191,9 @@ export function LiveScore({
   const [refs, setRefs] = useRefs();
   const hist = useHistRefs(board);
   const showChart = chartAlways || refs.chart;
-  const curve22 = useCurve22(board, showChart && refs.y22);
+  // a curva vem sempre que o gráfico abre: a virada de 2022 marca a zona de atenção mesmo sem o chip 2022
+  const curve22 = useCurve22(board, showChart);
+  const flip22 = flipOf(curve22);
   const s = board.br;
   const [ca, cb] = board.candidates;
   const pa = s && s.valid ? s.pa : null;
@@ -224,7 +227,7 @@ export function LiveScore({
         <span className="flex shrink-0 items-center gap-1">
           <SourceStamp at={board.source.at} short className="text-[11.5px]" />
           {onInfo && (
-            <button type="button" onClick={onInfo} className="-mr-1.5 flex size-7 items-center justify-center rounded-full hover:bg-accent" aria-label="Sobre os dados e o projeto">
+            <button type="button" onClick={onInfo} className="relative -mr-1.5 flex size-8 items-center justify-center rounded-full before:absolute before:-inset-1.5 hover:bg-accent" aria-label="Sobre os dados e o projeto">
               <Info className="size-3.5" aria-hidden />
             </button>
           )}
@@ -234,7 +237,7 @@ export function LiveScore({
         <RefChips refs={refs} set={setRefs} hist={hist} showChart={!chartAlways} />
         <Link
           href="/painel"
-          className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-full pr-1 pl-2 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+          className="relative inline-flex h-8 shrink-0 items-center gap-0.5 rounded-full pr-1 pl-2 before:absolute before:-inset-y-1.5 before:inset-x-0 text-[12px] font-medium text-muted-foreground hover:text-foreground"
         >
           Painel
           <ChevronRight className="size-3.5" aria-hidden />
@@ -242,9 +245,9 @@ export function LiveScore({
       </div>
       {showChart && (
         <div className={cn('animate-in fade-in-0 duration-200', size === 'lg' ? 'mt-4' : 'mt-2')}>
-          <NightSpark board={board} curve22={refs.y22 ? curve22 : null} height={size === 'lg' ? 220 : 104} />
+          <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={size === 'lg' ? 220 : 104} />
           {refs.y22 && curve22 && (
-            <p className="mt-1 text-[10.5px] text-muted-foreground">Tracejado: 2022 no mesmo ponto da apuração · reconstrução aproximada</p>
+            <p className="mt-1 text-[12px] text-muted-foreground">Curva tracejada: 2022 no mesmo ponto da apuração · reconstrução aproximada</p>
           )}
         </div>
       )}
@@ -264,8 +267,7 @@ export function LiveScoreCompact({ board }: { board: Board }) {
       <div className="relative flex h-2 flex-1 gap-[2px] overflow-hidden rounded-full bg-muted">
         {pa !== null && (
           <>
-            <div className="h-full transition-[width] duration-700" style={{ width: `${pa}%`, background: ca.color }} />
-            <div className="h-full flex-1" style={{ background: cb.color }} />
+            <SplitFill pa={pa} colorA={ca.color} colorB={cb.color} gap={2} />
           </>
         )}
         <div className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-background" />

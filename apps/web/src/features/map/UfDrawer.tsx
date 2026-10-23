@@ -126,7 +126,7 @@ function UfDetail({ board, uf }: { board: Board; uf: string }) {
             <CompareRow label="1º turno 2026" hint="só os votos dos dois finalistas" pa={pa1} cands={cands} delta={snap?.valid ? (pa1 == null ? null : snap.pa - pa1) : undefined} />
             <CompareRow label="2º turno 2022" hint="mesmos partidos" pa={p22} cands={cands} delta={snap?.valid ? (p22 == null ? null : snap.pa - p22) : undefined} />
           </ul>
-          {snap?.valid && <p className="mt-1 text-[11px] text-muted-foreground">À direita: quantos pontos o estado andou na direção de cada um, comparado a cada referência.</p>}
+          {snap?.valid && <p className="mt-1 text-[12px] text-muted-foreground">À direita: quantos pontos o estado andou na direção de cada um, comparado a cada referência.</p>}
         </section>
 
         {snap?.valid && t1 && (
@@ -181,7 +181,7 @@ function WhereLeft({ rows }: { rows: MunRow[] }) {
           </li>
         ))}
       </ul>
-      <p className="text-[11px] text-muted-foreground">Eleitores ainda não apurados, entre as maiores cidades com parcial coletada.</p>
+      <p className="text-[12px] text-muted-foreground">Eleitores ainda não apurados, entre as maiores cidades com parcial coletada.</p>
     </div>
   );
 }
@@ -271,7 +271,7 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
             </div>
           )}
           <MapLegend cands={cands} compact className="mt-3" />
-          <p className="mt-2 text-center text-[11px] text-muted-foreground">
+          <p className="mt-2 text-center text-[12px] text-muted-foreground">
             {layer === 'live'
               ? `Toque numa cidade. Em cinza, as que ainda não têm parcial coletada (${withLive} de ${rows.length} até agora).`
               : layer === 't1'

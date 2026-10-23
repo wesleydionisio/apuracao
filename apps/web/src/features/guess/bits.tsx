@@ -2,6 +2,7 @@
 import type { CandidateDef } from '@apuracao/shared';
 import NumberFlow from '@number-flow/react';
 import { cn } from '@/lib/utils';
+import { SplitFill } from '@/components/core/bars';
 
 /** porcentagem ao vivo com transição de dígitos (NumberFlow), sempre pt-BR */
 export function Pct({ v, digits = 1, suffix = '%', className }: { v: number; digits?: number; suffix?: string; className?: string }) {
@@ -40,13 +41,12 @@ export function SplitBar({
   return (
     <div className={cn('relative h-2 w-full rounded-full bg-muted', className)} role="img" aria-label={`${ca.short} ${w.toFixed(1)}%, ${cb.short} ${(100 - w).toFixed(1)}%`}>
       <div className="absolute inset-0 overflow-hidden rounded-full">
-        <div className="absolute inset-y-0 left-0 transition-[width] duration-700 ease-out" style={{ width: `${w}%`, background: ca.color }} />
-        <div className="absolute inset-y-0 right-0 transition-[width] duration-700 ease-out" style={{ width: `${100 - w}%`, background: cb.color }} />
+        <SplitFill pa={w} colorA={ca.color} colorB={cb.color} />
         <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-background" />
       </div>
       {marker != null && (
         <div
-          className="absolute -inset-y-1 w-1 -translate-x-1/2 rounded-full bg-foreground ring-2 ring-card transition-[left] duration-700 ease-out"
+          className="absolute -inset-y-1 w-1 -translate-x-1/2 rounded-full bg-foreground ring-2 ring-card"
           style={{ left: `${Math.max(0, Math.min(100, marker))}%` }}
           title={markerLabel}
         />

@@ -118,7 +118,7 @@ export default function DevBar() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed top-1 left-1/2 z-[80] flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/10 bg-black/80 px-3 py-1 font-mono text-[11px] text-white shadow-lg backdrop-blur"
+        className="fixed top-1 left-1/2 z-[80] flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/10 bg-black/80 px-3 py-1 tabular-nums text-[11px] text-white shadow-lg backdrop-blur"
         aria-label="Abrir barra de debug"
       >
         <SlidersHorizontal className="size-3" />
@@ -129,7 +129,7 @@ export default function DevBar() {
 
   return (
     <div
-      className="fixed inset-x-0 top-0 z-[80] border-b border-white/10 bg-black/85 font-mono text-[11px] text-white shadow-xl backdrop-blur"
+      className="fixed inset-x-0 top-0 z-[80] border-b border-white/10 bg-black/85 tabular-nums text-[11px] text-white shadow-xl backdrop-blur"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
       role="region"
       aria-label="Barra de debug da simulação"

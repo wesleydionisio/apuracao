@@ -81,7 +81,7 @@ export function MomentPage() {
           alt="Prévia da imagem que será compartilhada"
           width={1200}
           height={630}
-          loading="lazy"
+          loading="eager"
           onError={() => setNoImg(true)}
           className="aspect-[1200/630] w-full rounded-2xl border bg-muted object-cover"
         />
@@ -92,7 +92,7 @@ export function MomentPage() {
         onPointerDown={() => prefetchImage(input.image)}
         onClick={async () => {
           const r = await share(input);
-          if (r === 'copied') toast('Link copiado — cole no WhatsApp');
+          if (r === 'copied') toast('Link copiado. Cole no WhatsApp');
           else if (r === 'failed') toast('Não deu para compartilhar daqui');
         }}
       >
