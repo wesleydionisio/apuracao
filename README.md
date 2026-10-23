@@ -56,10 +56,10 @@ contorno de cada uma das 5.570 cidades (`packages/data/scripts/dots.ts`, `DOTS_V
 poller lê o andamento de todas as cidades nos arquivos `-ab` de cada UF, busca votos só das que mudaram
 (`MUN_PER_CYCLE`) e grava `public/data/mungrid.json` (~17 KB gzip): % apurado e % de A por cidade.
 
-- **Calor** (padrão): os pontos viram um campo contínuo (desfoque em três escalas, a mais fina com dado
-  suficiente vale), do vermelho ao azul passando pelo roxo; cinza onde nada foi apurado. Com zoom, o calor
-  se resolve num mosaico de cidades (Voronoi dos pontos ≈ limites dos municípios). As contas rodam num
-  worker (`apps/web/src/features/map/heat.worker.ts`).
+- **Grade** (padrão): o Brasil em hexágonos do mesmo tamanho (~55 km; 28 e 14 km com zoom). Cada um soma
+  os pontos das cidades que caem nele (hexágono sem ponto herda do vizinho com dado, então a Amazônia não
+  fica vazia), na cor de quem lidera, em três tons pela vantagem; o hexágono cresce de um ponto apagado até
+  o tamanho cheio conforme a região é apurada. A grade é montada num worker (`hex.worker.ts`).
 - **Pontos**: o ponto acende quando o % apurado da cidade passa do sorteio fixo dele e ganha a cor de um
   candidato na proporção dos votos da cidade.
 - Zoom e arrasto nos dois: pinça e dois dedos no celular (um dedo arrasta só com zoom, para não prender a

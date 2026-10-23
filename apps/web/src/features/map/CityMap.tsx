@@ -1,11 +1,11 @@
 // Mapa por cidade em dois modos, sobre os mesmos ~27 mil pontos de dots.json (1 a cada ~6 mil eleitores,
 // cada um preso à sua cidade):
-//  - calor: os pontos viram um campo contínuo sobre o território (heat.ts), do vermelho ao azul passando
-//    pelo roxo onde a disputa está dividida, e cinza onde nada foi apurado;
+//  - grade: o Brasil em hexágonos do mesmo tamanho (hex.ts), na cor de quem lidera ali, em três tons pela
+//    vantagem; o hexágono cresce de um ponto apagado até o tamanho cheio conforme a região é apurada;
 //  - pontos: cada ponto acende quando o % apurado da cidade passa do sorteio dele e fica vermelho ou azul
 //    na proporção dos votos da cidade (pontilhismo).
-// Canvas 2D (svg com 27 mil nós travaria um celular barato), com zoom e arrasto (viewport.ts). Só redesenha
-// quando chega dado novo, durante uma transição ou quando a vista muda.
+// Canvas 2D (svg com dezenas de milhares de nós travaria um celular barato), com zoom e arrasto
+// (viewport.ts). Só redesenha quando chega dado novo, durante uma transição ou quando a vista muda.
 import type { Board, CandidateDef } from '@apuracao/shared';
 import { fmtPct } from '@apuracao/shared';
 import { ChevronRight, Maximize2, Minus, Plus } from 'lucide-react';
@@ -15,12 +15,12 @@ import { getJSON, type CityView } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 import { useThemeColors } from './colors';
-import { hash01, mixRgb, paintField, paintMosaic, rgbCss, smoothNoise, toRgb, type Field, type Mosaic, type Palette } from './heat';
-import type { HeatReply, HeatRequest } from './heat.worker';
+import { bandOfMargin, hash01, HEX_X, HEX_Y, hexPath, hexUnder, hexValues, rgbCss, shades, toRgb, type HexLevel } from './hex';
+import type { HexReply, HexRequest } from './hex.worker';
 import { reduceMotion, useViewport } from './viewport';
 
 export type DotLayer = 'live' | 't1' | 'y2022';
-export type CityMapMode = 'heat' | 'dots';
+export type CityMapMode = 'hex' | 'dots';
 
 interface DotsFile {
   w: number;
@@ -51,8 +51,14 @@ const loadDots = () => (dotsP ??= getJSON<DotsFile>('/data/static/dots.json'));
 /** pontos coloridos por lote de pintura (ver `paint` no modo pontos) */
 const LOT = 256;
 
+/** raio do hexágono (unidades do mapa) em cada nível: ~55 km, ~28 km e ~14 km de largura */
+const RADII = [6.5, 3.25, 1.625];
+/** zoom a partir do qual entra cada nível mais fino (o hexágono na tela fica sempre entre ~4 e ~12 px) */
+const LEVEL_AT = [2.1, 4.3];
+
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 const coarse = () => typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+const ease = (t: number) => 1 - (1 - t) ** 3;
 
 /** % apurado e % de A por cidade, para a camada escolhida */
 function useCityValues(dots: DotsFile | null, layer: DotLayer, board: Board | null): Values | null {
@@ -99,48 +105,41 @@ function useCityValues(dots: DotsFile | null, layer: DotLayer, board: Board | nu
   }, [dots, board, layer, grid]);
 }
 
-/** mosaico de cidades calculado para uma região e um zoom (refeito quando a vista sai dela) */
-interface MosaicState {
-  mo: Mosaic;
-  off: HTMLCanvasElement;
-  img: ImageData;
-  k: number;
-  /** dados, paleta e cidade escolhida da última pintura */
-  pv: Values | null;
-  painted: string;
+/** ruído suave no espaço do mapa (0..1): a transição anda em ondas, não pisca tudo junto */
+function noise2(x: number, y: number, step = 70): number {
+  const fx = x / step;
+  const fy = y / step;
+  const ix = Math.floor(fx);
+  const iy = Math.floor(fy);
+  const sx = (fx - ix) ** 2 * (3 - 2 * (fx - ix));
+  const sy = (fy - iy) ** 2 * (3 - 2 * (fy - iy));
+  const v = (i: number, j: number) => hash01(i * 7919 + j * 104729, 9);
+  const a = v(ix, iy) + (v(ix + 1, iy) - v(ix, iy)) * sx;
+  const b = v(ix, iy + 1) + (v(ix + 1, iy + 1) - v(ix, iy + 1)) * sx;
+  return a + (b - a) * sy;
 }
 
-/** região (unidades do mapa) e zoom de um mosaico pronto ou pedido */
-interface Region {
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
-  k: number;
-}
-
-const smooth01 = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
-
-/** transição do calor: o que está na tela, de onde veio e para onde vai */
-interface HeatState {
-  gw: number;
-  gh: number;
-  cell: number;
-  /** na tela */
-  s: Float32Array;
-  p: Float32Array;
-  /** início da transição */
+/** um nível da grade em transição: de onde vem e para onde vai cada hexágono (% de A e fração apurada) */
+interface LevelView {
+  L: HexLevel;
   fs: Float32Array;
-  fp: Float32Array;
-  to: Field;
-  /** início da transição (-1 = parado) e duração */
+  fq: Float32Array;
+  ts: Float32Array;
+  tq: Float32Array;
+  delay: Float32Array;
+}
+
+interface HexState {
+  levels: LevelView[];
   t0: number;
   dur: number;
-  delay: Float32Array;
-  img: ImageData;
-  off: HTMLCanvasElement;
-  /** paleta da última pintura ('' = repintar) */
-  painted: string;
+}
+
+/** % de A e fração apurada de um hexágono no instante `now` */
+function shownAt(st: HexState, lv: LevelView, h: number, now: number): [number, number] {
+  const t = st.dur ? (now - st.t0) / st.dur : 1;
+  const e = ease(Math.min(1, Math.max(0, (t - lv.delay[h] * 0.45) / 0.55)));
+  return [lv.fs[h] + (lv.ts[h] - lv.fs[h]) * e, lv.fq[h] + (lv.tq[h] - lv.fq[h]) * e];
 }
 
 export default function CityMap({
@@ -176,7 +175,7 @@ export default function CityMap({
     return () => ro.disconnect();
   }, []);
 
-  // geometria fixa por ponto (posição, cidade, sorteios) e por cidade (quantos pontos, centro, raio)
+  // geometria fixa por ponto: posição, cidade e os sorteios do modo pontos
   const geo = useMemo(() => {
     if (!dots) return null;
     const n = dots.pts.length / 3;
@@ -187,11 +186,7 @@ export default function CityMap({
     const coin = new Float32Array(n); // cor: A se coin < % de A
     const delay = new Float32Array(n); // atraso da animação ao acender
     const shuffle = new Float32Array(n); // ordem de pintura
-    const nm = dots.mun.length;
-    const perCity = new Uint16Array(nm);
-    const cx = new Float32Array(nm);
-    const cy = new Float32Array(nm);
-    const cr = new Float32Array(nm);
+    const perCity = new Uint16Array(dots.mun.length);
     for (let i = 0; i < n; i++) {
       x[i] = dots.pts[i * 3] / 10;
       y[i] = dots.pts[i * 3 + 1] / 10;
@@ -201,40 +196,26 @@ export default function CityMap({
       delay[i] = hash01(i, 3);
       shuffle[i] = hash01(i, 4);
       perCity[m[i]]++;
-      cx[m[i]] += x[i];
-      cy[m[i]] += y[i];
     }
-    for (let c = 0; c < nm; c++) {
-      cx[c] /= perCity[c] || 1;
-      cy[c] /= perCity[c] || 1;
-    }
-    for (let i = 0; i < n; i++) cr[m[i]] += (x[i] - cx[m[i]]) ** 2 + (y[i] - cy[m[i]]) ** 2;
-    for (let c = 0; c < nm; c++) cr[c] = Math.sqrt(cr[c] / (perCity[c] || 1));
     const perm = Uint32Array.from({ length: n }, (_, i) => i).sort((a, b) => shuffle[a] - shuffle[b]);
-    // índice espacial para o toque: baldes de 12 unidades
+    // índice espacial para o toque no modo pontos: baldes de 12 unidades
     const B = 12;
     const bins = new Map<number, number[]>();
     for (let i = 0; i < n; i++) {
       const k = Math.floor(x[i] / B) * 10_000 + Math.floor(y[i] / B);
       (bins.get(k) ?? bins.set(k, []).get(k)!).push(i);
     }
-    // contorno de todos os estados num caminho só: recorte do calor e divisas
+    // contorno de todos os estados num caminho só: máscara da grade e divisas
     const outline = new Path2D(Object.values(dots.ufPaths).join(''));
-    return { n, x, y, m, order, coin, delay, perm, bins, B, outline, perCity, cx, cy, cr };
+    return { n, x, y, m, order, coin, delay, perm, bins, B, outline, perCity };
   }, [dots]);
 
   const pal = useMemo(() => {
-    const a = toRgb(cands[0].color);
-    const b = toRgb(cands[1].color);
     const card = toRgb(theme.card);
-    const p: Palette = { a, b, card, pending: mixRgb(card, toRgb(theme.foreground), 0.13) };
-    return {
-      ...p,
-      ink: toRgb(theme.foreground),
-      key: [cands[0].color, cands[1].color, theme.card, theme.foreground].join(),
-      mid: rgbCss(mixRgb(b, a, 0.5)),
-      pendingCss: rgbCss(p.pending),
-    };
+    const dark = 0.2126 * card[0] + 0.7152 * card[1] + 0.0722 * card[2] < 110;
+    const a = shades(toRgb(cands[0].color)).map(rgbCss);
+    const b = shades(toRgb(cands[1].color)).map(rgbCss);
+    return { a, b, dark };
   }, [cands, theme]);
 
   // um laço de desenho só: cada mudança (dado, vista, tema) pede um quadro; transições pedem os seguintes
@@ -250,15 +231,44 @@ export default function CityMap({
   }, []);
   useEffect(() => () => cancelAnimationFrame(rafId.current), []);
 
-  // toque/clique: ponto mais próximo → cidade
+  // grade hexagonal: os três níveis saem de um worker (o mais fino tem ~50 mil hexágonos)
+  const [levels, setLevels] = useState<HexLevel[] | null>(null);
+  useEffect(() => {
+    if (!geo || !dots) return;
+    // contorno do Brasil rasterizado, 1 byte por unidade do mapa: quais hexágonos vazios estão em terra
+    const mw = dots.w;
+    const mh = Math.ceil(dots.h);
+    const mc = document.createElement('canvas');
+    mc.width = mw;
+    mc.height = mh;
+    const mx = mc.getContext('2d', { willReadFrequently: true })!;
+    mx.fill(geo.outline);
+    const px = mx.getImageData(0, 0, mw, mh).data;
+    const mask = new Uint8Array(mw * mh);
+    for (let i = 0; i < mask.length; i++) mask[i] = px[i * 4 + 3] > 100 ? 1 : 0;
+    const w = new Worker(new URL('./hex.worker.ts', import.meta.url), { type: 'module' });
+    w.onmessage = (e: MessageEvent<HexReply>) => setLevels(e.data.levels);
+    w.postMessage(
+      { pts: { n: geo.n, x: geo.x, y: geo.y, m: geo.m, perCity: geo.perCity }, el: dots.el, mask, mw, mh, radii: RADII } satisfies HexRequest,
+      [mask.buffer],
+    );
+    return () => w.terminate();
+  }, [geo, dots]);
+
+  // toque/clique → cidade
   const onTap = (tx: number, ty: number) => {
     if (!geo || !dots || !cssW) return;
     const { k, x, y } = vp.v.current;
     const s = (cssW / dots.w) * k;
     const px = (tx - x) / s;
     const py = (ty - y) / s;
-    // no calor todo o território é "clicável": alcance maior
-    const reach = (mode === 'heat' ? 36 : 14) / s;
+    if (mode === 'hex' && levels) {
+      const L = levels[k < LEVEL_AT[0] ? 0 : k < LEVEL_AT[1] ? 1 : 2];
+      const h = hexUnder(L, px, py);
+      setPicked(h >= 0 && L.city[h] >= 0 ? L.city[h] : null);
+      return;
+    }
+    const reach = 14 / s;
     let best = -1;
     let bestD = reach * reach;
     const bx = Math.floor(px / geo.B);
@@ -301,101 +311,35 @@ export default function CityMap({
     kick();
   }, [geo, values, mode, kick]);
 
-  // Contas pesadas (campo de calor a cada dado, mosaico a cada zoom) num worker: num celular simples cada uma
-  // leva 100–200 ms, o que travaria a rolagem e o chat.
-  const worker = useRef<Worker | null>(null);
-  const heat = useRef<HeatState | null>(null);
-  const fieldReq = useRef({ id: 0, enter: false, pending: false });
-  const mosaic = useRef<MosaicState | null>(null);
-  const mosaicReq = useRef<(Region & { id: number }) | null>(null);
-  const mosaicSeq = useRef(0);
-  const mosaicTimer = useRef(0);
-
-  // novo campo: a tela transiciona do campo atual para ele
-  const applyField = (f: Field, enter: boolean) => {
-    let h = heat.current;
-    if (!h || h.gw !== f.gw || h.gh !== f.gh) {
-      const off = document.createElement('canvas');
-      off.width = f.gw;
-      off.height = f.gh;
-      const N = f.gw * f.gh;
-      h = heat.current = {
-        gw: f.gw,
-        gh: f.gh,
-        cell: f.cell,
-        s: new Float32Array(N),
-        p: new Float32Array(N),
-        fs: new Float32Array(N),
-        fp: new Float32Array(N),
-        to: f,
-        t0: -1,
-        dur: 0,
-        delay: smoothNoise(f.gw, f.gh),
-        img: new ImageData(f.gw, f.gh),
-        off,
-        painted: '',
-      };
-    }
-    // ao entrar no modo a cor nasce do cinza
-    if (enter) {
-      h.s.set(f.share);
-      h.p.fill(0);
-    }
-    h.fs.set(h.s);
-    h.fp.set(h.p);
-    h.to = f;
-    h.t0 = performance.now();
-    h.dur = reduceMotion() ? 0 : enter ? 1500 : 900;
+  // modo grade: a cada dado, cada hexágono transiciona do que está na tela para o novo valor
+  const hex = useRef<HexState | null>(null);
+  useEffect(() => {
+    if (!levels || !values || !geo || !dots || mode !== 'hex') return;
+    const now = performance.now();
+    const st = hex.current;
+    // ao entrar no modo (ou com grade nova) os hexágonos nascem apagados e crescem
+    const enter = !st || st.levels[0].L !== levels[0] || lastMode.current !== 'hex';
+    const next = levels.map((L, li) => {
+      const { share, prog } = hexValues(L, geo, dots.el, values.pst, values.pa);
+      const prev = enter ? null : st!.levels[li];
+      const n = L.n;
+      const fs = new Float32Array(n);
+      const fq = new Float32Array(n);
+      const ts = new Float32Array(n);
+      const tq = new Float32Array(n);
+      for (let h = 0; h < n; h++) {
+        const known = !Number.isNaN(share[h]);
+        if (prev) [fs[h], fq[h]] = shownAt(st!, prev, h, now);
+        else fs[h] = known ? share[h] : 50;
+        ts[h] = known ? share[h] : fs[h];
+        tq[h] = known ? prog[h] : 0;
+      }
+      const delay = prev?.delay ?? Float32Array.from({ length: n }, (_, h) => 0.7 * noise2(L.cx[h], L.cy[h]) + 0.3 * hash01(h, 5));
+      return { L, fs, fq, ts, tq, delay };
+    });
+    hex.current = { levels: next, t0: now, dur: reduceMotion() ? 0 : enter ? 1700 : 900 };
     kick();
-  };
-
-  const onReply = useRef<(d: HeatReply) => void>(() => {});
-  onReply.current = (d) => {
-    if (d.type === 'field') {
-      const r = fieldReq.current;
-      if (d.id !== r.id) return; // chegou dado mais novo enquanto calculava
-      applyField(d.f, r.enter);
-      r.pending = false;
-    } else if (mosaicReq.current?.id === d.id) {
-      const off = document.createElement('canvas');
-      off.width = d.mo.gw;
-      off.height = d.mo.gh;
-      mosaic.current = { mo: d.mo, off, img: new ImageData(d.mo.gw, d.mo.gh), k: mosaicReq.current.k, pv: null, painted: '' };
-      mosaicReq.current = null;
-      kick();
-    }
-  };
-
-  useEffect(() => {
-    if (!geo) return;
-    const w = new Worker(new URL('./heat.worker.ts', import.meta.url), { type: 'module' });
-    w.onmessage = (e: MessageEvent<HeatReply>) => onReply.current(e.data);
-    w.postMessage({ type: 'init', pts: { n: geo.n, x: geo.x, y: geo.y, m: geo.m, perCity: geo.perCity } } satisfies HeatRequest);
-    worker.current = w;
-    return () => {
-      w.terminate();
-      worker.current = null;
-      mosaicReq.current = null;
-      clearTimeout(mosaicTimer.current);
-    };
-  }, [geo]);
-
-  useEffect(() => {
-    if (!geo || !values || !dots || mode !== 'heat' || !worker.current) return;
-    const r = fieldReq.current;
-    const enter = !heat.current || lastMode.current !== 'heat';
-    // um pedido anterior que entrava no modo e foi atropelado continua "entrando"
-    fieldReq.current = { id: r.id + 1, enter: enter || (r.pending && r.enter), pending: true };
-    worker.current.postMessage({
-      type: 'field',
-      id: fieldReq.current.id,
-      el: dots.el,
-      pst: values.pst,
-      pa: values.pa,
-      W: dots.w,
-      H: dots.h,
-    } satisfies HeatRequest);
-  }, [geo, values, dots, mode]);
+  }, [levels, values, geo, dots, mode, kick]);
 
   useEffect(() => {
     lastMode.current = mode;
@@ -416,101 +360,88 @@ export default function CityMap({
     const s0 = cssW / dots.w;
     const [ca, cb] = cands;
     const pickedM = picked;
-    const touch = coarse();
-    // raio em px de tela: ~1px no celular, ~1,8px no desktop
+    // brilho do tema escuro: a imagem reduzida 6× e ampliada de volta vira um halo macio atrás dos hexágonos
+    const glow = document.createElement('canvas');
+    glow.width = Math.ceil(W / 6);
+    glow.height = Math.ceil(H / 6);
+    const gctx = glow.getContext('2d')!;
+    // raio em px de tela no modo pontos: ~1px no celular, ~1,8px no desktop
     const base = Math.max(0.8, Math.min(1.8, cssW / 520));
 
-    const buildMosaic = () => {
-      const w = worker.current;
-      if (!w) return;
-      const { k, x, y } = vp.v.current;
-      const s = s0 * k;
-      const vw = cssW / s;
-      const vh = cssH / s;
-      // a tela e mais um terço de folga para cada lado, para o arrasto curto já vir pronto
-      const x0 = -x / s - vw / 3;
-      const y0 = -y / s - vh / 3;
-      const x1 = x0 + vw * (5 / 3);
-      const y1 = y0 + vh * (5 / 3);
-      // ~3 px de tela por célula (3,5 no celular)
-      const gw = Math.min(480, Math.round(((x1 - x0) * s * dpr) / (touch ? 3.5 : 3)));
-      mosaicReq.current = { id: ++mosaicSeq.current, x0, y0, x1, y1, k };
-      w.postMessage({ type: 'mosaic', id: mosaicSeq.current, x0, y0, x1, y1, gw } satisfies HeatRequest);
-    };
-
-    const drawHeat = (now: number, s: number, k: number, vx: number, vy: number) => {
-      const h = heat.current;
-      if (!h) return false;
-      let more = false;
-      if (h.t0 >= 0) {
-        const t = h.dur ? (now - h.t0) / h.dur : 1;
-        for (let c = 0; c < h.s.length; c++) {
-          // cada região começa num momento (ruído suave): a cor se espalha em manchas, não pisca inteira
-          const lt = Math.min(1, Math.max(0, (t - h.delay[c] * 0.45) / 0.55));
-          const e = 1 - (1 - lt) ** 3;
-          h.s[c] = h.fs[c] + (h.to.share[c] - h.fs[c]) * e;
-          h.p[c] = h.fp[c] + (h.to.prog[c] - h.fp[c]) * e;
+    const drawHex = (now: number, s: number, k: number, vx: number, vy: number) => {
+      const st = hex.current;
+      if (!st) return false;
+      const li = k < LEVEL_AT[0] ? 0 : k < LEVEL_AT[1] ? 1 : 2;
+      const lv = st.levels[li];
+      const { L } = lv;
+      const R = L.R;
+      // só o que está na tela
+      const x0 = -vx / s - R;
+      const y0 = -vy / s - R;
+      const x1 = (cssW - vx) / s + R;
+      const y1 = (cssH - vy) / s + R;
+      const sel = pickedM !== null;
+      // 0–2 tons de A, 3–5 tons de B; um conjunto para o mapa e outro para a cidade escolhida
+      const fills = Array.from({ length: 6 }, () => new Path2D());
+      const fillsSel = Array.from({ length: 6 }, () => new Path2D());
+      const off = new Path2D();
+      const offSel = new Path2D();
+      const ring = new Path2D();
+      for (let h = 0; h < L.n; h++) {
+        const x = L.cx[h];
+        const y = L.cy[h];
+        if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+        const mine = sel && L.city[h] === pickedM;
+        const [sh, q] = shownAt(st, lv, h, now);
+        if (mine) hexPath(ring, x, y, R * 0.97);
+        if (q < 0.015) {
+          // ainda sem votos: um ponto apagado marca o lugar do hexágono
+          hexPath(mine ? offSel : off, x, y, R * 0.2);
+          continue;
         }
-        if (t >= 1) h.t0 = -1;
-        else more = true;
-        h.painted = '';
+        // cresce de ~1/3 até 92% do raio conforme a região é apurada (o resto é o vão entre hexágonos)
+        const r = R * (0.32 + 0.6 * Math.sqrt(q));
+        const i = (sh >= 50 ? 0 : 3) + bandOfMargin(Math.abs(2 * sh - 100));
+        hexPath((mine ? fillsSel : fills)[i], x, y, r);
       }
-      if (h.painted !== pal.key) {
-        paintField(h.img, h.s, h.p, h.to.dens, pal);
-        h.off.getContext('2d')!.putImageData(h.img, 0, 0);
-        h.painted = pal.key;
-      }
-      ctx.save();
-      ctx.clip(geo.outline);
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(h.off, 0, 0, h.gw * h.cell, h.gh * h.cell);
-      // com zoom o calor se resolve em cidades (aparece entre 1,8× e 3,4×)
-      const fade = smooth01((k - 1.8) / 1.6);
-      if (fade > 0) {
-        const mz = mosaic.current;
-        const vx0 = -vx / s;
-        const vy0 = -vy / s;
-        const vx1 = vx0 + cssW / s;
-        const vy1 = vy0 + cssH / s;
-        const covers = (r: Region) => r.k > k / 1.6 && r.k < k * 1.6 && r.x0 <= vx0 && r.y0 <= vy0 && r.x1 >= vx1 && r.y1 >= vy1;
-        const ready =
-          mz && covers({ k: mz.k, x0: mz.mo.x0, y0: mz.mo.y0, x1: mz.mo.x0 + mz.mo.gw * mz.mo.cell, y1: mz.mo.y0 + mz.mo.gh * mz.mo.cell });
-        // pede outro quando a vista para de mexer e nem o pronto nem o já pedido cobrem a tela
-        clearTimeout(mosaicTimer.current);
-        if (!ready && !(mosaicReq.current && covers(mosaicReq.current))) mosaicTimer.current = window.setTimeout(buildMosaic, 140);
-        if (mz) {
-          const key = `${pal.key}|${pickedM}`;
-          if (mz.pv !== values || mz.painted !== key) {
-            paintMosaic(mz.img, mz.mo, values.pst, values.pa, pal, pal.ink, pickedM, Math.min(0.5, 0.12 + 0.035 * mz.k));
-            mz.off.getContext('2d')!.putImageData(mz.img, 0, 0);
-            mz.pv = values;
-            mz.painted = key;
-          }
-          ctx.globalAlpha = fade;
-          ctx.drawImage(mz.off, mz.mo.x0, mz.mo.y0, mz.mo.gw * mz.mo.cell, mz.mo.gh * mz.mo.cell);
-          ctx.globalAlpha = 1;
+      const paint = (f: Path2D[], o: Path2D, alpha: number) => {
+        ctx.fillStyle = theme.foreground;
+        ctx.globalAlpha = 0.16 * alpha;
+        ctx.fill(o);
+        ctx.globalAlpha = alpha;
+        for (let i = 0; i < 6; i++) {
+          ctx.fillStyle = i < 3 ? pal.a[i] : pal.b[i - 3];
+          ctx.fill(f[i]);
         }
-      }
-      ctx.restore();
-      // divisas como recortes finos na cor do cartão
-      ctx.lineWidth = 1 / s;
-      ctx.strokeStyle = theme.card;
-      ctx.globalAlpha = 0.6;
-      ctx.stroke(geo.outline);
+      };
+      // a cidade escolhida ganha só um contorno claro por cima; o resto do mapa não muda
+      paint(fills, off, 1);
+      if (sel) paint(fillsSel, offSel, 1);
       ctx.globalAlpha = 1;
-      if (pickedM !== null && k < 2.6) {
-        // anel em volta da cidade escolhida (com zoom, o mosaico já contorna a cidade), com halo para aparecer sobre qualquer cor
-        ctx.beginPath();
-        ctx.arc(geo.cx[pickedM], geo.cy[pickedM], Math.max(geo.cr[pickedM] * 1.8, 7 / s), 0, Math.PI * 2);
-        ctx.lineWidth = 4 / s;
-        ctx.strokeStyle = theme.card;
-        ctx.stroke();
-        ctx.lineWidth = 1.75 / s;
-        ctx.strokeStyle = theme.foreground;
-        ctx.stroke();
+      if (pal.dark) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        gctx.clearRect(0, 0, glow.width, glow.height);
+        gctx.drawImage(cv, 0, 0, glow.width, glow.height);
+        ctx.globalCompositeOperation = 'destination-over';
+        ctx.globalAlpha = 0.55;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(glow, 0, 0, W, H);
+        ctx.restore();
       }
-      return more;
+      // divisas dos estados, discretas
+      ctx.lineWidth = 0.8 / s;
+      ctx.strokeStyle = theme.foreground;
+      ctx.globalAlpha = 0.22;
+      ctx.stroke(geo.outline);
+      if (sel) {
+        ctx.lineWidth = 1.5 / s;
+        ctx.globalAlpha = 1;
+        ctx.stroke(ring);
+      }
+      ctx.globalAlpha = 1;
+      return st.dur > 0 && now - st.t0 < st.dur;
     };
 
     const drawDots = (now: number, s: number, k: number, vx: number, vy: number) => {
@@ -594,7 +525,7 @@ export default function CityMap({
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, W, H);
       ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * x, dpr * y);
-      return mode === 'heat' ? drawHeat(now, s, k, x, y) : drawDots(now, s, k, x, y);
+      return mode === 'hex' ? drawHex(now, s, k, x, y) : drawDots(now, s, k, x, y);
     };
     kick();
   }, [geo, values, dots, cssW, cssH, theme, pal, cands, picked, mode, kick, vp.v]);
@@ -612,7 +543,7 @@ export default function CityMap({
 
   if (failed) return <p className="py-10 text-center text-sm text-muted-foreground">Não foi possível carregar o mapa.</p>;
 
-  const what = mode === 'heat' ? 'Mapa de calor do voto no Brasil' : 'Mapa de pontos do Brasil';
+  const what = mode === 'hex' ? 'Mapa do Brasil em hexágonos' : 'Mapa de pontos do Brasil';
   return (
     <div className={cn('w-full', className)}>
       <div ref={wrap} className="relative w-full overflow-hidden rounded-xl">
@@ -648,7 +579,7 @@ export default function CityMap({
           </span>
         </div>
       </div>
-      <Legend mode={mode} cands={cands} mid={pal.mid} pending={pal.pendingCss} vpp={dots?.vpp ?? 6000} layer={layer} stats={stats} />
+      <Legend mode={mode} cands={cands} pal={pal} vpp={dots?.vpp ?? 6000} layer={layer} stats={stats} />
       <PickedCity m={picked} dots={dots} values={values} cands={cands} onClose={() => setPicked(null)} />
     </div>
   );
@@ -680,19 +611,27 @@ function ZoomControls({ zoomed, onIn, onOut, onReset }: { zoomed: boolean; onIn:
   );
 }
 
+/** hexágono da legenda, com vértice para cima como no mapa */
+function Hex({ color, size = 12, opacity }: { color: string; size?: number; opacity?: number }) {
+  const pts = HEX_X.map((x, k) => `${(x * 0.98).toFixed(3)},${(HEX_Y[k] * 0.98).toFixed(3)}`).join(' ');
+  return (
+    <svg viewBox="-1 -1 2 2" width={size} height={size} aria-hidden className="shrink-0">
+      <polygon points={pts} fill={color} opacity={opacity} />
+    </svg>
+  );
+}
+
 function Legend({
   mode,
   cands,
-  mid,
-  pending,
+  pal,
   vpp,
   layer,
   stats,
 }: {
   mode: CityMapMode;
   cands: CandidateDef[];
-  mid: string;
-  pending: string;
+  pal: { a: string[]; b: string[] };
   vpp: number;
   layer: DotLayer;
   stats: { started: number; done: number; total: number } | null;
@@ -707,19 +646,39 @@ function Legend({
   // as duas legendas no mesmo lugar, só a do modo ativo visível: trocar de modo não muda a altura
   return (
     <div className="mt-3 grid text-center text-[12px] text-muted-foreground [&>*]:col-start-1 [&>*]:row-start-1">
-      <div className={cn('space-y-1.5', mode !== 'heat' && 'invisible')} aria-hidden={mode !== 'heat'}>
-        <div className="mx-auto flex max-w-[360px] items-center gap-2">
-          <span>{ca.short}</span>
-          <span className="h-2 flex-1 rounded-full" style={{ background: `linear-gradient(90deg, ${ca.color}, ${mid}, ${cb.color})` }} aria-hidden />
-          <span>{cb.short}</span>
+      <div className={cn('space-y-2', mode !== 'hex' && 'invisible')} aria-hidden={mode !== 'hex'}>
+        <div className="flex items-center justify-center gap-3">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="flex gap-0.5">
+              {pal.a.map((c) => (
+                <Hex key={c} color={c} />
+              ))}
+            </span>
+            {ca.short}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            {cb.short}
+            <span className="flex gap-0.5">
+              {[...pal.b].reverse().map((c) => (
+                <Hex key={c} color={c} />
+              ))}
+            </span>
+          </span>
+        </div>
+        <p className="flex flex-wrap items-center justify-center gap-x-1.5 text-pretty">
+          <span>Tom mais vivo, vantagem maior.</span>
           {live && (
-            <span className="ml-1 inline-flex items-center gap-1">
-              {sw(pending)} não apurado
+            <span className="inline-flex items-center gap-1">
+              O hexágono cresce
+              <span className="inline-flex items-end gap-0.5">
+                <Hex color="currentColor" size={5} opacity={0.5} />
+                <Hex color="currentColor" size={8} opacity={0.7} />
+                <Hex color="currentColor" size={11} />
+              </span>
+              conforme a região é apurada.
             </span>
           )}
-        </div>
-        <p className="text-pretty">
-          Roxo onde a disputa está dividida; a cor ganha força conforme as urnas da região são apuradas.{progress}
+          {progress && <span>{progress.trim()}</span>}
         </p>
       </div>
       <div className={cn('space-y-1.5', mode !== 'dots' && 'invisible')} aria-hidden={mode !== 'dots'}>

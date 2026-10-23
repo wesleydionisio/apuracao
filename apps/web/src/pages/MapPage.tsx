@@ -2,7 +2,7 @@
 // Camadas: Agora | 1º turno | 2022. Com "Agora", dá para comparar com uma referência e pintar o deslocamento.
 import type { Board } from '@apuracao/shared';
 import { fmtPct } from '@apuracao/shared';
-import { Flame, GitCompareArrows, Grip, Map as MapIcon, Rows3 } from 'lucide-react';
+import { GitCompareArrows, Grip, Hexagon, Map as MapIcon, Rows3 } from 'lucide-react';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { SourceStamp } from '@/components/core/live';
@@ -18,16 +18,17 @@ import { UfDrawer } from '@/features/map/UfDrawer';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 
-type View = 'heat' | 'dots' | 'map' | 'list';
+type View = 'hex' | 'dots' | 'map' | 'list';
 const VIEW_KEY = 'map:view';
 const CityMap = lazy(() => import('@/features/map/CityMap'));
 
 function savedView(): View {
   try {
     const v = localStorage.getItem(VIEW_KEY);
-    return v === 'map' || v === 'list' || v === 'dots' || v === 'heat' ? v : 'heat';
+    // 'heat' era o mapa de calor, trocado pela grade de hexágonos
+    return v === 'map' || v === 'list' || v === 'dots' || v === 'hex' ? v : 'hex';
   } catch {
-    return 'heat';
+    return 'hex';
   }
 }
 
@@ -78,8 +79,8 @@ function MapView({ board }: { board: Board }) {
     }
   };
   const live = !!board.released && !!board.br;
-  /** calor e pontos: mapas por cidade (a comparação por estado não se aplica) */
-  const byCity = view === 'heat' || view === 'dots';
+  /** grade e pontos: mapas por cidade (a comparação por estado não se aplica) */
+  const byCity = view === 'hex' || view === 'dots';
   // sem escolha do usuário a camada acompanha a liberação (17h); escolhida, fica
   const [layer, setLayer] = useState<MapLayer | null>(null);
   const effective: MapLayer = layer === null || (layer === 'live' && !live) ? (live ? 'live' : 't1') : layer;
@@ -147,8 +148,8 @@ function MapView({ board }: { board: Board }) {
           </h1>
         </div>
         <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como">
-          <ToggleGroupItem value="heat" aria-label="Mapa de calor">
-            <Flame />
+          <ToggleGroupItem value="hex" aria-label="Grade de hexágonos">
+            <Hexagon />
           </ToggleGroupItem>
           <ToggleGroupItem value="dots" aria-label="Pontos por cidade">
             <Grip />
@@ -220,7 +221,7 @@ function MapView({ board }: { board: Board }) {
       {byCity ? (
         <section className="rounded-2xl border bg-card p-3 sm:p-5">
           <Suspense fallback={<Skeleton className="aspect-[1000/1051] w-full rounded-xl" />}>
-            <CityMap mode={view === 'heat' ? 'heat' : 'dots'} layer={effective} cands={cands} className="mx-auto max-w-[620px]" />
+            <CityMap mode={view === 'hex' ? 'hex' : 'dots'} layer={effective} cands={cands} className="mx-auto max-w-[620px]" />
           </Suspense>
         </section>
       ) : view === 'map' ? (

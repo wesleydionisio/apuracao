@@ -11,7 +11,8 @@ export interface View {
   y: number;
 }
 
-export const MAX_ZOOM = 16;
+/** no zoom máximo o hexágono mais fino tem ~17 px na tela */
+export const MAX_ZOOM = 10;
 
 export const reduceMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 

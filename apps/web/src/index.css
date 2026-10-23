@@ -46,8 +46,8 @@
   --live: #16a34a;
   --warning: #b45309;
   /* candidatos: sobrescritos em runtime a partir de board.candidates (misturados em OKLCH) */
-  --cand-a: #e74948;
-  --cand-b: #4084e7;
+  --cand-a: #f2202e;
+  --cand-b: #1f6fff;
   /* tinta sobre preenchimentos fortes (cor de candidato) e fundo das fotos oficiais do TSE */
   --on-fill: #ffffff;
   --photo-bg: #ffffff;

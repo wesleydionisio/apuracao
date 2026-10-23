@@ -61,11 +61,11 @@ function* candidatesOf(raw: Any): Generator<[Any, string]> {
 
 /** cores fixas por número de urna; o resto cai no par padrão */
 export const DEFAULT_CAND_COLORS: Record<string, string> = {
-  '13': '#e74948', // vermelho
-  '22': '#4084e7', // azul
+  '13': '#f2202e', // vermelho vivo
+  '22': '#1f6fff', // azul vivo
 };
 
-/** "13:#e74948,22:#4084e7" -> mapa */
+/** "13:#f2202e,22:#1f6fff" -> mapa */
 export function parseColorMap(s: string | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   for (const part of (s ?? '').split(',')) {
@@ -196,7 +196,7 @@ export function detectCandidates(
   const na = opts.a ?? nums[0];
   const nb = opts.b ?? nums.find((n) => n !== na);
   if (!na || !nb) throw new Error('TSE: não encontrei dois candidatos no arquivo do 2º turno');
-  const [ca, cb] = opts.colors ?? ['#4084e7', '#e74948'];
+  const [ca, cb] = opts.colors ?? ['#1f6fff', '#f2202e'];
   const byNum = { ...DEFAULT_CAND_COLORS, ...opts.colorByNum };
   const def = (key: 'a' | 'b', n: string, fallback: string): CandidateDef => ({
     key,
