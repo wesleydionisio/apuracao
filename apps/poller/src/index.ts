@@ -8,6 +8,7 @@ import {
   detectCandidates,
   parseColorMap,
   isReleased,
+  parseMunProgress,
   parseResult,
   tsePaths,
   TSE_UFS,
@@ -17,7 +18,7 @@ import {
 } from '@apuracao/shared';
 import { emptyState, runCycle, toBoard, type PollState } from './board';
 import { config } from './config';
-import { loadHistory } from './history';
+import { loadHistory, readJson } from './history';
 import { hashOf, loadState, Output, writeJsonAtomic } from './output';
 import { ReplaySource, T_END } from './replay';
 import { pool, TseSource, type Source } from './source';
@@ -33,6 +34,13 @@ let cands: CandidateDef[] | null = null;
 let y2022Map: Record<Side, string> | null = null;
 let lastBoardHash = '';
 let munCursor = 0;
+/** andamento de TODAS as cidades (ab por UF): % apurado e hora da última seção, por IBGE */
+const munProg = new Map<string, { pst: number; at: string | null; el: number }>();
+/** hora do andamento quando os votos daquela cidade foram buscados pela última vez */
+const fetchedAt = new Map<string, string | null>();
+/** ordem das cidades no mapa de pontos (static/dots.json); o mungrid.json segue esta ordem */
+const dotOrder: string[] = readJson<{ mun: string[] }>(path.join(config.staticDir, 'dots.json'))?.mun ?? [];
+let lastGridHash = '';
 /** só no replay local: forçar "antes das 17h" / "ao vivo" para depurar as duas telas */
 let releaseOverride: 'auto' | 'on' | 'off' = 'auto';
 const replay = source instanceof ReplaySource ? source : null;
@@ -75,11 +83,36 @@ async function cycle(opts: { allMun?: boolean } = {}) {
   const got = new Set(ufs.map((u) => `uf:${u.code}`));
   const missing = Object.keys(state.ufs).filter((k) => !got.has(k));
 
-  const batch = !munTargets.length ? [] : opts.allMun ? munTargets : rotate(munTargets, config.munBatch);
+  // andamento por cidade: 1 arquivo por UF diz o % apurado de todas; só buscamos os votos de quem mudou
+  const progRes = await pool(ufCodes, config.tse.concurrency, (uf) => source.get(tsePaths.progressUf(election, uf)));
+  progRes.forEach((raw, i) => {
+    if (!raw || raw instanceof Error) return;
+    const UF = ufCodes[i].toUpperCase();
+    for (const r of parseMunProgress(raw)) {
+      const m = hist.byTse.get(`${UF}:${r.tse}`);
+      if (m) munProg.set(m.ibge, { pst: r.pst, at: r.at, el: m.el });
+    }
+  });
+  const batch = munProg.size
+    ? [...munProg]
+        .filter(([ibge, p]) => p.pst > 0 && fetchedAt.get(ibge) !== p.at)
+        .sort((x, y) => y[1].el - x[1].el)
+        .slice(0, opts.allMun ? Infinity : config.munPerCycle)
+        .flatMap(([ibge]) => {
+          const m = hist.byIbge.get(ibge);
+          return m ? [m] : [];
+        })
+    : !munTargets.length
+      ? []
+      : opts.allMun
+        ? munTargets
+        : rotate(munTargets, config.munBatch);
   const munRes = await pool(batch, config.tse.concurrency, (m) => fetchResult(m.uf.toLowerCase(), m.tse));
   const mun = batch.flatMap((m, i) => {
     const r = munRes[i];
-    return r && !(r instanceof Error) ? [{ ibge: m.ibge, p: r }] : [];
+    if (!r || r instanceof Error) return [];
+    fetchedAt.set(m.ibge, munProg.get(m.ibge)?.at ?? null);
+    return [{ ibge: m.ibge, p: r }];
   });
 
   // momentos com a hora do TSE (e não a do servidor): na simulação as duas divergem
@@ -104,6 +137,19 @@ async function cycle(opts: { allMun?: boolean } = {}) {
   }
   if (released) {
     if (flags.map_mun) await out.writeMun(state, (ibge) => hist.byIbge.get(ibge)?.uf);
+    // mapa de pontos: [% apurado ×10, % de A ×10 (ou -1 sem votos ainda)] de cada cidade, na ordem da grade
+    if (dotOrder.length) {
+      const p = dotOrder.map((ib) => Math.round((munProg.get(ib)?.pst ?? state.mun[`mun:${ib}`]?.pst ?? 0) * 10));
+      const a = dotOrder.map((ib) => {
+        const s = state.mun[`mun:${ib}`];
+        return s && s.valid ? Math.round(s.pa * 10) : -1;
+      });
+      const h2 = hashOf([p, a]);
+      if (h2 !== lastGridHash) {
+        await writeJsonAtomic(path.join(config.dataDir, 'mungrid.json'), { at: board.source.at, p, a });
+        lastGridHash = h2;
+      }
+    }
     await out.publish(result.changed, result.moments);
   }
   await out.persist(result.changed, result.moments, new Map());
@@ -148,6 +194,9 @@ async function rebuildTo(t: number) {
   if (!replay || !cands) return;
   state = emptyState();
   munCursor = 0;
+  munProg.clear();
+  fetchedAt.clear();
+  lastGridHash = '';
   const steps = Math.max(1, Math.min(120, Math.ceil(t * 120)));
   for (let i = 1; i < steps; i++) {
     replay.setT((t * i) / steps);

@@ -40,6 +40,8 @@ export const config = {
   /** municípios coletados (maiores por eleitorado) e quantos por ciclo */
   munLimit: int(env.MUN_LIMIT, 300),
   munBatch: int(env.MUN_BATCH, 30),
+  /** com o andamento por cidade (ab da UF): máximo de cidades que mudaram buscadas por ciclo */
+  munPerCycle: int(env.MUN_PER_CYCLE, 150),
   bigMunEl: int(env.BIG_MUN_EL, 300_000),
   healthPort: int(env.HEALTH_PORT, 3003),
   replay: {

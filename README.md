@@ -9,7 +9,7 @@ apps/api      Fastify: palpites, ranking, cidade, cards PNG, HTML com meta OG
 apps/ws       uWebSockets.js: salas, chat moderado, reações, fan-out de placar
 apps/web      Vite + React (SPA estática)
 packages/shared  tipos, parser TSE, cálculos, momentos, protocolo, moderação (com testes)
-packages/data    ETL: municípios, 1º turno 2026, 2022, malhas IBGE, fontes, curva 2022
+packages/data    ETL: municípios, 1º turno 2026, 2022, malhas IBGE, mapa de pontos, fontes, curva 2022
 ```
 
 ## Rodar local (sem Docker, sem Redis, sem Postgres)
@@ -50,6 +50,13 @@ candidato conforme o % apurado — hoje: Bolsonaro começa empatado, abre ~3 pon
 O replay simula a noite inteira (17h → totalização) em 20 minutos no
 mesmo formato JSON do TSE, a partir do 1º turno real de cada UF e município, com viradas.
 Sem Redis o WS lê `public/data/br.json` a cada 2s; sem Postgres os palpites vão para `var/guesses.ndjson`.
+
+**Mapa de pontos** (aba Mapa, padrão): ~27 mil pontos, 1 a cada ~6 mil eleitores, numa grade própria
+dentro do contorno de cada uma das 5.570 cidades (`packages/data/scripts/dots.ts`, `DOTS_VPP` muda a
+densidade). O poller lê o andamento de todas as cidades nos arquivos `-ab` de cada UF, busca votos só das
+que mudaram (`MUN_PER_CYCLE`) e grava `public/data/mungrid.json` (~17 KB gzip): % apurado e % de A por
+cidade. O ponto acende quando o % apurado da cidade passa do sorteio fixo dele e ganha a cor de um
+candidato na proporção dos votos da cidade.
 
 Testes: `pnpm test`.
 

@@ -62,6 +62,8 @@ export class ReplaySource implements Source {
   readonly name = 'replay';
   private ufs = new Map<string, Area>();
   private mun = new Map<string, Area & { uf: string }>();
+  /** códigos TSE dos municípios de cada UF (para o arquivo de andamento da UF) */
+  private munByUf = new Map<string, string[]>();
   private cands: { n: string; name: string; seq: number; sq?: string; party?: string }[];
   private scenario: Scenario | null;
   /** roteiro em termos de % de A (primeiro candidato) */
@@ -131,6 +133,7 @@ export class ReplaySource implements Source {
       const u = rng(cfg.replay.seed ^ hash(m.ibge));
       const ufPa1 = twoWay(ufRows[m.uf], cd) ?? 50;
       const pa1 = twoWay(h, cd) ?? ufPa1;
+      (this.munByUf.get(m.uf) ?? this.munByUf.set(m.uf, []).get(m.uf)!).push(m.tse);
       this.mun.set(`${m.uf}:${m.tse}`, {
         uf: m.uf,
         el: h.el,
@@ -138,7 +141,8 @@ export class ReplaySource implements Source {
         fa: clamp(parent.fa + (pa1 - ufPa1) + (u() - 0.5) * 2, 2, 98),
         bias: parent.bias + (scripted ? 0 : (u() - 0.5) * 4),
         delay: clamp(parent.delay + (u() - 0.3) * 0.1, 0, 0.3),
-        span: clamp(parent.span + (u() - 0.5) * 0.3, 0.2, 0.95),
+        // poucas seções acabam cedo: cidade pequena fecha em ~15% do tempo do estado, capital usa tudo
+        span: clamp((parent.span + (u() - 0.5) * 0.3) * clamp((h.el / 200_000) ** 0.35, 0.15, 1), 0.04, 0.95),
       });
     }
     console.log(
@@ -252,7 +256,36 @@ export class ReplaySource implements Source {
     return { pst, el: a.el, elc, turnout, valid, blank, nulls: turnout - valid - blank, va, vb: valid - va };
   }
 
+  /** <uf>-e<ele>-ab.json: andamento de cada cidade; a hora só muda quando entra seção nova (como no TSE) */
+  private progressUf(uf: string, t: number, delta: number) {
+    return {
+      ele: this.cfg.tse.code,
+      abr: (this.munByUf.get(uf) ?? []).map((tse) => {
+        const a = this.mun.get(`${uf}:${tse}`)!;
+        const c = this.counts(a, t, delta);
+        const ts = Math.max(1, Math.round(c.el / 320));
+        const st = Math.round((ts * c.pst) / 100);
+        const secs = 17 * 3600 + st; // monotônico em st: muda só com seção nova
+        const ht = [Math.floor(secs / 3600), Math.floor(secs / 60) % 60, secs % 60].map((v) => String(v).padStart(2, '0')).join(':');
+        return {
+          tpabr: 'mun',
+          cdabr: tse,
+          dt: '25/10/2026',
+          ht: st ? ht : '',
+          s: { ts: String(ts), st: String(st), pstn: ((st / ts) * 100).toFixed(2).replace('.', ',') },
+          e: { te: String(c.el), est: String(c.elc) },
+        };
+      }),
+    };
+  }
+
   async get(p: string): Promise<unknown | null> {
+    const ab = /\/(\d+)\/dados\/([a-z]{2})\/([a-z]{2})-e\d+-ab\.json$/.exec(p);
+    if (ab) {
+      if (ab[1] !== this.cfg.tse.code || ab[3] === 'br') return null;
+      const t = this.t();
+      return this.progressUf(ab[3].toUpperCase(), t, this.deltaAt(t));
+    }
     const m = /\/(\d+)\/dados\/([a-z]{2})\/([a-z]{2})(\d*)-c0001-e\d+-u\.json$/.exec(p);
     if (!m || m[1] !== this.cfg.tse.code) return null;
     const t = this.t();

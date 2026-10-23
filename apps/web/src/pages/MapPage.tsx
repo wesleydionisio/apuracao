@@ -2,8 +2,8 @@
 // Camadas: Agora | 1º turno | 2022. Com "Agora", dá para comparar com uma referência e pintar o deslocamento.
 import type { Board } from '@apuracao/shared';
 import { fmtPct } from '@apuracao/shared';
-import { GitCompareArrows, Map as MapIcon, Rows3 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { GitCompareArrows, Grip, Map as MapIcon, Rows3 } from 'lucide-react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { SourceStamp } from '@/components/core/live';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,7 +18,18 @@ import { UfDrawer } from '@/features/map/UfDrawer';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 
-type View = 'map' | 'list';
+type View = 'dots' | 'map' | 'list';
+const VIEW_KEY = 'map:view';
+const DotMap = lazy(() => import('@/features/map/DotMap'));
+
+function savedView(): View {
+  try {
+    const v = localStorage.getItem(VIEW_KEY);
+    return v === 'map' || v === 'list' || v === 'dots' ? v : 'dots';
+  } catch {
+    return 'dots';
+  }
+}
 
 const COMPARE_KEY = 'map:compare';
 const TITLES = [
@@ -57,7 +68,15 @@ const segItem = 'rounded-md! px-3 data-[state=on]:bg-card data-[state=on]:shadow
 function MapView({ board }: { board: Board }) {
   const params = useParams<{ uf?: string }>();
   const [, nav] = useLocation();
-  const [view, setView] = useState<View>('map');
+  const [view, setViewState] = useState<View>(savedView);
+  const setView = (v: View) => {
+    setViewState(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* sem storage */
+    }
+  };
   const live = !!board.released && !!board.br;
   // sem escolha do usuário a camada acompanha a liberação (17h); escolhida, fica
   const [layer, setLayer] = useState<MapLayer | null>(null);
@@ -126,7 +145,10 @@ function MapView({ board }: { board: Board }) {
           </h1>
         </div>
         <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como">
-          <ToggleGroupItem value="map" aria-label="Mapa">
+          <ToggleGroupItem value="dots" aria-label="Pontos por cidade">
+            <Grip />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="map" aria-label="Estados">
             <MapIcon />
           </ToggleGroupItem>
           <ToggleGroupItem value="list" aria-label="Lista">
@@ -155,10 +177,10 @@ function MapView({ board }: { board: Board }) {
         {/* sempre no lugar; fora da camada "Agora" fica invisível (não empurra o resto) */}
         {(
           <div
-            className={cn('flex items-center gap-2', effective !== 'live' && 'invisible')}
+            className={cn('flex items-center gap-2', (effective !== 'live' || view === 'dots') && 'invisible')}
             role="group"
             aria-label="Comparar com"
-            aria-hidden={effective !== 'live'}
+            aria-hidden={effective !== 'live' || view === 'dots'}
           >
             <GitCompareArrows className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="text-xs text-muted-foreground">Comparar com</span>
@@ -190,7 +212,13 @@ function MapView({ board }: { board: Board }) {
         caption={effective === 'live' ? 'Estados liderados agora · o que decide é o voto total' : effective === 't1' ? 'Estados vencidos no 1º turno' : 'Estados vencidos em 2022'}
       />
 
-      {view === 'map' ? (
+      {view === 'dots' ? (
+        <section className="rounded-2xl border bg-card p-3 sm:p-5">
+          <Suspense fallback={<Skeleton className="aspect-[1000/1051] w-full rounded-xl" />}>
+            <DotMap layer={effective} cands={cands} className="mx-auto max-w-[620px]" />
+          </Suspense>
+        </section>
+      ) : view === 'map' ? (
         <section className="rounded-2xl border bg-card p-3 sm:p-5">
           <BrazilMap
             values={mapValues}

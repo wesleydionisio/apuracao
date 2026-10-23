@@ -1,5 +1,6 @@
 // Roda o ETL inteiro em ordem. Idempotente: downloads ficam em packages/data/raw/.
 import { buildCurve2022 } from './curve-2022';
+import { buildDots } from './dots';
 import { buildFonts } from './fonts';
 import { buildGeo } from './geo';
 import { buildPhotos } from './photos';
@@ -17,6 +18,7 @@ const step = async (name: string, fn: () => unknown) => {
 await step('1º turno 2026 + municípios', buildT1);
 await step('2022', buildY2022);
 await step('geo', buildGeo);
+await step('mapa de pontos', buildDots);
 await step('fontes', buildFonts);
 await step('fotos dos candidatos', buildPhotos);
 await step('curva 2022', buildCurve2022);

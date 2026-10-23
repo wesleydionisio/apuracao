@@ -17,6 +17,8 @@ export const tsePaths = {
     `${e.cycle}/${e.code}/dados/${uf}/${uf}${munTse ?? ''}-c0001-e${pad6(e.code)}-u.json`,
   /** andamento de todas as UFs num arquivo só */
   progress: (e: TseElection) => `${e.cycle}/${e.code}/dados/br/br-e${pad6(e.code)}-ab.json`,
+  /** andamento de todas as cidades de uma UF (% apurado por município, sem votos) */
+  progressUf: (e: TseElection, uf: string) => `${e.cycle}/${e.code}/dados/${uf}/${uf}-e${pad6(e.code)}-ab.json`,
   /** lista de municípios com código TSE (cd) e IBGE (cdi) */
   municipalities: (e: TseElection) => `${e.cycle}/${e.code}/config/mun-e${pad6(e.code)}-cm.json`,
 };
@@ -133,6 +135,29 @@ export function parseProgress(raw: Any): ProgressRow[] {
     turnout: num(r.e?.c),
     at: tseDate(r.dt, r.ht),
   }));
+}
+
+export interface MunProgress {
+  /** código TSE do município */
+  tse: string;
+  pst: number;
+  el: number;
+  elc: number;
+  /** hora da última totalização daquela cidade (muda quando entra seção nova) */
+  at: string | null;
+}
+
+/** <uf>-e<ele>-ab.json: andamento de cada município da UF */
+export function parseMunProgress(raw: Any): MunProgress[] {
+  return (raw?.abr ?? [])
+    .filter((r: Any) => String(r.tpabr).toLowerCase().startsWith('mu'))
+    .map((r: Any) => ({
+      tse: String(r.cdabr),
+      pst: pct(r.s?.pstn ?? r.s?.pst),
+      el: num(r.e?.te),
+      elc: num(r.e?.est),
+      at: tseDate(r.dt, r.ht),
+    }));
 }
 
 export interface TseMunicipality {

@@ -166,3 +166,11 @@ test('moderação: termos, leet, links e tamanho', () => {
   assert.equal(mod.check('x'.repeat(241)).ok, false);
   assert.equal(mod.check('   ').ok, false);
 });
+
+test('andamento por município (ab da UF)', async () => {
+  const { parseMunProgress } = await import('../src/index');
+  const raw = { abr: [{ tpabr: 'mun', cdabr: '61000', dt: '04/10/2026', ht: '18:49:26', s: { pstn: '100' }, e: { te: '6336', est: '6336' } }, { tpabr: 'uf', cdabr: 'sp' }] };
+  const rows = parseMunProgress(raw);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0], { tse: '61000', pst: 100, el: 6336, elc: 6336, at: '2026-10-04T18:49:26-03:00' });
+});
