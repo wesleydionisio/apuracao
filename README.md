@@ -51,12 +51,19 @@ O replay simula a noite inteira (17h → totalização) em 20 minutos no
 mesmo formato JSON do TSE, a partir do 1º turno real de cada UF e município, com viradas.
 Sem Redis o WS lê `public/data/br.json` a cada 2s; sem Postgres os palpites vão para `var/guesses.ndjson`.
 
-**Mapa de pontos** (aba Mapa, padrão): ~27 mil pontos, 1 a cada ~6 mil eleitores, numa grade própria
-dentro do contorno de cada uma das 5.570 cidades (`packages/data/scripts/dots.ts`, `DOTS_VPP` muda a
-densidade). O poller lê o andamento de todas as cidades nos arquivos `-ab` de cada UF, busca votos só das
-que mudaram (`MUN_PER_CYCLE`) e grava `public/data/mungrid.json` (~17 KB gzip): % apurado e % de A por
-cidade. O ponto acende quando o % apurado da cidade passa do sorteio fixo dele e ganha a cor de um
-candidato na proporção dos votos da cidade.
+**Mapa por cidade** (aba Mapa): ~27 mil pontos, 1 a cada ~6 mil eleitores, numa grade própria dentro do
+contorno de cada uma das 5.570 cidades (`packages/data/scripts/dots.ts`, `DOTS_VPP` muda a densidade). O
+poller lê o andamento de todas as cidades nos arquivos `-ab` de cada UF, busca votos só das que mudaram
+(`MUN_PER_CYCLE`) e grava `public/data/mungrid.json` (~17 KB gzip): % apurado e % de A por cidade.
+
+- **Calor** (padrão): os pontos viram um campo contínuo (desfoque em três escalas, a mais fina com dado
+  suficiente vale), do vermelho ao azul passando pelo roxo; cinza onde nada foi apurado. Com zoom, o calor
+  se resolve num mosaico de cidades (Voronoi dos pontos ≈ limites dos municípios). As contas rodam num
+  worker (`apps/web/src/features/map/heat.worker.ts`).
+- **Pontos**: o ponto acende quando o % apurado da cidade passa do sorteio fixo dele e ganha a cor de um
+  candidato na proporção dos votos da cidade.
+- Zoom e arrasto nos dois: pinça e dois dedos no celular (um dedo arrasta só com zoom, para não prender a
+  rolagem), Ctrl/⌘ + rolagem no computador, duplo toque, botões e teclado.
 
 Testes: `pnpm test`.
 

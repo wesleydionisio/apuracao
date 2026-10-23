@@ -2,7 +2,7 @@
 // Camadas: Agora | 1º turno | 2022. Com "Agora", dá para comparar com uma referência e pintar o deslocamento.
 import type { Board } from '@apuracao/shared';
 import { fmtPct } from '@apuracao/shared';
-import { GitCompareArrows, Grip, Map as MapIcon, Rows3 } from 'lucide-react';
+import { Flame, GitCompareArrows, Grip, Map as MapIcon, Rows3 } from 'lucide-react';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { SourceStamp } from '@/components/core/live';
@@ -18,16 +18,16 @@ import { UfDrawer } from '@/features/map/UfDrawer';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 
-type View = 'dots' | 'map' | 'list';
+type View = 'heat' | 'dots' | 'map' | 'list';
 const VIEW_KEY = 'map:view';
-const DotMap = lazy(() => import('@/features/map/DotMap'));
+const CityMap = lazy(() => import('@/features/map/CityMap'));
 
 function savedView(): View {
   try {
     const v = localStorage.getItem(VIEW_KEY);
-    return v === 'map' || v === 'list' || v === 'dots' ? v : 'dots';
+    return v === 'map' || v === 'list' || v === 'dots' || v === 'heat' ? v : 'heat';
   } catch {
-    return 'dots';
+    return 'heat';
   }
 }
 
@@ -78,6 +78,8 @@ function MapView({ board }: { board: Board }) {
     }
   };
   const live = !!board.released && !!board.br;
+  /** calor e pontos: mapas por cidade (a comparação por estado não se aplica) */
+  const byCity = view === 'heat' || view === 'dots';
   // sem escolha do usuário a camada acompanha a liberação (17h); escolhida, fica
   const [layer, setLayer] = useState<MapLayer | null>(null);
   const effective: MapLayer = layer === null || (layer === 'live' && !live) ? (live ? 'live' : 't1') : layer;
@@ -145,6 +147,9 @@ function MapView({ board }: { board: Board }) {
           </h1>
         </div>
         <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como">
+          <ToggleGroupItem value="heat" aria-label="Mapa de calor">
+            <Flame />
+          </ToggleGroupItem>
           <ToggleGroupItem value="dots" aria-label="Pontos por cidade">
             <Grip />
           </ToggleGroupItem>
@@ -177,10 +182,10 @@ function MapView({ board }: { board: Board }) {
         {/* sempre no lugar; fora da camada "Agora" fica invisível (não empurra o resto) */}
         {(
           <div
-            className={cn('flex items-center gap-2', (effective !== 'live' || view === 'dots') && 'invisible')}
+            className={cn('flex items-center gap-2', (effective !== 'live' || byCity) && 'invisible')}
             role="group"
             aria-label="Comparar com"
-            aria-hidden={effective !== 'live' || view === 'dots'}
+            aria-hidden={effective !== 'live' || byCity}
           >
             <GitCompareArrows className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="text-xs text-muted-foreground">Comparar com</span>
@@ -212,10 +217,10 @@ function MapView({ board }: { board: Board }) {
         caption={effective === 'live' ? 'Estados liderados agora · o que decide é o voto total' : effective === 't1' ? 'Estados vencidos no 1º turno' : 'Estados vencidos em 2022'}
       />
 
-      {view === 'dots' ? (
+      {byCity ? (
         <section className="rounded-2xl border bg-card p-3 sm:p-5">
           <Suspense fallback={<Skeleton className="aspect-[1000/1051] w-full rounded-xl" />}>
-            <DotMap layer={effective} cands={cands} className="mx-auto max-w-[620px]" />
+            <CityMap mode={view === 'heat' ? 'heat' : 'dots'} layer={effective} cands={cands} className="mx-auto max-w-[620px]" />
           </Suspense>
         </section>
       ) : view === 'map' ? (
