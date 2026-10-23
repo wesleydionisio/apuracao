@@ -1,6 +1,7 @@
 // /tv — tela cheia para projetar na parede ou numa live. Sempre escuro, sem chat, tudo em vw.
 import type { Board, CandidateDef, Snap } from '@apuracao/shared';
 import { useEffect } from 'react';
+import { NightChart } from '@/features/curve';
 import { CandidateAvatar, useCandidateCssVars } from '@/components/core/candidate';
 import { LivePill } from '@/components/core/live';
 import { useNow } from '@/components/ui';
@@ -8,7 +9,7 @@ import { fmtBrt } from '@apuracao/shared';
 import { fmtCompact, fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
-import { countdown, Int, momentParts, Pct, SplitBar } from './bits';
+import { countdown, momentParts, Pct, SplitBar } from './bits';
 
 const STATUS: Record<Snap['status'], string> = {
   nao_iniciada: 'Apuração não iniciada',
@@ -77,54 +78,80 @@ function Countdown({ board, now }: { board: Board; now: number }) {
 function Live({ board, br }: { board: Board; br: Snap }) {
   const [ca, cb] = board.candidates;
   const behind = br.lead === 'a' ? cb : br.lead === 'b' ? ca : null;
+  const rows = [
+    { c: ca, pct: br.pa, votes: br.a, lead: br.lead === 'a' },
+    { c: cb, pct: br.pb, votes: br.b, lead: br.lead === 'b' },
+  ].sort((x, y) => y.pct - x.pct);
+  // o gráfico usa px fixos (rótulos de 10–19px): na TV ele é ampliado como um todo
+  // a coluna do gráfico tem ~38% da largura: o zoom mantém ~340px internos, a largura para a qual ele foi desenhado
+  const zoom = Math.max(1, Math.min(2.4, window.innerWidth / 900));
   return (
     <>
-      <div className="flex items-end justify-between gap-[2vw]">
-        <span className="text-[1.8vw] font-medium">{STATUS[br.status]}</span>
-        <span className="text-[1.8vw] text-muted-foreground">
-          <Pct v={br.pst} digits={2} className="font-semibold text-foreground" /> das urnas apuradas
+      <div className="flex items-center gap-[1.6vw]">
+        <span className="text-[1.6vw] font-medium">{STATUS[br.status]}</span>
+        <div className="h-[0.9vh] flex-1 overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-foreground transition-[width] duration-700 ease-out" style={{ width: `${br.pst}%` }} />
+        </div>
+        <span className="text-[1.6vw] text-muted-foreground">
+          <Pct v={br.pst} digits={2} className="font-semibold text-foreground" /> das urnas
         </span>
       </div>
-      <div className="h-[0.8vh] overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full bg-foreground transition-[width] duration-700 ease-out" style={{ width: `${br.pst}%` }} />
-      </div>
 
-      <div className="grid flex-1 grid-cols-2 items-center gap-[4vw]">
-        <Side c={ca} pct={br.pa} votes={br.a} lead={br.lead === 'a'} />
-        <Side c={cb} pct={br.pb} votes={br.b} lead={br.lead === 'b'} right />
-      </div>
-
-      <SplitBar pa={br.pa} ca={ca} cb={cb} className="h-[2.6vh]" />
-      <div className="flex items-center justify-between text-[1.7vw]">
-        <span className="text-muted-foreground">
-          Diferença: <Int v={Math.abs(br.a - br.b)} className="font-semibold text-foreground" /> votos
-        </span>
-        {br.status === 'apurando' && behind && br.need !== null && (
-          <span>
-            {behind.short} precisa de{' '}
-            <strong className="num font-semibold">{br.need > 100 ? 'mais de 100' : fmtPct(br.need, 1)}%</strong> do que falta
-          </span>
-        )}
-        {br.status === 'definido' && <span className="font-medium">Os votos que faltam não permitem virada</span>}
+      <div className="grid flex-1 grid-cols-[7fr_5fr] items-center gap-[3vw]">
+        <div className="flex flex-col gap-[3.2vh]">
+          {rows.map((r) => (
+            <Side key={r.c.key} {...r} />
+          ))}
+          <SplitBar pa={br.pa} ca={ca} cb={cb} className="h-[2.2vh]" />
+        </div>
+        <div className="flex min-w-0 flex-col gap-[2vh]">
+          <div className="rounded-[1vw] border bg-card p-[1.2vw]">
+            <div style={{ zoom }}>
+              <NightChart board={board} modes={['hoje']} height={Math.round((window.innerHeight * 0.36) / zoom)} />
+            </div>
+          </div>
+          <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-[1vw] border bg-border">
+            <TvStat label="Diferença" value={fmtCompact(Math.abs(br.a - br.b))} />
+            <TvStat
+              label={behind ? `${behind.short.split(' ')[0]} precisa` : 'Precisa'}
+              value={br.status !== 'apurando' || br.need === null ? '—' : br.need > 100 ? '>100%' : `${fmtPct(br.need, 1)}%`}
+            />
+            <TvStat label="A apurar" value={br.rem > 0 ? `~${fmtCompact(br.rem)}` : '—'} />
+          </dl>
+          {br.status === 'definido' && <p className="text-[1.5vw] font-medium">Os votos que faltam não permitem virada</p>}
+        </div>
       </div>
       <Ticker board={board} />
     </>
   );
 }
 
-function Side({ c, pct, votes, lead, right = false }: { c: CandidateDef; pct: number; votes: number; lead: boolean; right?: boolean }) {
+function TvStat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className={cn('flex items-center gap-[2vw]', right && 'flex-row-reverse text-right')}>
-      <CandidateAvatar c={c} size="xl" ring={lead} className="size-[12vw] rounded-[2.4vw]" />
-      <div className="min-w-0">
-        <div className="flex items-center gap-[0.8vw] text-[2.6vw] font-semibold" style={{ flexDirection: right ? 'row-reverse' : 'row' }}>
-          <span className="size-[1vw] rounded-full" style={{ background: c.color }} />
-          {c.short}
-          {c.party && <span className="text-[1.6vw] font-normal text-muted-foreground">{c.party}</span>}
+    <div className="bg-card px-[1vw] py-[1.4vh]">
+      <dt className="truncate text-[1.1vw] text-muted-foreground">{label}</dt>
+      <dd className="display mt-[0.4vh] truncate text-[2vw] leading-none font-semibold">{value}</dd>
+    </div>
+  );
+}
+
+function Side({ c, pct, votes, lead }: { c: CandidateDef; pct: number; votes: number; lead: boolean }) {
+  return (
+    <div className="flex items-center gap-[1.8vw]">
+      <CandidateAvatar c={c} size="xl" ring={lead} className="size-[9vw] rounded-[1.8vw]" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[2.3vw] leading-tight font-semibold">{c.short}</div>
+        <div className="num mt-[0.3vh] flex items-baseline gap-[0.8vw] text-[1.4vw] text-muted-foreground">
+          {lead && (
+            <span className="font-semibold" style={{ color: c.color }}>
+              À frente
+            </span>
+          )}
+          {c.party && <span>{c.party}</span>}
+          <span>{fmtCompact(votes)} votos</span>
         </div>
-        <Pct v={pct} digits={2} className={cn('display block text-[8vw] leading-[0.95] font-semibold', !lead && 'text-muted-foreground')} />
-        <div className="num text-[1.7vw] text-muted-foreground">{fmtCompact(votes)} votos</div>
       </div>
+      <Pct v={pct} digits={2} className={cn('display block text-[7vw] leading-[0.9] font-semibold', !lead && 'text-muted-foreground')} />
     </div>
   );
 }

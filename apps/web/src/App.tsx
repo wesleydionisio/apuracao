@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from 'react';
-import { Route, Switch, useLocation } from 'wouter';
+import { Redirect, Route, Switch, useLocation } from 'wouter';
 import { useCandidateCssVars } from '@/components/core/candidate';
 import { LegalFooter } from '@/components/shell/bits';
 import { Header } from '@/components/shell/Header';
@@ -7,11 +7,11 @@ import { TabBar } from '@/components/shell/TabBar';
 import { Skeleton, Toaster } from './components/ui';
 import { api, fetchBoard } from './lib/api';
 import { live } from './lib/live';
-import Home from './pages/Painel';
+import Home from './pages/Home';
 import { useBoard } from './store/board';
 
+const Painel = lazy(() => import('./pages/Painel'));
 const MapPage = lazy(() => import('./pages/MapPage'));
-const ChatPage = lazy(() => import('./pages/ChatPage'));
 const SalaPage = lazy(() => import('./pages/ChatPage').then((m) => ({ default: m.SalaPage })));
 const CityPage = lazy(() => import('./pages/CityPage'));
 const GuessPage = lazy(() => import('./pages/GuessPage'));
@@ -102,9 +102,10 @@ function Frame() {
   const headerRef = useRef<HTMLDivElement>(null);
   const [path] = useLocation();
   useViewportVars(headerRef);
+  const liveScreen = path === '/' || path.startsWith('/sala');
   useEffect(() => {
-    if (!path.startsWith('/chat') && !path.startsWith('/sala')) window.scrollTo(0, 0);
-  }, [path]);
+    if (!liveScreen) window.scrollTo(0, 0);
+  }, [path, liveScreen]);
   return (
     <>
       <div ref={headerRef} className="fixed inset-x-0 top-0 z-30">
@@ -114,9 +115,12 @@ function Frame() {
         <Suspense fallback={<PageFallback />}>
           <Switch>
             <Route path="/" component={Home} />
+            <Route path="/painel" component={Painel} />
             <Route path="/mapa" component={MapPage} />
             <Route path="/mapa/:uf" component={MapPage} />
-            <Route path="/chat" component={ChatPage} />
+            <Route path="/chat">
+              <Redirect to="/" replace />
+            </Route>
             <Route path="/sala/:slug" component={SalaPage} />
             <Route path="/cidade" component={CityPage} />
             <Route path="/cidade/:uf/:slug" component={CityPage} />
@@ -133,8 +137,8 @@ function Frame() {
             </Route>
           </Switch>
         </Suspense>
-        {/* aviso legal em toda tela, menos o chat em tela cheia (que tem os termos no próprio composer) */}
-        {!path.startsWith('/chat') && !path.startsWith('/sala') && <LegalFooter />}
+        {/* aviso legal em toda tela; a tela Ao vivo (placar + chat) mostra o seu dentro do layout */}
+        {!liveScreen && <LegalFooter />}
       </main>
       <TabBar />
       <Suspense fallback={null}>

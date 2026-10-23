@@ -3,7 +3,7 @@ import type { CandidateDef } from '@apuracao/shared';
 import { Slider } from 'radix-ui';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { cn } from '@/lib/utils';
-import { Pct } from '@/features/standalone/bits';
+import { Pct } from './bits';
 
 export const MIN = 30;
 export const MAX = 70;

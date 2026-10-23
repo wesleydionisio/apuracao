@@ -1,12 +1,12 @@
 // Abas no rodapé: alvos de 60px de altura, ícone + rótulo, indicador do ativo.
-import { ChartNoAxesColumn, Map, MapPin, MessagesSquare, Target, type LucideIcon } from 'lucide-react';
+import { ChartNoAxesColumn, Map, MapPin, Radio, Target, type LucideIcon } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { cn } from '@/lib/utils';
 
 const TABS: { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean }[] = [
-  { href: '/', label: 'Placar', icon: ChartNoAxesColumn, match: (p) => p === '/' },
+  { href: '/', label: 'Ao vivo', icon: Radio, match: (p) => p === '/' || p.startsWith('/sala') || p.startsWith('/chat') },
+  { href: '/painel', label: 'Painel', icon: ChartNoAxesColumn, match: (p) => p.startsWith('/painel') },
   { href: '/mapa', label: 'Mapa', icon: Map, match: (p) => p.startsWith('/mapa') },
-  { href: '/chat', label: 'Chat', icon: MessagesSquare, match: (p) => p.startsWith('/chat') || p.startsWith('/sala') },
   { href: '/cidade', label: 'Cidade', icon: MapPin, match: (p) => p.startsWith('/cidade') },
   { href: '/palpite', label: 'Palpite', icon: Target, match: (p) => p.startsWith('/palpite') || p.startsWith('/p/') },
 ];

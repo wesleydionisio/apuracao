@@ -1,6 +1,7 @@
 // Gráfico protagonista da noite (estilo Polymarket): % dos válidos de cada candidato × % de urnas apuradas.
 // SVG próprio (sem lib de gráficos): rótulos no fim das linhas, ponto ao vivo, scrub por toque, camada de 2022.
 import type { Board, CandidateDef } from '@apuracao/shared';
+import { twoWay } from '@apuracao/shared';
 import NumberFlow from '@number-flow/react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
@@ -51,12 +52,51 @@ export function useCurve2022() {
   return c22;
 }
 
-export default function NightChart({ board, className }: { board: Board; className?: string }) {
+/** % de A no confronto A×B do 1º turno 2026 (Brasil) */
+export function useT1TwoWay(board: Board): number | null {
+  const [v, set] = useState<number | null>(null);
+  const nums = board.candidates.map((c) => c.n).join('-');
+  useEffect(() => {
+    let alive = true;
+    staticData
+      .hist('t1-2026')
+      .then((h) => alive && set(h?.br ? twoWay(h.br, board.candidates) : null))
+      .catch(() => alive && set(null));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nums]);
+  return v;
+}
+
+export type ChartMode = 'hoje' | '2022' | 't1';
+const MODE_LABEL: Record<ChartMode, string> = { hoje: 'Hoje', '2022': '× 2022', t1: '× 1º turno' };
+
+export default function NightChart({
+  board,
+  className,
+  height: forcedHeight,
+  modes = ['hoje', '2022', 't1'],
+  defaultMode = 'hoje',
+  overlays,
+}: {
+  board: Board;
+  className?: string;
+  /** altura fixa (padrão: 236 no celular, 300 a partir de 640px) */
+  height?: number;
+  /** quais comparações oferecer no seletor (um só = sem seletor) */
+  modes?: ChartMode[];
+  defaultMode?: ChartMode;
+  /** camadas controladas de fora (ex.: chips "Comparar com"); com isso o seletor interno some */
+  overlays?: { y22?: boolean; t1?: boolean };
+}) {
   const [ca, cb] = board.candidates;
-  const [mode, setMode] = useState<'hoje' | '2022'>('hoje');
+  const [mode, setMode] = useState<ChartMode>(defaultMode);
   const c22 = useCurve2022();
+  const t1 = useT1TwoWay(board);
   const [wrap, width] = useWidth<HTMLDivElement>();
-  const height = width >= 640 ? 300 : 236;
+  const height = forcedHeight ?? (width >= 640 ? 300 : 236);
   const [probe, setProbe] = useState<number | null>(null);
 
   const now: Pt[] = useMemo(() => {
@@ -73,7 +113,8 @@ export default function NightChart({ board, className }: { board: Board; classNa
       .filter((p) => p.pct[na] !== undefined)
       .map((p) => ({ x: p.pst, a: p.pct[na], b: p.pct[nb] ?? 100 - p.pct[na], src: (p as { src?: string }).src }));
   }, [c22, board.y2022Map]);
-  const show22 = mode === '2022' && past.length > 1;
+  const show22 = (overlays ? !!overlays.y22 : mode === '2022') && past.length > 1;
+  const showT1 = (overlays ? !!overlays.t1 : mode === 't1') && t1 !== null;
   // último cruzamento das linhas em 2022 (a virada da noite)
   const flip22 = useMemo(() => {
     let at: number | null = null;
@@ -87,7 +128,10 @@ export default function NightChart({ board, className }: { board: Board; classNa
 
   const pst = board.br?.pst ?? 0;
   const last = now[now.length - 1];
-  const dom = useMemo(() => yDomain([...now.map((p) => p.a), ...(show22 ? past.map((p) => p.a) : [])]), [now, past, show22]);
+  const dom = useMemo(
+    () => yDomain([...now.map((p) => p.a), ...(show22 ? past.map((p) => p.a) : []), ...(showT1 ? [t1!] : [])]),
+    [now, past, show22, showT1, t1],
+  );
 
   // "Hoje": o eixo x acompanha a apuração (a linha ocupa a largura); "× 2022": 0–100% para ver a noite inteira
   // a ponta da linha fica em ~45–50% da largura, deixando uma pista à direita para os rótulos
@@ -151,7 +195,7 @@ export default function NightChart({ board, className }: { board: Board; classNa
             {pst < 99.5 && (
               <g>
                 <rect x={sx(pst)} y={PAD.t} width={Math.max(0, sx(xMax) - sx(pst))} height={ih} fill="url(#falta)" opacity={0.6} />
-                {sx(xMax) - sx(pst) > 70 && (
+                {sx(xMax) - sx(pst) > 70 && !labels?.right && (
                   <text x={(sx(pst) + sx(xMax)) / 2} y={PAD.t + ih - 8} textAnchor="middle" className="fill-muted-foreground text-[10px]">
                     a apurar
                   </text>
@@ -175,6 +219,28 @@ export default function NightChart({ board, className }: { board: Board; classNa
                 </text>
               </g>
             ))}
+            {/* grade vertical leve + linha de base */}
+            {xTicks.slice(1, -1).map((v) => (
+              <line key={`gx-${v}`} x1={sx(v)} x2={sx(v)} y1={PAD.t} y2={PAD.t + ih} stroke="var(--border)" strokeDasharray="1 5" />
+            ))}
+            <line x1={PAD.l} x2={PAD.l + iw} y1={PAD.t + ih} y2={PAD.t + ih} stroke="var(--border)" />
+            {/* referência do 1º turno: confronto A×B como linha horizontal */}
+            {showT1 &&
+              (['a', 'b'] as const).map((k) => {
+                const c = k === 'a' ? ca : cb;
+                const v = k === 'a' ? t1! : 100 - t1!;
+                const y = sy(v);
+                const above = v > 50;
+                return (
+                  <g key={`t1-${k}`}>
+                    <line x1={PAD.l} x2={PAD.l + iw} y1={y} y2={y} stroke={c.color} strokeOpacity={0.7} strokeWidth={1.25} strokeDasharray="5 4" />
+                    {/* à direita, junto da grade: o começo da curva costuma ser a parte mais agitada */}
+                    <text x={PAD.l + iw - 4} y={above ? y - 5 : y + 12} textAnchor="end" className="num text-[10px] font-medium" fill={c.color}>
+                      1º turno {fmtPct(v, 1)}%
+                    </text>
+                  </g>
+                );
+              })}
             {/* eixo x: % de urnas apuradas */}
             {xTicks.map((v, i) => (
               <text
@@ -313,40 +379,58 @@ export default function NightChart({ board, className }: { board: Board; classNa
         )}
       </div>
 
-      <figcaption className="mt-2 flex items-center justify-between gap-3">
-        <span className="text-[11px] leading-tight text-muted-foreground">
-          {show22 ? (
+      <figcaption className="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <span className="min-w-0 text-[11px] leading-tight text-muted-foreground">
+          {show22 && showT1 ? (
             <>
               <span className="mr-1 inline-block w-3 border-t border-dashed border-muted-foreground align-middle" />
-              2022 · reconstrução aproximada
+              Curva tracejada: 2022 (reconstrução). Linhas retas: 1º turno de 2026
+            </>
+          ) : show22 ? (
+            <>
+              <span className="mr-1 inline-block w-3 border-t border-dashed border-muted-foreground align-middle" />
+              2022, reconstrução aproximada
+            </>
+          ) : showT1 ? (
+            <>
+              <span className="mr-1 inline-block w-3 border-t border-dashed border-muted-foreground align-middle" />
+              1º turno de 2026, só os dois finalistas
             </>
           ) : (
-            '% dos votos válidos × % das urnas apuradas'
+            '% dos votos válidos conforme as urnas são apuradas'
           )}
         </span>
-        <ToggleGroup
-          type="single"
-          value={mode}
-          onValueChange={(v) => v && setMode(v as 'hoje' | '2022')}
-          className="shrink-0 gap-0.5 rounded-full bg-muted p-0.5"
-          aria-label="Comparação"
-        >
-          <ToggleGroupItem value="hoje" className="h-8 rounded-full px-3 text-[12px] font-semibold text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm">
-            Hoje
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="2022"
-            disabled={past.length < 2}
-            className="h-8 rounded-full px-3 text-[12px] font-semibold text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+        {!overlays && modes.length > 1 && (
+          <ToggleGroup
+            type="single"
+            value={mode}
+            onValueChange={(v) => v && setMode(v as ChartMode)}
+            className="shrink-0 gap-0.5 rounded-full bg-muted p-0.5"
+            aria-label="Comparar a curva de hoje com"
           >
-            × 2022
-          </ToggleGroupItem>
-        </ToggleGroup>
+            {modes.map((m) => (
+              <ToggleGroupItem
+                key={m}
+                value={m}
+                disabled={(m === '2022' && past.length < 2) || (m === 't1' && t1 === null)}
+                className="h-8 rounded-full px-3 text-[12px] font-semibold whitespace-nowrap text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+              >
+                {MODE_LABEL[m]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        )}
       </figcaption>
       {show22 && c22 && (
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
           O TSE não publica a série da noite de 2022: os pontos marcados vêm de registros da imprensa e do TSE, o resto é
           interpolado.{flip22 !== null && <> Em 2022, a virada veio com cerca de {fmtPct(flip22, 0)}% das urnas apuradas.</>}
+        </p>
+      )}
+      {showT1 && last && !show22 && (
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          Hoje {ca.short} está {fmtPct(Math.abs(last.a - t1!), 1)} pts {last.a >= t1! ? 'acima' : 'abaixo'} do próprio 1º turno no confronto
+          direto. Fonte: TSE.
         </p>
       )}
     </figure>

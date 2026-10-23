@@ -126,6 +126,8 @@ export function WhenVisible({ children, h = 200 }: { children: ReactNode; h?: nu
     const el = ref.current;
     if (!el || on) return;
     if (!('IntersectionObserver' in window)) return setOn(true);
+    // rede de segurança: há navegadores/abas em que o observer nunca dispara — monta assim mesmo
+    const t = setTimeout(() => setOn(true), 2500);
     const io = new IntersectionObserver(
       (es) => {
         if (es.some((e) => e.isIntersecting)) {
@@ -136,7 +138,10 @@ export function WhenVisible({ children, h = 200 }: { children: ReactNode; h?: nu
       { rootMargin: '300px' },
     );
     io.observe(el);
-    return () => io.disconnect();
+    return () => {
+      clearTimeout(t);
+      io.disconnect();
+    };
   }, [on]);
   return <div ref={ref}>{on ? children : <Skeleton h={h} />}</div>;
 }

@@ -2,6 +2,7 @@
 import type { CandidateDef } from '@apuracao/shared';
 import { fmtPct, ufName } from '@apuracao/shared';
 import { useMemo, useRef, useState } from 'react';
+import { CandidateAvatar } from '@/components/core/candidate';
 import { cn } from '@/lib/utils';
 import { fillFor, inkFor, leaderOf, pair } from './colors';
 import { LABEL_NUDGE, projectStates, statesPath, useGeo } from './geo';
@@ -20,6 +21,8 @@ export function BrazilMap({
   labels = true,
   className,
   label = 'Mapa do Brasil por estado',
+  tipValues,
+  tipRefs,
 }: {
   values: Record<string, UfValue | undefined>;
   cands: CandidateDef[];
@@ -28,6 +31,10 @@ export function BrazilMap({
   labels?: boolean;
   className?: string;
   label?: string;
+  /** valores reais para a ficha (quando `values` é o mapa de deslocamento) */
+  tipValues?: Record<string, UfValue | undefined>;
+  /** referências mostradas na ficha: rótulo → % de A por UF */
+  tipRefs?: { label: string; values: Record<string, number | null> }[];
 }) {
   const { fc, loading } = useGeo(statesPath);
   const wrap = useRef<HTMLDivElement>(null);
@@ -44,7 +51,8 @@ export function BrazilMap({
 
   // o selecionado vai por último para o contorno não ficar por baixo dos vizinhos
   const ordered = selected ? [...states.filter((s) => s.uf !== selected), ...states.filter((s) => s.uf === selected)] : states;
-  const tipVal = tip ? values[tip.uf] : undefined;
+  const tipVal = tip ? (tipValues ?? values)[tip.uf] : undefined;
+  const tipLead = tipVal?.pa != null ? leaderOf(tipVal.pa, cands) : null;
 
   return (
     <div ref={wrap} className={cn('relative w-full', className)}>
@@ -126,20 +134,40 @@ export function BrazilMap({
       </svg>
       {tip && (
         <div
-          className="pointer-events-none absolute z-10 min-w-36 -translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-lg border bg-popover px-3 py-2 text-xs shadow-md"
-          style={{ left: tip.x, top: tip.y }}
+          className="pointer-events-none absolute z-10 w-52 -translate-x-1/2 -translate-y-[calc(100%+12px)] rounded-xl border bg-popover p-3 text-xs shadow-lg"
+          style={{ left: `clamp(104px, ${tip.x}px, calc(100% - 104px))`, top: tip.y }}
           role="tooltip"
         >
-          <div className="font-semibold text-foreground">{ufName(tip.uf)}</div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[13px] font-semibold text-foreground">{ufName(tip.uf)}</span>
+            {tipLead && <CandidateAvatar c={tipLead} size="xs" />}
+          </div>
           {tipVal?.pa != null ? (
-            <div className="num mt-1 flex items-center justify-between gap-3">
-              <span style={{ color: cands[0].color }}>{pair(tipVal.pa)[0]}%</span>
-              <span style={{ color: cands[1].color }}>{pair(tipVal.pa)[1]}%</span>
-            </div>
+            <>
+              <div className="num mt-1.5 flex items-center justify-between gap-3 text-[13px] font-semibold">
+                <span style={{ color: cands[0].color }}>{pair(tipVal.pa)[0]}%</span>
+                <span style={{ color: cands[1].color }}>{pair(tipVal.pa)[1]}%</span>
+              </div>
+              <div className="mt-1.5 flex h-1 overflow-hidden rounded-full bg-muted">
+                <span style={{ width: `${tipVal.pa}%`, background: cands[0].color }} />
+                <span className="flex-1" style={{ background: cands[1].color }} />
+              </div>
+            </>
           ) : (
-            <div className="mt-0.5 text-muted-foreground">Sem dados ainda</div>
+            <div className="mt-1 text-muted-foreground">Sem dados ainda</div>
           )}
-          {tipVal?.pst != null && <div className="num mt-0.5 text-muted-foreground">{fmtPct(tipVal.pst, 1)}% apurado</div>}
+          {tipVal?.pst != null && <div className="num mt-1.5 text-muted-foreground">{fmtPct(tipVal.pst, 1)}% apurado</div>}
+          {tipRefs?.map((r) => {
+            const v = r.values[tip.uf];
+            return v == null ? null : (
+              <div key={r.label} className="num mt-1 flex justify-between gap-2 text-muted-foreground">
+                <span>{r.label}</span>
+                <span>
+                  {pair(v)[0]} × {pair(v)[1]}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

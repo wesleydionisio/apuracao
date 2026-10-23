@@ -230,21 +230,28 @@ const BOT_LINES = [
 function startMockChat() {
   const bots = Array.from({ length: 8 }, () => {
     const id = Math.random().toString(36).slice(2);
-    return { id, nick: randomNick(), hue: hueOf(id) };
+    const r = Math.random();
+    return { id, nick: randomNick(), hue: hueOf(id), side: r < 0.4 ? ('a' as const) : r < 0.8 ? ('b' as const) : undefined };
   });
   const tick = () => {
     const b = bots[Math.floor(Math.random() * bots.length)];
     const rooms = Object.keys(useChat.getState().msgs);
     const r = rooms.length ? rooms[Math.floor(Math.random() * rooms.length)] : 'br';
+    const cands = useBoard.getState().board?.candidates;
+    const mine = b.side && cands?.find((c) => c.key === b.side);
+    let body = BOT_LINES[Math.floor(Math.random() * BOT_LINES.length)];
+    if (mine && Math.random() < 0.35) body = Math.random() < 0.5 ? `:${mine.n}: :${mine.n}: :${mine.n}:` : `${body} :${mine.n}:`;
     useChat.getState().push(r, {
       id: Math.random().toString(36).slice(2),
       nick: b.nick,
       hue: b.hue,
-      body: BOT_LINES[Math.floor(Math.random() * BOT_LINES.length)],
+      body,
       at: Date.now(),
+      ...(b.side ? { side: b.side } : {}),
     });
     const cur = useChat.getState().reacts[r] ?? {};
-    useChat.getState().react(r, { ...cur, '🔥': (cur['🔥'] ?? 0) + Math.ceil(Math.random() * 30) });
+    const e = Math.random() < 0.6 ? (Math.random() < 0.5 ? 'cheer:a' : 'cheer:b') : '🔥';
+    useChat.getState().react(r, { ...cur, [e]: (cur[e as Reaction] ?? 0) + Math.ceil(Math.random() * 12) });
     setTimeout(tick, 1500 + Math.random() * 3500);
   };
   setTimeout(tick, 800);

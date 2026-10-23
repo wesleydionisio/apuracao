@@ -1,7 +1,7 @@
 // Formulário de palpite como "ticket": um número principal, ajuste fino, detalhes opcionais.
 import type { Board, Municipality } from '@apuracao/shared';
 import { UFS } from '@apuracao/shared';
-import { ChevronRight, Clock, Lock, MapPin, X } from 'lucide-react';
+import { ChartColumn, ChevronRight, Clock, Lock, MapPin, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { candOf } from '@/components/core/candidate';
@@ -14,8 +14,9 @@ import { api, HttpError } from '@/lib/api';
 import { fmtInt } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
-import { countdown } from '@/features/standalone/bits';
+import { countdown } from './bits';
 import { CityPicker } from './CityPicker';
+import { GuessHistogram, useGuessHist } from './Histogram';
 import { PctSlider } from './PctSlider';
 
 export const MY_GUESS = 'my-guess';
@@ -48,6 +49,7 @@ export function GuessTicket({ board }: { board: Board }) {
   const [munPa, setMunPa] = useState(50);
   const [cityOpen, setCityOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const hist = useGuessHist();
   useEffect(() => {
     if (me && !nick) setNick(me.nick);
   }, [me, nick]);
@@ -127,6 +129,19 @@ export function GuessTicket({ board }: { board: Board }) {
       <div className="px-5 pt-5 pb-4">
         <PctSlider value={pa} onChange={setPa} ca={ca} cb={cb} label={`Percentual final de ${ca.short} no Brasil`} />
       </div>
+
+      {hist && hist.total > 0 && (
+        <div className="border-t px-5 py-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <span className="flex items-center gap-1.5 text-[13px] font-medium">
+              <ChartColumn className="size-4 text-muted-foreground" aria-hidden />
+              Onde estão os palpites
+            </span>
+            <span className="text-[11px] text-muted-foreground">a linha é você</span>
+          </div>
+          <GuessHistogram hist={hist} ca={ca} cb={cb} mine={pa} />
+        </div>
+      )}
 
       <div className="divide-y border-y">
         <div className="px-5 py-4">

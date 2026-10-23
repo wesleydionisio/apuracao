@@ -1,28 +1,43 @@
 // Aba Mapa: mapa real do Brasil (padrão) ou lista de estados; toque abre o painel da UF.
-import type { Board, CandidateDef } from '@apuracao/shared';
+// Camadas: Agora | 1º turno | 2022. Com "Agora", dá para comparar com uma referência e pintar o deslocamento.
+import type { Board } from '@apuracao/shared';
 import { fmtPct } from '@apuracao/shared';
-import { Map as MapIcon, Rows3 } from 'lucide-react';
+import { GitCompareArrows, Map as MapIcon, Rows3 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useLocation, useParams } from 'wouter';
-import { CandidateAvatar } from '@/components/core/candidate';
 import { SourceStamp } from '@/components/core/live';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { BrazilMap } from '@/features/map/BrazilMap';
-import { useAsync, useStateValues, type MapLayer, type UfValue } from '@/features/map/data';
+import { REF_LABEL, swingOf, swingValues, useStateValues, useUfRefs, type MapLayer, type RefLayer } from '@/features/map/data';
 import { MapLegend } from '@/features/map/Legend';
+import { MapRankings } from '@/features/map/Rankings';
 import { StateList } from '@/features/map/StateList';
+import { StateTally } from '@/features/map/Tally';
 import { UfDrawer } from '@/features/map/UfDrawer';
-import { staticData } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 
 type View = 'map' | 'list';
+
+const COMPARE_KEY = 'map:compare';
+
+function savedCompare(): RefLayer | null {
+  try {
+    const v = localStorage.getItem(COMPARE_KEY);
+    return v === 't1' || v === 'y2022' ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function MapPage() {
   const board = useBoard((s) => s.board);
   if (!board) return <MapSkeleton />;
   return <MapView board={board} />;
 }
+
+const segItem = 'rounded-md! px-3 data-[state=on]:bg-card data-[state=on]:shadow-sm';
 
 function MapView({ board }: { board: Board }) {
   const params = useParams<{ uf?: string }>();
@@ -32,10 +47,26 @@ function MapView({ board }: { board: Board }) {
   // sem escolha do usuário a camada acompanha a liberação (17h); escolhida, fica
   const [layer, setLayer] = useState<MapLayer | null>(null);
   const effective: MapLayer = layer === null || (layer === 'live' && !live) ? (live ? 'live' : 't1') : layer;
+  const [compare, setCompareState] = useState<RefLayer | null>(savedCompare);
+  const setCompare = (v: RefLayer | null) => {
+    setCompareState(v);
+    try {
+      if (v) localStorage.setItem(COMPARE_KEY, v);
+      else localStorage.removeItem(COMPARE_KEY);
+    } catch {
+      /* sem storage */
+    }
+  };
   const { values } = useStateValues(board, effective);
-  const { data: t1 } = useAsync(() => staticData.hist('t1-2026'), []);
+  const { refs, t1 } = useUfRefs(board);
   const selected = params.uf?.toUpperCase() ?? null;
   const cands = board.candidates;
+
+  // referência para "quem mais mudou": a escolhida; sem escolha, 2022 (ou o 1º turno quando a camada já é 2022)
+  const rankRef: RefLayer = effective === 'live' ? (compare ?? 'y2022') : effective === 't1' ? 'y2022' : 't1';
+  const swing = useMemo(() => swingOf(values, refs[rankRef]), [values, refs, rankRef]);
+  const swingMode = effective === 'live' && compare !== null;
+  const mapValues = useMemo(() => (swingMode ? swingValues(values, refs[compare!]) : values), [swingMode, values, refs, compare]);
 
   const electorate = useMemo(() => {
     const out: Record<string, number> = {};
@@ -47,21 +78,30 @@ function MapView({ board }: { board: Board }) {
   const pick = (uf: string) => nav(`/mapa/${uf}`, { replace: !!selected });
   const close = () => nav('/mapa', { replace: true });
 
-  const title =
-    effective === 'live' ? 'Quem lidera em cada estado' : effective === 't1' ? 'Como cada estado votou no 1º turno' : 'Como cada estado votou em 2022';
-  const caption =
-    effective === 'live'
+  const title = swingMode
+    ? `Para onde cada estado andou desde ${compare === 't1' ? 'o 1º turno' : '2022'}`
+    : effective === 'live'
+      ? 'Quem lidera em cada estado'
+      : effective === 't1'
+        ? 'Como cada estado votou no 1º turno'
+        : 'Como cada estado votou em 2022';
+  const caption = swingMode
+    ? `Cor de quem ganhou terreno; mais forte quanto maior o deslocamento. Compare a parcial com ${REF_LABEL[compare!]}.`
+    : effective === 'live'
       ? 'Parcial do 2º turno, votos válidos.'
       : effective === 't1'
         ? 'Confronto direto entre os dois finalistas no 1º turno de 2026.'
         : '2º turno de 2022, pelos mesmos partidos.';
+  const tipRefs = (['t1', 'y2022'] as RefLayer[])
+    .filter((r) => !(effective === r))
+    .map((r) => ({ label: r === 't1' ? '1º turno' : '2022', values: refs[r] }));
 
   return (
     <div className="space-y-4 pb-2">
       <header className="flex items-end justify-between gap-3 pt-1">
         <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">Presidente · 2º turno</p>
-          <h1 className="text-[22px] font-semibold leading-tight tracking-tight">{title}</h1>
+          <p className="text-xs text-muted-foreground">Presidente · 2º turno · por estado</p>
+          <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-balance">{title}</h1>
         </div>
         <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como">
           <ToggleGroupItem value="map" aria-label="Mapa">
@@ -73,30 +113,69 @@ function MapView({ board }: { board: Board }) {
         </ToggleGroup>
       </header>
 
-      <div className="flex items-center justify-between gap-2">
-        <ToggleGroup type="single" size="sm" value={effective} onValueChange={(v) => v && setLayer(v as MapLayer)} aria-label="Camada" className="rounded-lg bg-muted p-0.5">
-          {live && (
-            <ToggleGroupItem value="live" className="rounded-md! data-[state=on]:bg-card data-[state=on]:shadow-sm">
-              Agora
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <ToggleGroup type="single" size="sm" value={effective} onValueChange={(v) => v && setLayer(v as MapLayer)} aria-label="Camada" className="rounded-lg bg-muted p-0.5">
+            {live && (
+              <ToggleGroupItem value="live" className={segItem}>
+                Agora
+              </ToggleGroupItem>
+            )}
+            <ToggleGroupItem value="t1" className={segItem}>
+              1º turno
             </ToggleGroupItem>
-          )}
-          <ToggleGroupItem value="t1" className="rounded-md! data-[state=on]:bg-card data-[state=on]:shadow-sm">
-            1º turno
-          </ToggleGroupItem>
-          <ToggleGroupItem value="y2022" className="rounded-md! data-[state=on]:bg-card data-[state=on]:shadow-sm">
-            2022
-          </ToggleGroupItem>
-        </ToggleGroup>
-        {effective === 'live' && board.br && <span className="num text-xs text-muted-foreground">{fmtPct(board.br.pst, 1)}% apurado</span>}
+            <ToggleGroupItem value="y2022" className={segItem}>
+              2022
+            </ToggleGroupItem>
+          </ToggleGroup>
+          {effective === 'live' && board.br && <span className="num text-xs text-muted-foreground">{fmtPct(board.br.pst, 1)}% apurado</span>}
+        </div>
+        {effective === 'live' && (
+          <div className="flex items-center gap-2" role="group" aria-label="Comparar com">
+            <GitCompareArrows className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="text-xs text-muted-foreground">Comparar com</span>
+            {(['t1', 'y2022'] as RefLayer[]).map((r) => {
+              const on = compare === r;
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setCompare(on ? null : r)}
+                  className={cn(
+                    'press inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors',
+                    on ? 'border-foreground bg-foreground text-background' : 'bg-card text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {REF_LABEL[r]}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      <Tally values={values} cands={cands} />
+      <StateTally
+        values={values}
+        electorate={electorate}
+        cands={cands}
+        caption={effective === 'live' ? 'Estados liderados agora · o que decide é o voto total' : effective === 't1' ? 'Estados vencidos no 1º turno' : 'Estados vencidos em 2022'}
+      />
 
       {view === 'map' ? (
         <section className="rounded-2xl border bg-card p-3 sm:p-5">
-          <BrazilMap values={values} cands={cands} selected={selected} onPick={pick} className="mx-auto max-w-[520px]" />
-          <MapLegend cands={cands} className="mt-3" />
-          <p className="mt-3 text-center text-xs text-muted-foreground">{caption} Toque num estado para ver as cidades.</p>
+          <BrazilMap
+            values={mapValues}
+            tipValues={swingMode ? values : undefined}
+            tipRefs={tipRefs}
+            cands={cands}
+            selected={selected}
+            onPick={pick}
+            className="mx-auto max-w-[520px]"
+            label={swingMode ? 'Mapa do deslocamento por estado' : undefined}
+          />
+          <MapLegend cands={cands} className="mt-3" caption={swingMode ? `Deslocamento desde ${REF_LABEL[compare!]}, em pontos` : undefined} />
+          <p className="mt-3 text-center text-xs text-pretty text-muted-foreground">{caption} Toque num estado para ver as cidades.</p>
           {values.ZZ?.pa != null && (
             <button type="button" onClick={() => pick('ZZ')} className="press mx-auto mt-3 flex min-h-10 items-center gap-2 rounded-full border px-3 text-xs">
               Exterior
@@ -107,45 +186,21 @@ function MapView({ board }: { board: Board }) {
           )}
         </section>
       ) : (
-        <StateList values={values} electorate={electorate} cands={cands} onPick={pick} showPst={effective === 'live'} />
+        <StateList
+          values={values}
+          electorate={electorate}
+          cands={cands}
+          onPick={pick}
+          showPst={effective === 'live'}
+          swing={effective === 'live' && compare ? swingOf(values, refs[compare]) : undefined}
+          swingLabel={compare ? REF_LABEL[compare] : undefined}
+        />
       )}
+
+      <MapRankings values={values} swing={swing} refLabel={REF_LABEL[rankRef]} cands={cands} onPick={pick} />
 
       <SourceStamp at={board.source.at} />
       <UfDrawer board={board} uf={selected} onClose={close} />
-    </div>
-  );
-}
-
-/** "lidera em N estados" — contagem por candidato com foto */
-function Tally({ values, cands }: { values: Record<string, UfValue | undefined>; cands: CandidateDef[] }) {
-  let a = 0;
-  let b = 0;
-  for (const [uf, v] of Object.entries(values)) {
-    if (uf === 'ZZ' || v?.pa == null) continue;
-    if (v.pa > 50) a++;
-    else if (v.pa < 50) b++;
-  }
-  const rest = 27 - a - b;
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      {[
-        { c: cands[0], n: a },
-        { c: cands[1], n: b },
-      ].map(({ c, n }) => (
-        <div key={c.key} className="flex items-center gap-3 rounded-xl border bg-card p-3">
-          <CandidateAvatar c={c} size="md" />
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-1">
-              <span className="display text-2xl font-semibold leading-none" style={{ color: c.color }}>
-                {n}
-              </span>
-              <span className="text-xs text-muted-foreground">{n === 1 ? 'estado' : 'estados'}</span>
-            </div>
-            <div className="mt-1 text-xs leading-tight text-muted-foreground">{c.short}</div>
-          </div>
-        </div>
-      ))}
-      {rest > 0 && rest < 27 && <p className="col-span-2 -mt-1 text-[11px] text-muted-foreground">{rest} sem parcial ainda.</p>}
     </div>
   );
 }
@@ -154,10 +209,7 @@ function MapSkeleton() {
   return (
     <div className="space-y-4 pt-1">
       <Skeleton className="h-12 w-3/4" />
-      <div className="grid grid-cols-2 gap-2">
-        <Skeleton className="h-16" />
-        <Skeleton className="h-16" />
-      </div>
+      <Skeleton className="h-24 w-full rounded-2xl" />
       <Skeleton className="aspect-square w-full rounded-2xl" />
     </div>
   );

@@ -9,8 +9,9 @@ import { fmtCompact } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { fillFor, leaderOf, marginPts } from './colors';
 import type { UfValue } from './data';
+import { Swing } from './parts';
 
-type Sort = 'el' | 'margin' | 'pst';
+type Sort = 'el' | 'margin' | 'pst' | 'swing';
 
 export function StateList({
   values,
@@ -18,6 +19,8 @@ export function StateList({
   cands,
   onPick,
   showPst,
+  swing,
+  swingLabel,
 }: {
   values: Record<string, UfValue | undefined>;
   /** eleitorado por UF (do placar ou do histórico) */
@@ -25,6 +28,9 @@ export function StateList({
   cands: CandidateDef[];
   onPick: (uf: string) => void;
   showPst: boolean;
+  /** deslocamento de A vs uma referência (coluna extra) */
+  swing?: Record<string, number | null>;
+  swingLabel?: string;
 }) {
   const [sort, setSort] = useState<Sort>('el');
   const rows = useMemo(() => {
@@ -33,6 +39,7 @@ export function StateList({
       const v = values[uf];
       if (sort === 'margin') return v?.pa == null ? -1 : marginPts(v.pa);
       if (sort === 'pst') return v?.pst ?? -1;
+      if (sort === 'swing') return swing?.[uf] == null ? -1 : Math.abs(swing[uf]!);
       return electorate[uf] ?? 0;
     };
     return ufs.sort((x, y) => key(y) - key(x));
@@ -46,6 +53,7 @@ export function StateList({
           <ToggleGroupItem value="el">Eleitores</ToggleGroupItem>
           <ToggleGroupItem value="margin">Diferença</ToggleGroupItem>
           {showPst && <ToggleGroupItem value="pst">Apuração</ToggleGroupItem>}
+          {swing && <ToggleGroupItem value="swing">Mudança</ToggleGroupItem>}
         </ToggleGroup>
       </div>
       <ul className="divide-y rounded-xl border bg-card">
@@ -89,13 +97,17 @@ export function StateList({
                 ) : (
                   <span className="text-xs text-muted-foreground">sem dados</span>
                 )}
+                {swing && <Swing v={swing[uf] ?? null} cands={cands} className="w-14 justify-end text-xs" />}
                 <ChevronRight className={cn('size-4 shrink-0 text-muted-foreground')} aria-hidden />
               </button>
             </li>
           );
         })}
       </ul>
-      <p className="mt-2 text-[11px] text-muted-foreground">"+8,2" = vantagem de quem lidera, em pontos percentuais dos votos válidos.</p>
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        "+8,2" = vantagem de quem lidera, em pontos percentuais dos votos válidos.
+        {swing && swingLabel && ` Última coluna: quanto o estado andou na direção de cada um desde ${swingLabel}.`}
+      </p>
     </div>
   );
 }

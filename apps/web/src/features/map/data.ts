@@ -68,6 +68,43 @@ export function useStateValues(board: Board | null, layer?: MapLayer) {
   return { values, layer: want, live };
 }
 
+export type RefLayer = 't1' | 'y2022';
+
+export const REF_LABEL: Record<RefLayer, string> = { t1: '1º turno', y2022: '2022' };
+
+/** % de A por UF no 1º turno 2026 (confronto direto) e no 2º turno de 2022 — para comparar com qualquer camada */
+export function useUfRefs(board: Board | null) {
+  const { data: t1 } = useAsync(() => staticData.hist('t1-2026'), []);
+  const { data: y22 } = useAsync(() => staticData.hist('y2022-t2'), []);
+  return useMemo(() => {
+    const out: Record<RefLayer, Record<string, number | null>> = { t1: {}, y2022: {} };
+    if (!board) return { refs: out, t1, y22 };
+    for (const [uf, h] of Object.entries(t1?.uf ?? {})) out.t1[uf] = twoWay(h, board.candidates);
+    for (const [uf, h] of Object.entries(y22?.uf ?? {})) out.y2022[uf] = pa2022(board, h);
+    return { refs: out, t1, y22 };
+  }, [board, t1, y22]);
+}
+
+/** deslocamento de A em pontos (agora − referência) por UF */
+export function swingOf(values: Record<string, UfValue | undefined>, ref: Record<string, number | null>) {
+  const out: Record<string, number | null> = {};
+  for (const [uf, v] of Object.entries(values)) {
+    const r = ref[uf];
+    out[uf] = v?.pa != null && r != null ? v.pa - r : null;
+  }
+  return out;
+}
+
+/**
+ * Valores "falsos" para pintar o mapa pelo deslocamento: pa' = 50 + Δ/2 faz a margem do mapa (|2pa'−100|)
+ * ser exatamente |Δ| e a cor ser de quem ganhou terreno. Assim a mesma escala/legenda serve aos dois modos.
+ */
+export function swingValues(values: Record<string, UfValue | undefined>, ref: Record<string, number | null>): Record<string, UfValue> {
+  const out: Record<string, UfValue> = {};
+  for (const [uf, d] of Object.entries(swingOf(values, ref))) out[uf] = { pa: d === null ? null : 50 + d / 2, pst: values[uf]?.pst ?? null, snap: values[uf]?.snap };
+  return out;
+}
+
 export interface MunRow {
   m: Municipality;
   s: Snap | null;

@@ -1,7 +1,7 @@
 // /p/:id — o palpite como card compartilhável + ticker ao vivo (distância e ranking).
 import type { Board, CandidateDef } from '@apuracao/shared';
 import { ufName } from '@apuracao/shared';
-import { Download, Link2, Share2, Trophy } from 'lucide-react';
+import { ChartColumn, Download, Link2, Medal, Share2, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'wouter';
 import { CandidateAvatar, candOf } from '@/components/core/candidate';
@@ -14,7 +14,8 @@ import { fmtInt, fmtPct } from '@/lib/format';
 import { downloadImage, prefetchImage, share } from '@/lib/share';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
-import { Pct, SplitBar } from '@/features/standalone/bits';
+import { Pct, SplitBar } from './bits';
+import { GuessHistogram, useGuessHist } from './Histogram';
 import { ScoreSide } from './PctSlider';
 import { myGuessId } from './Ticket';
 
@@ -61,6 +62,7 @@ export default function GuessPageView() {
 }
 
 function GuessDetail({ board, v, mine }: { board: Board; v: View; mine: boolean }) {
+  const hist = useGuessHist();
   const ca = candOf(board, 'a');
   const cb = candOf(board, 'b');
   if (!ca || !cb) return <Skeleton h={420} />;
@@ -128,10 +130,34 @@ function GuessDetail({ board, v, mine }: { board: Board; v: View; mine: boolean 
           )}
         </div>
 
-        {live && <Ticker live={live} state={state} g={g} />}
+        {live && <Ticker live={live} state={state} g={g} pst={board.br?.pst ?? 0} />}
       </section>
 
       <ShareBlock id={g.id} story={story} text={shareText} url={url} final={state === 'final'} />
+
+      {hist && hist.total > 0 && (
+        <section className="rounded-2xl border bg-card p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-1.5 text-[15px] font-semibold">
+              <ChartColumn className="size-4 text-muted-foreground" aria-hidden />
+              Onde estão os palpites
+            </h2>
+            <span className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <span className="h-3 w-0.5 rounded-full bg-foreground" aria-hidden />
+                palpite
+              </span>
+              {live && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-3 w-0 border-l-[1.5px] border-dashed border-foreground" aria-hidden />
+                  parcial
+                </span>
+              )}
+            </span>
+          </div>
+          <GuessHistogram hist={hist} ca={ca} cb={cb} mine={g.pa} live={live?.pa ?? null} />
+        </section>
+      )}
 
       {!mine && (
         <Button asChild variant="secondary" size="lg" className="h-12 w-full rounded-xl text-[15px]">
@@ -156,65 +182,151 @@ function SubRow({ label, pa }: { label: string; pa: number }) {
   );
 }
 
-function Ticker({ live, state, g }: { live: GuessLive; state: 'live' | 'final' | 'wait'; g: View['guess'] }) {
+/** trilha da distância ao longo da noite, guardada no aparelho (a API só dá o valor atual) */
+type TrailPoint = { pst: number; dist: number };
+function useDistanceTrail(id: string, pst: number, dist: number | null): TrailPoint[] {
+  const key = `guess-trail:${id}`;
+  const [trail, setTrail] = useState<TrailPoint[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(key) ?? '[]') as TrailPoint[];
+    } catch {
+      return [];
+    }
+  });
+  useEffect(() => {
+    if (dist === null || !(pst > 0)) return;
+    setTrail((cur) => {
+      const last = cur[cur.length - 1];
+      if (last && pst <= last.pst) return cur; // só anda para frente
+      const next = [...cur, { pst: Math.round(pst * 100) / 100, dist: Math.round(dist * 100) / 100 }].slice(-240);
+      try {
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {
+        /* sem storage */
+      }
+      return next;
+    });
+  }, [key, pst, dist]);
+  return trail;
+}
+
+function DistanceSpark({ trail, className }: { trail: TrailPoint[]; className?: string }) {
+  if (trail.length < 2) return null;
+  const W = 120;
+  const H = 36;
+  const max = Math.max(...trail.map((p) => p.dist), 0.5);
+  // eixo x = trecho da noite já visto (do primeiro ao último ponto), para a linha ocupar a largura toda
+  const x0 = trail[0].pst;
+  const x1 = Math.max(trail[trail.length - 1].pst, x0 + 1);
+  const x = (pst: number) => ((pst - x0) / (x1 - x0)) * W;
+  const y = (d: number) => 2 + (d / max) * (H - 4);
+  const d = trail.map((p, i) => `${i ? 'L' : 'M'}${x(p.pst).toFixed(1)},${y(p.dist).toFixed(1)}`).join(' ');
+  const best = trail.reduce((a, b) => (b.dist < a.dist ? b : a));
+  const last = trail[trail.length - 1];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className={cn('h-9 w-[120px] overflow-visible', className)} role="img" aria-label={`Menor distância da noite: ${fmtPct(best.dist, 2)} pontos com ${fmtPct(best.pst, 0)}% apurado`}>
+      {/* em cima = perto do parcial */}
+      <line x1={0} x2={W} y1={2} y2={2} stroke="var(--foreground)" strokeOpacity={0.15} />
+      <path d={d} fill="none" stroke="var(--foreground)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={x(best.pst)} cy={y(best.dist)} r={2.5} fill="var(--live)" />
+      <circle cx={x(last.pst)} cy={y(last.dist)} r={2.5} fill="var(--foreground)" />
+    </svg>
+  );
+}
+
+/** medalha sóbria: só ganha cor de metal quando a posição merece (pódio ou topo percentual) */
+function medalTone(rank: number, top: number) {
+  if (rank === 1 || top <= 1) return '#c9a227';
+  if (rank === 2 || top <= 5) return '#9aa4b1';
+  if (rank === 3 || top <= 10) return '#b07a4a';
+  return null;
+}
+
+function Ticker({ live, state, g, pst }: { live: GuessLive; state: 'live' | 'final' | 'wait'; g: View['guess']; pst: number }) {
+  const trail = useDistanceTrail(g.id, pst, state === 'final' ? null : live.dist);
+  const best = trail.length ? trail.reduce((a, b) => (b.dist < a.dist ? b : a)) : null;
   const ranks: { label: string; rank: number; total: number }[] = [{ label: 'Brasil', rank: live.rank, total: live.total }];
   if (live.ufRank != null && live.ufTotal) ranks.push({ label: g.uf ?? 'Estado', rank: live.ufRank, total: live.ufTotal });
   if (live.munRank != null && live.munTotal) ranks.push({ label: 'Cidade', rank: live.munRank, total: live.munTotal });
   return (
     <div className="border-t bg-muted/40 px-5 py-4">
-      <div className="text-[12px] text-muted-foreground">{state === 'final' ? 'Resultado do palpite' : 'Distância para o parcial'}</div>
-      <div className="mt-0.5 flex items-baseline gap-2">
-        {state === 'final' && live.dist < 0.05 ? (
-          <span className="display text-[32px] leading-tight font-semibold">Na mosca</span>
-        ) : (
-          <>
-            {state === 'final' && <span className="text-[17px] font-medium">errou por</span>}
-            <Pct v={live.dist} digits={2} suffix="" className="display text-[32px] leading-tight font-semibold" />
-            <span className="text-[15px] text-muted-foreground">{pts(live.dist)}</span>
-          </>
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[12px] text-muted-foreground">{state === 'final' ? 'Resultado do palpite' : 'Distância para o parcial'}</div>
+          <div className="mt-0.5 flex items-baseline gap-2">
+            {state === 'final' && live.dist < 0.05 ? (
+              <span className="display text-[32px] leading-tight font-semibold">Na mosca</span>
+            ) : (
+              <>
+                {state === 'final' && <span className="text-[17px] font-medium">errou por</span>}
+                <Pct v={live.dist} digits={2} suffix="" className="display text-[32px] leading-tight font-semibold" />
+                <span className="text-[15px] text-muted-foreground">{pts(live.dist)}</span>
+              </>
+            )}
+          </div>
+        </div>
+        {state !== 'final' && trail.length >= 2 && (
+          <div className="shrink-0 text-right">
+            <DistanceSpark trail={trail} />
+            {best && (
+              <div className="num mt-1 text-[10px] text-muted-foreground">
+                <span className="mr-1 inline-block size-1.5 rounded-full bg-live align-middle" aria-hidden />
+                mais perto: {fmtPct(best.dist, 2)} com {fmtPct(best.pst, 0)}%
+              </div>
+            )}
+          </div>
         )}
       </div>
-      <div className={cn('mt-3 grid gap-2', ranks.length === 1 ? 'grid-cols-1' : ranks.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
+      <ul className={cn('mt-4 grid gap-2', ranks.length === 1 ? 'grid-cols-1' : ranks.length === 2 ? 'grid-cols-2' : 'grid-cols-3')}>
         {ranks.map((r) => {
           const t = topPct(r.rank, r.total);
+          const tone = medalTone(r.rank, t);
           return (
-            <div key={r.label} className="rounded-xl border bg-card px-3 py-2.5">
-              <div className="text-[11px] text-muted-foreground">{r.label}</div>
-              <div className="num mt-0.5 text-[17px] leading-tight font-semibold">
-                {fmtInt(r.rank)}º<span className="text-[12px] font-normal text-muted-foreground"> de {fmtInt(r.total)}</span>
+            <li key={r.label} className="flex flex-col rounded-xl border bg-card px-3 py-2.5">
+              <div className="flex items-center justify-between gap-1">
+                <span className="truncate text-[11px] text-muted-foreground">{r.label}</span>
+                <Medal className="size-4 shrink-0" style={{ color: tone ?? 'var(--muted-foreground)', opacity: tone ? 1 : 0.4 }} aria-hidden />
               </div>
-              <div className={cn('num text-[11px]', t <= 10 ? 'font-medium text-live' : 'text-muted-foreground')}>top {fmtTop(t)}%</div>
-            </div>
+              <div className="num mt-1 text-[19px] leading-none font-semibold tracking-tight">
+                {fmtInt(r.rank)}º
+              </div>
+              <div className="num mt-1 truncate text-[11px] text-muted-foreground">de {fmtInt(r.total)}</div>
+              <div className={cn('num truncate text-[11px]', tone ? 'font-medium text-foreground' : 'text-muted-foreground')}>top {fmtTop(t)}%</div>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 }
 
-function ShareBlock({ id, story, text, url, final }: { id: string; story: string; text: string; url: string; final: boolean }) {
+function ShareBlock({ story, text, url, final }: { id: string; story: string; text: string; url: string; final: boolean }) {
   const [busy, setBusy] = useState(false);
   const [noPreview, setNoPreview] = useState(false);
-  const preview = ogUrl.guess(id, 'og');
   return (
     <section className="rounded-2xl border bg-card p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold">{final ? 'Mostre seu resultado' : 'Mande no grupo'}</h2>
-        {!noPreview && <span className="text-[11px] text-muted-foreground">prévia do card</span>}
+      <div className="flex gap-4">
+        {!noPreview && (
+          <img
+            onError={() => setNoPreview(true)}
+            src={story}
+            alt="Prévia do card para Stories e WhatsApp"
+            width={1080}
+            height={1350}
+            loading="lazy"
+            decoding="async"
+            className="aspect-[1080/1350] w-[38%] max-w-44 shrink-0 rounded-xl border bg-muted object-cover shadow-[0_1px_2px_rgba(0,0,0,0.12),0_8px_24px_-8px_rgba(0,0,0,0.35)]"
+          />
+        )}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h2 className="text-[17px] leading-tight font-semibold text-balance">{final ? 'Mostre seu resultado' : 'Mande no grupo'}</h2>
+          <p className="mt-1 text-[13px] text-muted-foreground text-pretty">
+            {final ? 'O card mostra quanto você errou e sua posição.' : 'O card vira o seu ranking ao vivo durante a apuração.'}
+          </p>
+          <div className="mt-auto hidden pt-3 text-[11px] text-muted-foreground sm:block">Formato Stories (1080×1350) e prévia no WhatsApp.</div>
+        </div>
       </div>
-      {!noPreview && (
-      <img
-        onError={() => setNoPreview(true)}
-        src={preview}
-        alt="Prévia da imagem que será compartilhada"
-        width={1200}
-        height={630}
-        loading="lazy"
-        decoding="async"
-        className="mt-3 aspect-[1200/630] w-full rounded-xl border bg-muted object-cover"
-      />
-      )}
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-4 grid grid-cols-2 gap-2">
         <Button
           size="lg"
           className="col-span-2 h-12 rounded-xl text-[15px]"

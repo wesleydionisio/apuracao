@@ -1,7 +1,7 @@
 // Painel da UF: no celular um Drawer de baixo (vaul), no desktop pela lateral.
 import type { Board, HistRow } from '@apuracao/shared';
 import { flipped, fmtPct, twoWay, inUf, ufName } from '@apuracao/shared';
-import { ArrowRight, X } from 'lucide-react';
+import { ArrowRight, Hourglass, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
@@ -17,7 +17,7 @@ import { leaderOf, marginPts } from './colors';
 import { cityHref, pa2022, useAsync, useMedia, useUfMunicipalities, type MapLayer, type MunRow } from './data';
 import { MapLegend } from './Legend';
 import { MunMap, type MunHit } from './MunMap';
-import { CandidateLines, CompareRow, CountedBar, FlipNote, pair, SectionTitle, StatusBadge, TransferBlock } from './parts';
+import { CandidateLines, CompareRow, CountedBar, FlipNote, Kpi, pair, RefLegend, SectionTitle, StatusBadge, TransferBlock, VersusBar } from './parts';
 
 export function UfDrawer({ board, uf, onClose }: { board: Board; uf: string | null; onClose: () => void }) {
   const desktop = useMedia('(min-width: 1024px)');
@@ -68,9 +68,40 @@ function UfDetail({ board, uf }: { board: Board; uf: string }) {
       </DrawerHeader>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+24px)]">
+        {snap?.valid && (
+          <section className="grid grid-cols-4 gap-3 border-b py-3">
+            <Kpi label="Válidos" value={fmtCompact(snap.valid)} hint="já apurados" />
+            <Kpi label="Diferença" value={fmtCompact(Math.abs(snap.a - snap.b))} hint="votos" />
+            <Kpi label="Faltam" value={`~${fmtCompact(snap.rem)}`} hint="votos válidos" />
+            <Kpi label="Compareceu" value={snap.elc ? `${fmtPct((snap.turnout / snap.elc) * 100, 0)}%` : '—'} hint={t1 && t1.el ? `1º t.: ${fmtPct((t1.turnout / t1.el) * 100, 0)}%` : undefined} />
+          </section>
+        )}
         <section className="py-4">
           {snap?.valid ? (
-            <CandidateLines cands={cands} snap={snap} />
+            <>
+              <CandidateLines cands={cands} snap={snap} />
+              {(pa1 != null || p22 != null) && (
+                <div className="mt-4 rounded-xl bg-muted/50 p-3">
+                  <VersusBar
+                    pa={snap.pa}
+                    cands={cands}
+                    h="h-2"
+                    refs={[
+                      ...(pa1 != null ? [{ pa: pa1, tag: 't1', label: '1º turno' }] : []),
+                      ...(p22 != null ? [{ pa: p22, tag: 'y22', label: '2022' }] : []),
+                    ]}
+                  />
+                  <RefLegend
+                    className="mt-2.5"
+                    cands={cands}
+                    refs={[
+                      ...(pa1 != null ? [{ pa: pa1, tag: 't1', label: '1º turno' }] : []),
+                      ...(p22 != null ? [{ pa: p22, tag: 'y22', label: '2022' }] : []),
+                    ]}
+                  />
+                </div>
+              )}
+            </>
           ) : (
             <p className="rounded-xl bg-muted/60 p-3 text-sm text-muted-foreground">
               {live ? `Ainda sem urnas apuradas em ${ufName(uf)}.` : `A parcial de ${ufName(uf)} aparece aqui a partir das 17h de domingo.`}
@@ -86,11 +117,16 @@ function UfDetail({ board, uf }: { board: Board; uf: string }) {
             </div>
           )}
           <ul className="divide-y">
-            {snap?.valid && <CompareRow label={`${ufName(uf)} agora`} hint={`${fmtPct(snap.pst, 1)}% apurado`} pa={snap.pa} cands={cands} strong />}
-            {live && board.br?.valid ? <CompareRow label="Brasil agora" pa={board.br.pa} cands={cands} /> : null}
-            <CompareRow label="1º turno 2026" hint="só os votos dos dois finalistas" pa={pa1} cands={cands} />
-            <CompareRow label="2º turno 2022" hint="mesmos partidos" pa={p22} cands={cands} />
+            {snap?.valid && (
+              <CompareRow label={`${ufName(uf)} agora`} hint={`${fmtPct(snap.pst, 1)}% apurado`} pa={snap.pa} cands={cands} strong delta={snap?.valid ? 0 : undefined} />
+            )}
+            {live && board.br?.valid ? (
+              <CompareRow label="Brasil agora" hint={`${fmtPct(board.br.pst, 1)}% apurado`} pa={board.br.pa} cands={cands} delta={snap?.valid ? snap.pa - board.br.pa : undefined} />
+            ) : null}
+            <CompareRow label="1º turno 2026" hint="só os votos dos dois finalistas" pa={pa1} cands={cands} delta={snap?.valid ? (pa1 == null ? null : snap.pa - pa1) : undefined} />
+            <CompareRow label="2º turno 2022" hint="mesmos partidos" pa={p22} cands={cands} delta={snap?.valid ? (p22 == null ? null : snap.pa - p22) : undefined} />
           </ul>
+          {snap?.valid && <p className="mt-1 text-[11px] text-muted-foreground">À direita: quantos pontos o estado andou na direção de cada um, comparado a cada referência.</p>}
         </section>
 
         {snap?.valid && t1 && (
@@ -105,6 +141,47 @@ function UfDetail({ board, uf }: { board: Board; uf: string }) {
           <SourceStamp at={snap?.at ?? board.source.at} />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Onde ainda falta apurar dentro da UF: maiores eleitorados não apurados entre as cidades com parcial coletada.
+ * O poller só coleta as maiores cidades, então o texto deixa claro que é um recorte.
+ */
+function WhereLeft({ rows }: { rows: MunRow[] }) {
+  const left = rows
+    .filter((r) => r.s && r.s.pst < 100)
+    .map((r) => ({ r, rem: Math.max(0, r.s!.el - r.s!.elc) }))
+    .filter((x) => x.rem > 0)
+    .sort((a, b) => b.rem - a.rem)
+    .slice(0, 5);
+  if (!left.length) return null;
+  return (
+    <div className="mt-5">
+      <h3 className="mb-1 flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
+        <Hourglass className="size-3.5" aria-hidden />
+        Onde mais falta apurar
+      </h3>
+      <ul className="divide-y">
+        {left.map(({ r, rem }) => (
+          <li key={r.m.ibge}>
+            <Link href={cityHref(r.m)} className="press flex min-h-12 items-center gap-3 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{r.m.name}</span>
+                <span className="mt-1.5 block h-1 max-w-40 overflow-hidden rounded-full bg-muted" aria-hidden>
+                  <span className="block h-full rounded-full bg-foreground/60" style={{ width: `${r.s!.pst}%` }} />
+                </span>
+              </span>
+              <span className="text-right">
+                <span className="num block text-sm font-semibold">{fmtCompact(rem)}</span>
+                <span className="num block text-[11px] text-muted-foreground">{fmtPct(r.s!.pst, 0)}% apurado</span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[11px] text-muted-foreground">Eleitores ainda não apurados, entre as maiores cidades com parcial coletada.</p>
     </div>
   );
 }
@@ -204,6 +281,8 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
         </div>
       )}
 
+      {layer === 'live' && !abroad && <WhereLeft rows={rows} />}
+
       <h3 className="mb-1 mt-5 text-[13px] font-medium text-muted-foreground">Maiores cidades</h3>
       {loading && !data ? (
         <div className="space-y-2">
@@ -228,6 +307,7 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
                         {fmtCompact(r.m.el)} eleitores
                         {layer === 'live' && r.s && ` · ${fmtPct(r.s.pst, 0)}% apurado`}
                       </span>
+                      {pa != null && <VersusBar pa={pa} cands={cands} h="h-1" className="mt-1.5 max-w-40" />}
                     </span>
                     {lead && pa != null ? (
                       <span className="flex shrink-0 items-center gap-2">

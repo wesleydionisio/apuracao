@@ -34,6 +34,8 @@ export function Header() {
   const hero = useBoard((s) => s.heroVisible);
   const [path] = useLocation();
   const live = !!board?.released && !!board.br;
+  // na tela Ao vivo o placar já está na tela: nada de mini-placar no cabeçalho
+  const liveScreen = path === '/' || path.startsWith('/sala');
   return (
     <header className="safe-t border-b bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
       <div className="mx-auto max-w-3xl px-4 lg:max-w-6xl">
@@ -46,7 +48,7 @@ export function Header() {
           <LivePill link={link} className="shrink-0" />
           <ThemeToggle />
         </div>
-        {board && !hero && (live ? <MiniScore board={board} /> : path !== '/' ? <MiniCountdown board={board} /> : null)}
+        {board && !hero && !liveScreen && (live ? <MiniScore board={board} /> : <MiniCountdown board={board} />)}
       </div>
     </header>
   );
@@ -57,7 +59,7 @@ function MiniScore({ board }: { board: Board }) {
   const br = board.br!;
   const [ca, cb] = board.candidates;
   return (
-    <Link href="/" className="block pb-2.5" aria-label="Ver placar completo">
+    <Link href="/" className="block pb-2.5" aria-label="Ver placar ao vivo">
       <div className="flex items-center gap-2">
         <CandidateAvatar c={ca} size="xs" ring={br.lead === 'a'} />
         <span className="display min-w-[3.6rem] text-[17px] font-semibold" style={{ color: ca.color }}>

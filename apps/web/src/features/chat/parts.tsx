@@ -1,121 +1,166 @@
-// Peças do chat: mini-placar, mensagens (usuário e sistema), reações.
-import type { CandidateDef, ChatMsg, Reaction, Room } from '@apuracao/shared';
-import { EMOJI_REACTIONS as REACTIONS } from '@apuracao/shared';
-import { useEffect, useState } from 'react';
+// Peças do chat de live: selo de torcida, emoji de partido no texto, linha de mensagem, momento.
+import type { CandidateDef, ChatMsg } from '@apuracao/shared';
+import { PARTY_TOKEN_RE } from '@apuracao/shared';
+import type { ReactNode } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { fmtHM } from '@/lib/format';
-import { live } from '@/lib/live';
 import { cn } from '@/lib/utils';
-import { mentioned, momentParts } from '@/features/standalone/bits';
+import { favored, mentioned, momentParts } from './moment';
 
-/** inicial do apelido sobre a cor estável do autor */
-export function NickAvatar({ m, className }: { m: Pick<ChatMsg, 'nick' | 'hue'>; className?: string }) {
+/** cor do apelido: mais escura no claro, mais clara no escuro (contraste AA nos dois temas) */
+export const nickColor = (hue: number) => ({ ['--h' as string]: hue }) as React.CSSProperties;
+export const NICK_CLS = 'text-[hsl(var(--h)_60%_34%)] dark:text-[hsl(var(--h)_75%_72%)]';
+
+/** fundo do selo: a cor do candidato um pouco escurecida, para o texto branco passar de 4,5:1 */
+const badgeBg = (c: CandidateDef) => `color-mix(in oklab, ${c.color} 78%, black)`;
+
+/**
+ * Selo de torcida: número da urna (e a sigla, quando cabe) na cor do candidato.
+ * Nada de logotipo oficial — só o número que todo mundo já associa.
+ */
+export function PartyBadge({
+  c,
+  party = false,
+  size = 'sm',
+  className,
+}: {
+  c: CandidateDef;
+  party?: boolean;
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}) {
   return (
     <span
-      aria-hidden
-      className={cn('flex size-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold text-white', className)}
-      style={{ background: `hsl(${m.hue} 45% 44%)` }}
+      className={cn(
+        'inline-flex shrink-0 items-center gap-[3px] rounded-[5px] font-bold leading-none text-white tabular-nums select-none',
+        size === 'sm' && 'h-[17px] px-[5px] text-[11px] align-[-2px]',
+        size === 'md' && 'h-6 px-2 text-[13px]',
+        size === 'lg' && 'h-9 rounded-lg px-3 text-[17px]',
+        className,
+      )}
+      style={{ background: badgeBg(c) }}
+      aria-label={`${c.n}${c.party ? ` ${c.party}` : ''}`}
     >
-      {m.nick.charAt(0).toUpperCase()}
+      {c.n}
+      {party && c.party && <span className="font-semibold opacity-80">{c.party}</span>}
     </span>
   );
 }
 
-/** cor do apelido: mais escura no claro, mais clara no escuro (contraste AA nos dois) */
-export const nickColor = (hue: number) => ({ ['--h' as string]: hue }) as React.CSSProperties;
-export const NICK_CLS = 'text-[hsl(var(--h)_55%_36%)] dark:text-[hsl(var(--h)_70%_70%)]';
+/** ":13:" / ":pt:" → candidato correspondente */
+export function tokenCandidate(token: string, cands: CandidateDef[] | null): CandidateDef | null {
+  const t = token.toLowerCase();
+  return cands?.find((c) => c.n === t || c.party?.toLowerCase() === t) ?? null;
+}
 
-/** Momento da apuração dentro do chat: cartão com os candidatos citados. */
-export function SystemMessage({ m, cands }: { m: ChatMsg; cands: CandidateDef[] | null }) {
+/** texto com os emojis de partido desenhados como selos */
+export function renderBody(body: string, cands: CandidateDef[] | null, size: 'sm' | 'md' = 'sm'): ReactNode[] {
+  const out: ReactNode[] = [];
+  const re = new RegExp(PARTY_TOKEN_RE.source, 'gi');
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body))) {
+    const c = tokenCandidate(m[1], cands);
+    if (!c) continue;
+    if (m.index > last) out.push(body.slice(last, m.index));
+    out.push(<PartyBadge key={m.index} c={c} party size={size} className="mx-px" />);
+    last = m.index + m[0].length;
+  }
+  if (last < body.length) out.push(body.slice(last));
+  return out;
+}
+
+const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator}|‍|️|\s|:(?:[a-z]{2,12}|\d{2}):)+$/iu;
+
+/** mensagem só de emoji/selos (até ~6): aparece maior, como reação falada */
+export function isEmojiOnly(body: string): boolean {
+  return body.length <= 40 && EMOJI_ONLY.test(body) && /\S/.test(body);
+}
+
+/** Uma linha por mensagem, estilo live: [selo] Apelido: texto */
+export function ChatLine({
+  m,
+  cands,
+  fresh,
+  mine,
+  onPick,
+}: {
+  m: ChatMsg;
+  cands: CandidateDef[] | null;
+  fresh: boolean;
+  mine: boolean;
+  onPick: (m: ChatMsg) => void;
+}) {
+  const side = m.side ? cands?.find((c) => c.key === m.side) : null;
+  const big = isEmojiOnly(m.body);
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(m)}
+      className={cn(
+        'block w-full rounded-md px-3 py-[3px] text-left text-[14px] leading-[1.45] break-words transition-colors hover:bg-accent/40 active:bg-accent/70',
+        fresh && 'animate-in fade-in-0 slide-in-from-bottom-1 duration-200',
+        mine && 'bg-accent/30',
+      )}
+      aria-label={`${m.nick}${side ? `, torce ${side.n}` : ''}: ${m.body}. Toque para opções`}
+    >
+      {side && <PartyBadge c={side} className="mr-1.5" />}
+      <span className={cn('font-semibold', NICK_CLS)} style={nickColor(m.hue)}>
+        {m.nick}
+      </span>
+      <span className="text-muted-foreground">: </span>
+      <span className={cn('text-pretty', big && 'text-[22px] leading-[1.3] [&>span]:align-[3px]')}>{renderBody(m.body, cands, big ? 'md' : 'sm')}</span>
+    </button>
+  );
+}
+
+/** Momento da apuração no meio do chat: linha destacada com o candidato citado. */
+export function SystemLine({ m, cands, fresh }: { m: ChatMsg; cands: CandidateDef[] | null; fresh: boolean }) {
   const { Icon, kind, text } = momentParts(m.body);
   const who = mentioned(cands, text).slice(0, 2);
+  const lead = favored(cands, text);
   return (
-    <div className="my-2 flex items-start gap-3 rounded-xl border bg-card px-3 py-2.5">
+    <div
+      className={cn(
+        'mx-2 my-1.5 flex items-center gap-2.5 rounded-lg border-l-[3px] bg-muted/70 py-2 pr-3 pl-2.5',
+        fresh && 'animate-in fade-in-0 slide-in-from-bottom-2 duration-300',
+      )}
+      style={{ borderLeftColor: lead?.color ?? 'var(--border)' }}
+      role="note"
+    >
       {who.length ? (
-        <span className="relative mt-0.5 flex shrink-0">
-          <span className="flex -space-x-2">
-            {who.map((c) => (
-              <CandidateAvatar key={c.key} c={c} size="sm" className="ring-2 ring-card" />
-            ))}
-          </span>
-          <span className="absolute -right-1.5 -bottom-1 flex size-4 items-center justify-center rounded-full bg-foreground text-background ring-2 ring-card">
-            <Icon className="size-2.5" aria-hidden />
-          </span>
+        <span className="flex shrink-0 -space-x-1.5">
+          {who.map((c) => (
+            <CandidateAvatar key={c.key} c={c} size="sm" className="ring-2 ring-muted" />
+          ))}
         </span>
       ) : (
-        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-background">
           <Icon className="size-4" aria-hidden />
         </span>
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className="font-medium text-foreground">{kind}</span>
+          <Icon className="size-3" aria-hidden />
+          <span className="font-semibold text-foreground">{kind}</span>
           <span aria-hidden>·</span>
           <span className="num">{fmtHM(new Date(m.at).toISOString())}</span>
         </div>
-        <p className="mt-0.5 text-[14px] leading-snug font-medium text-pretty">{text}</p>
+        <p className="mt-0.5 text-[13px] leading-snug font-medium text-pretty">{text}</p>
       </div>
     </div>
   );
 }
 
-const compact = (n: number) =>
-  n >= 1000 ? `${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : String(n);
-
-/** Reações agregadas (no máx. 1 atualização/s do servidor) + emoji subindo quando chega uma rajada. */
-export function Reactions({
-  room,
-  reacts,
-  burst,
-  disabled,
-}: {
-  room: Room;
-  reacts?: Partial<Record<Reaction, number>>;
-  burst?: { e: Reaction; n: number; k: number };
-  disabled: boolean;
-}) {
-  const [floats, setFloats] = useState<{ k: number; e: string; x: number }[]>([]);
-  const [tapped, setTapped] = useState<string | null>(null);
-  useEffect(() => {
-    if (!burst) return;
-    const f = { k: burst.k, e: burst.e, x: 8 + Math.random() * 84 };
-    setFloats((cur) => [...cur.slice(-6), f]);
-    const t = setTimeout(() => setFloats((cur) => cur.filter((x) => x.k !== f.k)), 1300);
-    return () => clearTimeout(t);
-  }, [burst]);
+/** inicial do apelido sobre a cor estável do autor (perfil, gaveta de ações) */
+export function NickAvatar({ m, className }: { m: Pick<ChatMsg, 'nick' | 'hue'>; className?: string }) {
   return (
-    <div className="relative flex gap-1.5 overflow-x-auto px-3 py-2 no-scrollbar">
-      <div className="pointer-events-none absolute inset-x-0 bottom-full h-0" aria-hidden>
-        {floats.map((f) => (
-          <span key={f.k} className="float-emoji absolute bottom-0 text-2xl" style={{ left: `${f.x}%` }}>
-            {f.e}
-          </span>
-        ))}
-      </div>
-      {REACTIONS.map((e) => {
-        const n = reacts?.[e] ?? 0;
-        return (
-          <button
-            key={e}
-            type="button"
-            disabled={disabled}
-            onClick={() => {
-              live.react(room, e);
-              navigator.vibrate?.(8);
-              setTapped(e);
-              setTimeout(() => setTapped((t) => (t === e ? null : t)), 180);
-            }}
-            className={cn(
-              'flex h-9 min-w-[3.25rem] flex-1 items-center justify-center gap-1.5 rounded-full border bg-card px-2.5 transition-transform duration-150 ease-out active:scale-95 disabled:opacity-40',
-              tapped === e && 'scale-110',
-            )}
-            aria-label={`Reagir com ${e}${n ? `, ${n} reações` : ''}`}
-          >
-            <span className="text-[17px] leading-none">{e}</span>
-            {n > 0 && <span className="num text-[11px] font-medium text-muted-foreground">{compact(n)}</span>}
-          </button>
-        );
-      })}
-    </div>
+    <span
+      aria-hidden
+      className={cn('flex size-8 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold text-white', className)}
+      style={{ background: `hsl(${m.hue} 45% 42%)` }}
+    >
+      {m.nick.charAt(0).toUpperCase()}
+    </span>
   );
 }

@@ -11,12 +11,14 @@ export function MapLegend({
   className,
   compact = false,
   bare = false,
+  caption = 'Diferença entre os dois, em pontos',
 }: {
   cands: CandidateDef[];
   className?: string;
   compact?: boolean;
   /** sem os avatares nas pontas (quando quem está ao lado já mostra) */
   bare?: boolean;
+  caption?: string;
 }) {
   const [a, b] = cands;
   const bands = [4, 3, 2, 1, 0];
@@ -43,7 +45,7 @@ export function MapLegend({
       </div>
       {!compact && (
         <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          Diferença entre os dois, em pontos
+          {caption}
           <span className="inline-flex items-center gap-1">
             · <span className="inline-block size-2.5 rounded-[3px] bg-border" /> sem dados
           </span>

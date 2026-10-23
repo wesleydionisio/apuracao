@@ -210,6 +210,42 @@ app.get('/api/stats', async (_req, reply) => {
   };
 });
 
+// "onde estão os palpites": distribuição nacional em faixas de 0,5 ponto (30–70%; fora disso cai na ponta)
+const HIST_MIN = 30;
+const HIST_MAX = 70;
+const HIST_STEP = 0.5;
+let histMemo: { at: number; bins: { pa: number; n: number }[]; total: number } | null = null;
+function guessHistogram() {
+  if (histMemo && Date.now() - histMemo.at < 5000) return histMemo;
+  const counts = store.index.national.counts;
+  const nBins = Math.round((HIST_MAX - HIST_MIN) / HIST_STEP);
+  const bins = Array.from({ length: nBins }, (_, i) => ({ pa: HIST_MIN + i * HIST_STEP, n: 0 }));
+  let total = 0;
+  for (let k = 0; k < counts.length; k++) {
+    const c = counts[k];
+    if (!c) continue;
+    const i = Math.min(nBins - 1, Math.max(0, Math.floor((k / 100 - HIST_MIN) / HIST_STEP)));
+    bins[i].n += c;
+    total += c;
+  }
+  histMemo = { at: Date.now(), bins, total };
+  return histMemo;
+}
+
+app.get<{ Querystring: { me?: string } }>('/api/guesses/hist', async (req, reply) => {
+  const { bins, total } = guessHistogram();
+  if (req.query.me !== '1') {
+    reply.header('cache-control', 'public, s-maxage=30, stale-while-revalidate=60');
+    return { bins, total };
+  }
+  // com ?me=1 a resposta é pessoal: nunca em cache compartilhado
+  reply.header('cache-control', 'private, no-store');
+  const id = verifyAid(req.cookies[AID_COOKIE], config.secret);
+  const gid = id ? store.index.byAnon.get(id) : undefined;
+  const mine = gid ? store.index.byId.get(gid)?.pa : undefined;
+  return { bins, total, ...(mine !== undefined ? { mine } : {}) };
+});
+
 app.post<{ Body: Record<string, unknown> }>('/api/admin/flags', async (req, reply) => {
   if (!config.adminToken || req.headers['x-admin-token'] !== config.adminToken) return reply.code(401).send({ error: 'auth' });
   if (!redis) return reply.code(501).send({ error: 'sem redis' });

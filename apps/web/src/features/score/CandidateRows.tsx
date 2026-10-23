@@ -1,10 +1,11 @@
 // Linhas de candidato (g1 + Polymarket): foto, nome, partido, votos; % grande, variação recente, barra fina.
+// Referências opcionais (1º turno, 2022) aparecem como marcas na barra e uma linha de comparação.
 import type { Board, CandidateDef, CurvePoint, Snap } from '@apuracao/shared';
 import NumberFlow from '@number-flow/react';
+import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { useMemo } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
-import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
-import { fmtInt } from '@/lib/format';
+import { fmtInt, fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 const PCT2 = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
@@ -24,20 +25,46 @@ export function recentDelta(curve: CurvePoint[]): number | null {
   return ref === last ? null : last.pa - ref.pa;
 }
 
-/** variação recente em tom neutro: vermelho/verde confundiria com as cores dos candidatos */
-function Trend({ v }: { v: number | null }) {
-  if (v === null) return <span className="text-[11px] text-muted-foreground">&nbsp;</span>;
-  if (Math.abs(v) < 0.005) return <span className="num text-[11px] text-muted-foreground">estável em 5 min</span>;
+/** variação em tom neutro: vermelho/verde confundiria com as cores dos candidatos */
+function Arrowed({ v, digits = 2, suffix }: { v: number; digits?: number; suffix?: string }) {
   const up = v > 0;
   const Icon = up ? ArrowUpRight : ArrowDownRight;
   return (
-    <span className="num inline-flex items-center gap-0.5 text-[11px] font-medium text-muted-foreground">
-      <Icon className={up ? 'size-3.5 text-foreground' : 'size-3.5'} aria-hidden />
-      <span className="sr-only">{up ? 'subiu' : 'caiu'}</span>
-      <span className={up ? 'text-foreground' : undefined}>{Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-      <span>em 5 min</span>
+    <span className="num inline-flex items-center gap-0.5">
+      <Icon className={cn('size-3.5', up ? 'text-foreground' : 'text-muted-foreground')} aria-hidden />
+      <span className="sr-only">{up ? 'mais' : 'menos'}</span>
+      <span className={up ? 'text-foreground' : undefined}>{fmtPct(Math.abs(v), digits)}</span>
+      {suffix && <span className="ml-0.5">{suffix}</span>}
     </span>
   );
+}
+
+function Trend({ v }: { v: number | null }) {
+  if (v === null) return <span className="text-[11px] text-muted-foreground">&nbsp;</span>;
+  if (Math.abs(v) < 0.005) return <span className="num text-[11px] text-muted-foreground">estável em 5 min</span>;
+  return (
+    <span className="text-[11px] font-medium text-muted-foreground">
+      <Arrowed v={v} suffix="em 5 min" />
+    </span>
+  );
+}
+
+export interface RowRefs {
+  /** % de A no confronto A×B do 1º turno 2026 */
+  t1?: number | null;
+  /** % de A (lado de A) no 2º turno de 2022 */
+  y22?: number | null;
+}
+
+const REF_LABEL: Record<keyof RowRefs, string> = { t1: '1º turno', y22: '2022' };
+/** 1º turno: tique cheio; 2022: tique vazado — distinguíveis sem depender de cor */
+export const REF_TICK: Record<keyof RowRefs, string> = {
+  t1: 'bg-foreground ring-2 ring-background',
+  y22: 'bg-background ring-[1.5px] ring-foreground',
+};
+
+export function RefTick({ k, className }: { k: keyof RowRefs; className?: string }) {
+  return <span className={cn('inline-block h-3 w-[3px] rounded-full', REF_TICK[k], className)} aria-hidden />;
 }
 
 function Row({
@@ -47,6 +74,7 @@ function Row({
   lead,
   delta,
   final,
+  refs,
 }: {
   c: CandidateDef;
   pct: number;
@@ -54,6 +82,8 @@ function Row({
   lead: boolean;
   delta: number | null;
   final: boolean;
+  /** referências já convertidas para este candidato (0–100) */
+  refs: { k: keyof RowRefs; v: number }[];
 }) {
   return (
     <li className="py-3.5 first:pt-1">
@@ -83,22 +113,60 @@ function Row({
           </div>
         </div>
       </div>
-      <div className="relative mt-3 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+      <div className="relative mt-3 h-1.5 rounded-full bg-muted" aria-hidden>
         <div className="h-full rounded-full transition-[width] duration-700 ease-out" style={{ width: `${pct}%`, background: c.color }} />
         <div className="absolute inset-y-0 left-1/2 w-px bg-foreground/35" />
+        {refs.map((r) => (
+          <span
+            key={r.k}
+            className={cn('absolute -top-1 h-3.5 w-[3px] -translate-x-1/2 rounded-full', REF_TICK[r.k])}
+            style={{ left: `${Math.max(0, Math.min(100, r.v))}%` }}
+          />
+        ))}
       </div>
+      {refs.length > 0 && (
+        <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
+          {refs.map((r) => (
+            <div key={r.k} className="flex items-center gap-1.5">
+              <dt className="flex items-center gap-1.5">
+                <RefTick k={r.k} />
+                {REF_LABEL[r.k]}
+              </dt>
+              <dd className="num flex items-center gap-1.5">
+                <span className="font-medium text-foreground">{fmtPct(r.v, 1)}%</span>
+                <Arrowed v={pct - r.v} digits={1} suffix="pts" />
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </li>
   );
 }
 
-export function CandidateRows({ board, snap, className }: { board: Board; snap: Snap; className?: string }) {
+export function CandidateRows({
+  board,
+  snap,
+  className,
+  refs,
+}: {
+  board: Board;
+  snap: Snap;
+  className?: string;
+  /** referências opcionais (% de A); ausentes = não mostra */
+  refs?: RowRefs;
+}) {
   const [ca, cb] = board.candidates;
   const d = useMemo(() => (snap.s === 'br' ? recentDelta(board.curve) : null), [board.curve, snap.s]);
   const final = snap.status === 'totalizado';
+  const refsFor = (side: 'a' | 'b') =>
+    (Object.entries(refs ?? {}) as [keyof RowRefs, number | null | undefined][])
+      .filter((e): e is [keyof RowRefs, number] => typeof e[1] === 'number')
+      .map(([k, v]) => ({ k, v: side === 'a' ? v : 100 - v }));
   // líder primeiro, como num placar
   const rows = [
-    { c: ca, pct: snap.pa, votes: snap.a, lead: snap.lead === 'a', delta: d },
-    { c: cb, pct: snap.pb, votes: snap.b, lead: snap.lead === 'b', delta: d === null ? null : -d },
+    { c: ca, pct: snap.pa, votes: snap.a, lead: snap.lead === 'a', delta: d, refs: refsFor('a') },
+    { c: cb, pct: snap.pb, votes: snap.b, lead: snap.lead === 'b', delta: d === null ? null : -d, refs: refsFor('b') },
   ].sort((x, y) => y.pct - x.pct);
   return (
     <ul className={cn('divide-y', className)} aria-label="Votos por candidato">

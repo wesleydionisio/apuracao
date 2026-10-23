@@ -30,7 +30,7 @@ export function StatsStrip({ snap, className }: { snap: Snap; className?: string
       <Progress value={snap.pst} className="h-1.5 bg-muted [&>*]:bg-foreground" aria-label="Urnas apuradas" />
       <dl className="mt-1 grid grid-cols-3 divide-x">
         <Stat label="Diferença">{fmtCompact(diff)}</Stat>
-        <Stat label="Faltam (estim.)">{snap.rem > 0 ? `~${fmtCompact(snap.rem)}` : '—'}</Stat>
+        <Stat label="A apurar (est.)">{snap.rem > 0 ? `~${fmtCompact(snap.rem)}` : '—'}</Stat>
         <Stat label="Comparecimento">
           {turnout === null ? '—' : <NumberFlow value={turnout} format={ONE} locales="pt-BR" suffix="%" />}
         </Stat>

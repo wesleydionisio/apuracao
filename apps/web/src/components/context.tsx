@@ -1,14 +1,17 @@
 // Camadas de contexto do 2º turno: transferência de votos do 1º turno e "virou de lado" vs 2022.
-import type { Board, HistoryFile, HistRow, MunBoard, Municipality, Snap } from '@apuracao/shared';
-import { flipped, transfer, ufName } from '@apuracao/shared';
-import { ArrowRight } from 'lucide-react';
+import type { Board, CandidateDef, HistoryFile, HistRow, MunBoard, Municipality, Snap } from '@apuracao/shared';
+import { flipped, transfer, twoWay, ufName } from '@apuracao/shared';
+import { ArrowRight, Repeat2, Waypoints } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
+import { TransferSankey } from '@/features/score/Sankey';
+import { MetaPill, Section } from '@/features/score/Section';
+import { cn } from '@/lib/utils';
 import { fetchMunBoard, staticData } from '../lib/api';
 import { fmtCompact, fmtPct, signed } from '../lib/format';
 import { candOf } from '../store/board';
-import { Card, Chip, Empty, Skeleton, Title } from './ui';
+import { Empty, Skeleton } from './ui';
 
 function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): { data: T | undefined; loading: boolean } {
   const [s, set] = useState<{ data: T | undefined; loading: boolean }>({ data: undefined, loading: true });
@@ -29,8 +32,8 @@ function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): { data: T | undefin
 export { useAsync };
 
 /**
- * Fluxo do estoque do 1º turno (votos dos eliminados + brancos/nulos + abstenção):
- * quanto foi para A, para B e quanto ficou de fora.
+ * Fluxo do estoque do 1º turno (votos dos eliminados + brancos/nulos + abstenção) em barra:
+ * quanto foi para A, para B e quanto ficou de fora. Usado nos painéis de UF.
  */
 function FlowBar({ board, snap, t1 }: { board: Board; snap: Snap; t1: HistRow }) {
   const [ca, cb] = board.candidates;
@@ -50,7 +53,11 @@ function FlowBar({ board, snap, t1 }: { board: Board; snap: Snap; t1: HistRow })
         <span>Estoque do 1º turno</span>
         <span className="num">≈ {fmtCompact(t.stock)} votos</span>
       </div>
-      <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full" role="img" aria-label={`${ca.short} ficou com ${fmtPct((ga / tot) * 100, 0)}% do estoque, ${cb.short} com ${fmtPct((gb / tot) * 100, 0)}%`}>
+      <div
+        className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full"
+        role="img"
+        aria-label={`${ca.short} ficou com ${fmtPct((ga / tot) * 100, 0)}% do estoque, ${cb.short} com ${fmtPct((gb / tot) * 100, 0)}%`}
+      >
         {seg.map((s) => (
           <div key={s.k} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${s.w * 100}%`, background: s.color }} />
         ))}
@@ -64,7 +71,7 @@ function FlowBar({ board, snap, t1 }: { board: Board; snap: Snap; t1: HistRow })
             <CandidateAvatar c={c} size="sm" />
             <div className="min-w-0">
               <dt className="truncate text-[12px] text-muted-foreground">{c.short}</dt>
-              <dd className="display text-[17px] font-semibold leading-tight" style={{ color: c.color }}>
+              <dd className="display text-[17px] leading-tight font-semibold" style={{ color: c.color }}>
                 {pct === null ? '—' : `${fmtPct(pct, 0)}%`}
                 <span className="num ml-1.5 text-[11px] font-normal text-muted-foreground">{signed(gain / 1e6, 2)} mi</span>
               </dd>
@@ -80,9 +87,13 @@ function FlowBar({ board, snap, t1 }: { board: Board; snap: Snap; t1: HistRow })
   );
 }
 
-export function TransferCard({ board }: { board: Board }) {
+/** parte do estoque: com dado parcial escalonado o ganho pode passar do estoque — não inventamos precisão */
+const sharePct = (p: number | null) => (p === null ? '—' : p > 100 ? '>100%' : `${fmtPct(Math.max(0, p), 0)}%`);
+
+export function TransferCard({ board, className }: { board: Board; className?: string }) {
   const { data: hist, loading } = useAsync(() => staticData.hist('t1-2026'), []);
   const br = board.br;
+  const [ca, cb] = board.candidates;
   const rows = useMemo(() => {
     if (!hist) return [];
     return Object.entries(board.ufs)
@@ -94,47 +105,72 @@ export function TransferCard({ board }: { board: Board }) {
       .sort((x, y) => y.t.stock - x.t.stock)
       .slice(0, 8);
   }, [hist, board.ufs, board.candidates]);
-  const [ca, cb] = board.candidates;
+  const t = hist?.br && br ? transfer(br, hist.br, board.candidates) : null;
   return (
-    <Card>
-      <Title right={<Chip>vs 1º turno</Chip>}>De onde vieram os votos</Title>
+    <Section icon={Waypoints} title="De onde vieram os votos" meta={<MetaPill>vs 1º turno</MetaPill>} className={className}>
       {loading ? (
-        <Skeleton h={120} />
-      ) : !hist?.br || !br ? (
+        <Skeleton h={220} />
+      ) : !t ? (
         <Empty title="Histórico do 1º turno indisponível">A comparação aparece assim que o histórico for publicado.</Empty>
       ) : (
         <>
-          <FlowBar board={board} snap={br} t1={hist.br} />
+          <p className="mb-3 text-[13px] leading-snug text-muted-foreground">
+            Votos que ficaram livres depois do 1º turno (de quem foi eliminado, brancos, nulos e quem não votou) e para onde foram até
+            agora.
+          </p>
+          <TransferSankey t={t} ca={ca} cb={cb} />
+          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+            Ganho de cada um sobre o próprio 1º turno
+            {t.scale < 1 ? `, proporcional aos ${fmtPct(t.scale * 100, 0)}% do eleitorado já apurado` : ''}. Perdas contam como zero.
+          </p>
           {rows.length > 0 && (
             <table className="num mt-4 w-full text-[12px]">
               <caption className="sr-only">Parte do estoque do 1º turno que foi para cada candidato, por estado</caption>
               <thead className="text-left text-[11px] text-muted-foreground">
                 <tr className="border-b">
                   <th className="py-1.5 font-normal">Estado</th>
+                  <th className="w-[36%] py-1.5 font-normal">
+                    <span className="sr-only">Divisão do estoque</span>
+                  </th>
                   <th className="py-1.5 text-right font-normal">{ca.short.split(' ')[0]}</th>
                   <th className="py-1.5 text-right font-normal">{cb.short.split(' ')[0]}</th>
                   <th className="py-1.5 text-right font-normal">Estoque</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {rows.map((r) => (
-                  <tr key={r.uf}>
-                    <td className="py-2">
-                      <Link href={`/mapa/${r.uf}`} className="font-semibold hover:underline">
-                        {r.uf}
-                      </Link>
-                    </td>
-                    <td className="py-2 text-right font-medium" style={{ color: ca.color }}>{r.t.pctA === null ? '—' : `${fmtPct(r.t.pctA, 0)}%`}</td>
-                    <td className="py-2 text-right font-medium" style={{ color: cb.color }}>{r.t.pctB === null ? '—' : `${fmtPct(r.t.pctB, 0)}%`}</td>
-                    <td className="py-2 text-right text-muted-foreground">{fmtCompact(r.t.stock)}</td>
-                  </tr>
-                ))}
+                {rows.map((r) => {
+                  const ga = Math.max(0, r.t.gainA);
+                  const gb = Math.max(0, r.t.gainB);
+                  const tot = Math.max(r.t.stock, ga + gb) || 1;
+                  return (
+                    <tr key={r.uf}>
+                      <td className="py-2.5">
+                        <Link href={`/mapa/${r.uf}`} className="font-semibold hover:underline">
+                          {r.uf}
+                        </Link>
+                      </td>
+                      <td className="py-2.5 pr-2">
+                        <div className="flex h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+                          <div style={{ width: `${(ga / tot) * 100}%`, background: ca.color }} />
+                          <div style={{ width: `${(gb / tot) * 100}%`, background: cb.color }} />
+                        </div>
+                      </td>
+                      <td className="py-2.5 text-right font-medium" style={{ color: ca.color }}>
+                        {sharePct(r.t.pctA)}
+                      </td>
+                      <td className="py-2.5 text-right font-medium" style={{ color: cb.color }}>
+                        {sharePct(r.t.pctB)}
+                      </td>
+                      <td className="py-2.5 text-right text-muted-foreground">{fmtCompact(r.t.stock)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
         </>
       )}
-    </Card>
+    </Section>
   );
 }
 
@@ -151,55 +187,102 @@ export function UfTransfer({ board, uf }: { board: Board; uf: string }) {
   );
 }
 
-/** Estados que mudaram de lado em relação a 2022 */
-export function FlipsCard({ board }: { board: Board }) {
+/** barrinha A×B (A à esquerda) com a marca dos 50% */
+function Duel({ pa, ca, cb, faded = false }: { pa: number; ca: CandidateDef; cb: CandidateDef; faded?: boolean }) {
+  return (
+    <div className={cn('relative flex h-1.5 overflow-hidden rounded-full', faded && 'opacity-55')} aria-hidden>
+      <div style={{ width: `${pa}%`, background: ca.color }} />
+      <div className="flex-1" style={{ background: cb.color }} />
+      <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-card" />
+    </div>
+  );
+}
+
+const FLIP_COLS = 'grid-cols-[minmax(0,1fr)_4.5rem_1rem_4.5rem]';
+
+/** Estados que mudaram de lado em relação a 2022: barra de 2022 → barra de agora */
+export function FlipsCard({ board, className }: { board: Board; className?: string }) {
   const { data: y22, loading } = useAsync<HistoryFile | null>(() => staticData.hist('y2022-t2'), []);
+  const [ca, cb] = board.candidates;
+  const c22 = useMemo(
+    () => [
+      { ...ca, n: board.y2022Map.a },
+      { ...cb, n: board.y2022Map.b },
+    ],
+    [ca, cb, board.y2022Map],
+  );
   const list = useMemo(() => {
     if (!y22) return [];
     return Object.entries(board.ufs)
-      .map(([k, s]) => ({ uf: k.slice(3), s, f: s.pst >= 5 ? flipped(s, y22.uf[k.slice(3)], board.y2022Map) : null }))
+      .map(([k, s]) => {
+        const uf = k.slice(3);
+        const f = s.pst >= 5 ? flipped(s, y22.uf[uf], board.y2022Map) : null;
+        return { uf, s, f, pa22: twoWay(y22.uf[uf], c22) };
+      })
       .filter((x) => x.f)
       .sort((x, y) => (y.s.el || 0) - (x.s.el || 0));
-  }, [y22, board.ufs, board.y2022Map]);
+  }, [y22, board.ufs, board.y2022Map, c22]);
+  const total = Object.keys(board.ufs).length;
   return (
-    <Card>
-      <Title right={<Chip>vs 2º turno de 2022</Chip>}>Virou de lado</Title>
+    <Section
+      icon={Repeat2}
+      title="Virou de lado"
+      meta={y22 && total > 0 ? <span className="num">{list.length} de {total} vs 2022</span> : <MetaPill>vs 2022</MetaPill>}
+      className={className}
+    >
       {loading ? (
-        <Skeleton h={90} />
+        <Skeleton h={120} />
       ) : !y22 ? (
-        <Empty title="Histórico de 2022 indisponível" />
+        <Empty title="Histórico de 2022 indisponível">A comparação aparece quando o arquivo de 2022 estiver publicado.</Empty>
       ) : !list.length ? (
-        <Empty title="Nenhum estado mudou de lado até agora">Contamos só estados com pelo menos 5% apurado.</Empty>
+        <Empty title="Nenhum estado mudou de lado até agora">Contamos só estados com pelo menos 5% apurado. Pode mudar a qualquer momento.</Empty>
       ) : (
-        <ul className="-mx-1 divide-y">
-          {list.map(({ uf, s, f }) => {
-            const from = candOf(board, f!.from)!;
-            const to = candOf(board, f!.to)!;
-            return (
-              <li key={uf}>
-                <Link href={`/mapa/${uf}`} className="press flex min-h-13 items-center gap-3 rounded-lg px-1 hover:bg-accent/60">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[14px] font-semibold">{ufName(uf)}</div>
-                    <div className="num text-[11px] text-muted-foreground">{fmtPct(s.pst, 0)}% apurado</div>
-                  </div>
-                  <span className="flex shrink-0 items-center gap-1.5" aria-label={`de ${from.party ?? from.short} em 2022 para ${to.short}`}>
-                    <span className="rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: from.color, background: `color-mix(in oklab, ${from.color} 12%, transparent)` }}>
-                      {board.y2022Map[from.key] === from.n && from.party ? `${from.party} em 2022` : '2022'}
-                    </span>
+        <>
+          <div className={cn('grid items-center gap-2 border-b pb-1.5 text-[11px] text-muted-foreground', FLIP_COLS)} aria-hidden>
+            <span>Estado</span>
+            <span>2022</span>
+            <span />
+            <span>agora</span>
+          </div>
+          <ul className="divide-y">
+            {list.map(({ uf, s, f, pa22 }) => {
+              const to = candOf(board, f!.to)!;
+              return (
+                <li key={uf}>
+                  <Link
+                    href={`/mapa/${uf}`}
+                    className={cn('press -mx-1 grid min-h-13 items-center gap-2 rounded-lg px-1 hover:bg-accent/60', FLIP_COLS)}
+                    aria-label={`${ufName(uf)} virou para ${to.short}, com ${fmtPct(s.pst, 0)}% apurado`}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <CandidateAvatar c={to} size="xs" />
+                      <div className="min-w-0">
+                        <div className="truncate text-[14px] font-semibold">{ufName(uf)}</div>
+                        <div className="num text-[11px] text-muted-foreground">{fmtPct(s.pst, 0)}% apurado</div>
+                      </div>
+                    </div>
+                    <div>
+                      {pa22 !== null && <Duel pa={pa22} ca={ca} cb={cb} faded />}
+                      <div className="num mt-1 text-[11px] text-muted-foreground">
+                        {pa22 === null ? '—' : `${fmtPct(Math.max(pa22, 100 - pa22), 0)}%`}
+                      </div>
+                    </div>
                     <ArrowRight className="size-3.5 text-muted-foreground" aria-hidden />
-                    <CandidateAvatar c={to} size="xs" />
-                    <span className="text-[13px] font-semibold" style={{ color: to.color }}>
-                      {to.short.split(' ')[0]}
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+                    <div>
+                      <Duel pa={s.pa} ca={ca} cb={cb} />
+                      <div className="num mt-1 text-[11px] font-semibold" style={{ color: to.color }}>
+                        {fmtPct(Math.max(s.pa, s.pb), 1)}%
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
-      <p className="mt-2 text-[11px] text-muted-foreground">Parcial: pode desvirar até o fim da apuração.</p>
-    </Card>
+      <p className="mt-2 text-[11px] text-muted-foreground">Parcial: pode desvirar até o fim da apuração. 2022 pelo partido de cada lado.</p>
+    </Section>
   );
 }
 
