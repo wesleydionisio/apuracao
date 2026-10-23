@@ -1,7 +1,7 @@
 // Conexão WebSocket única: snaps, chat, reações e momentos.
 // Se cair, o placar segue pelo polling do JSON estático e o chat entra em modo degradado.
-import type { ClientMsg, Reaction, Room, ServerMsg } from '@apuracao/shared';
-import { hueOf, randomNick } from '@apuracao/shared';
+import type { ClientMsg, Reaction, Room, ServerMsg, Side } from '@apuracao/shared';
+import { cheerOf, hueOf, randomNick } from '@apuracao/shared';
 import { useBoard } from '../store/board';
 import { useChat } from '../store/chat';
 import { MOCK } from './env';
@@ -123,9 +123,36 @@ class Live {
     this.raw({ t: 'nick', nick });
   }
 
+  /** lado da torcida (selo ao lado do apelido). Fica no aparelho e é reenviado a cada conexão. */
+  side(side: Side | null) {
+    try {
+      if (side) localStorage.setItem('side', side);
+      else localStorage.removeItem('side');
+    } catch {
+      /* sem storage */
+    }
+    const me = useBoard.getState().me;
+    if (me) useBoard.getState().set({ me: { ...me, side } });
+    if (!MOCK) this.raw({ t: 'side', side });
+  }
+
+  /** "manda um 13/22": torcida agregada como reação */
+  cheer(r: Room, side: Side) {
+    this.react(r, cheerOf(side));
+  }
+
   report(r: Room, id: string) {
     if (MOCK) return useChat.getState().del(r, id);
     this.raw({ t: 'report', r, id });
+  }
+}
+
+export function savedSide(): Side | null {
+  try {
+    const s = localStorage.getItem('side');
+    return s === 'a' || s === 'b' ? s : null;
+  } catch {
+    return null;
   }
 }
 
@@ -142,7 +169,9 @@ function handle(m: ServerMsg) {
         /* sem storage */
       }
       if (custom && custom !== m.you.nick) live.nick(custom);
-      board.set({ online: m.online, me: { ...m.you, nick: custom || m.you.nick } });
+      const side = savedSide();
+      if (side && side !== m.you.side) live.side(side);
+      board.set({ online: m.online, me: { ...m.you, nick: custom || m.you.nick, side: side ?? m.you.side ?? null } });
       chat.set({ enabled: m.flags.chat });
       board.setFlags(m.flags);
       break;

@@ -36,6 +36,7 @@ interface UD {
   pub: string;
   nick: string;
   hue: number;
+  side: 'a' | 'b' | null;
   ip: string;
   rooms: Set<Room>;
   msg: Bucket;
@@ -179,7 +180,7 @@ async function postChat(ws: WS, room: Room, body: unknown) {
   }
   ud.last.set(room, now);
   m.chatIn++;
-  const msg: ChatMsg = { id: newId(), nick: ud.nick, hue: ud.hue, body: chk.body, at: now };
+  const msg: ChatMsg = { id: newId(), nick: ud.nick, hue: ud.hue, body: chk.body, at: now, ...(ud.side ? { side: ud.side } : {}) };
   if (bus?.ready()) {
     try {
       await store.persist(room, JSON.stringify(msg));
@@ -430,6 +431,7 @@ app.ws<UD>('/ws', {
         pub,
         nick: nickForId(aid),
         hue: hueOf(aid),
+        side: null,
         ip,
         rooms: new Set(),
         msg: new Bucket(config.userBurst, config.userRefill),
@@ -450,7 +452,7 @@ app.ws<UD>('/ws', {
     ipConns.set(ud.ip, (ipConns.get(ud.ip) ?? 0) + 1);
     ws.subscribe(ALL);
     ws.subscribe(snapTopic('br'));
-    send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue }, online: Math.max(online, conns), flags });
+    send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side }, online: Math.max(online, conns), flags });
     if (closedRooms.size) send(ws, { t: 'flags', flags, closedRooms: [...closedRooms] });
     const br = board.get('br');
     if (br) send(ws, { t: 'snap', s: 'br', d: br });
@@ -479,7 +481,11 @@ app.ws<UD>('/ws', {
         const n = cleanNick(msg.nick, mod);
         if (!n) return send(ws, { t: 'err', code: 'invalid' });
         ud.nick = n;
-        return send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue }, online: Math.max(online, conns), flags });
+        return send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side }, online: Math.max(online, conns), flags });
+      }
+      case 'side': {
+        ud.side = msg.side === 'a' || msg.side === 'b' ? msg.side : null;
+        return send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side }, online: Math.max(online, conns), flags });
       }
       case 'report':
         return void report(ws, msg.r, msg.id).catch(() => {});

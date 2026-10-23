@@ -6,6 +6,8 @@ export interface Me {
   id: string;
   nick: string;
   hue: number;
+  /** lado da torcida no chat */
+  side?: 'a' | 'b' | null;
 }
 
 export interface Stats {

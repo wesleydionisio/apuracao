@@ -1,10 +1,20 @@
 // Protocolo WebSocket (JSON pequeno). Ver spec §9.
-import type { Flags, Moment, Snap } from './types';
+import type { Flags, Moment, Side, Snap } from './types';
 
 export const MAX_BODY = 240;
 export const HISTORY_ON_JOIN = 50;
-export const REACTIONS = ['👀', '🔥', '😱', '👏', '😂'] as const;
+export const EMOJI_REACTIONS = ['🔥', '😱', '👏', '😂', '👀', '🙏'] as const;
+/** torcida: "manda um 13" / "manda um 22" — agregada como reação, nunca como voto */
+export const CHEERS = ['cheer:a', 'cheer:b'] as const;
+export const REACTIONS = [...EMOJI_REACTIONS, ...CHEERS] as const;
 export type Reaction = (typeof REACTIONS)[number];
+export const cheerOf = (side: Side) => `cheer:${side}` as const;
+
+/**
+ * Emoji de partido/candidato dentro do texto do chat: ":13:", ":22:", ":pt:", ":pl:".
+ * O servidor trata como texto comum; o cliente desenha como selo na cor do candidato.
+ */
+export const PARTY_TOKEN_RE = /:([a-z]{2,12}|\d{2}):/gi;
 
 /** salas: 'br', 'sp', 'mg', ... ou 'sala:<slug>' */
 export type Room = string;
@@ -17,6 +27,8 @@ export interface ChatMsg {
   body: string;
   at: number;
   sys?: true;
+  /** lado que o autor escolheu torcer (selo ao lado do apelido) */
+  side?: Side;
 }
 
 export type ClientMsg =
@@ -25,11 +37,12 @@ export type ClientMsg =
   | { t: 'chat'; r: Room; body: string }
   | { t: 'react'; r: Room; e: Reaction }
   | { t: 'nick'; nick: string }
+  | { t: 'side'; side: Side | null }
   | { t: 'report'; r: Room; id: string }
   | { t: 'ping' };
 
 export type ServerMsg =
-  | { t: 'hello'; you: { id: string; nick: string; hue: number }; online: number; flags: Flags }
+  | { t: 'hello'; you: { id: string; nick: string; hue: number; side?: Side | null }; online: number; flags: Flags }
   | { t: 'snap'; s: string; d: Snap }
   | { t: 'history'; r: Room; m: ChatMsg[] }
   | { t: 'chat'; r: Room; m: ChatMsg }

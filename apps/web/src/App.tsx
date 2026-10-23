@@ -7,7 +7,7 @@ import { TabBar } from '@/components/shell/TabBar';
 import { Skeleton, Toaster } from './components/ui';
 import { api, fetchBoard } from './lib/api';
 import { live } from './lib/live';
-import Home from './pages/Home';
+import Home from './pages/Painel';
 import { useBoard } from './store/board';
 
 const MapPage = lazy(() => import('./pages/MapPage'));

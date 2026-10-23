@@ -1,6 +1,6 @@
 // Peças do chat: mini-placar, mensagens (usuário e sistema), reações.
 import type { CandidateDef, ChatMsg, Reaction, Room } from '@apuracao/shared';
-import { REACTIONS } from '@apuracao/shared';
+import { EMOJI_REACTIONS as REACTIONS } from '@apuracao/shared';
 import { useEffect, useState } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { fmtHM } from '@/lib/format';
