@@ -1,0 +1,57 @@
+{
+	servers {
+		# conexões WS longas: sem timeout de leitura no servidor
+		timeouts {
+			idle 5m
+		}
+	}
+}
+
+{$SITE_HOST} {
+	encode zstd gzip
+
+	# métricas só pela rede interna
+	@internal path /metrics /api/admin/*
+	respond @internal 404
+
+	# WebSocket → workers (stateless, Redis faz o fan-out entre eles)
+	@ws path /ws
+	reverse_proxy @ws ws1:3002 ws2:3002 ws3:3002 ws4:3002 {
+		lb_policy least_conn
+		health_uri /health
+		health_interval 10s
+	}
+
+	# placar estático: a CDN segura o tráfego (Edge TTL 5s no Cloudflare)
+	handle_path /data/* {
+		root * /srv/data
+		@static path /static/*
+		@live not path /static/*
+		header @static Cache-Control "public, max-age=3600"
+		header @live Cache-Control "public, s-maxage=5, stale-while-revalidate=30"
+		header Access-Control-Allow-Origin *
+		file_server
+	}
+
+	handle /api/* {
+		reverse_proxy api:3001
+	}
+
+	# rotas compartilháveis: HTML com <meta og:*> gerado pela API
+	@share path / /p/* /cidade/* /m/* /sala/* /tv /embed/placar
+	handle @share {
+		reverse_proxy api:3001
+	}
+
+	# embed pode ir em iframe de portais; o resto não
+	@notembed not path /embed/*
+	header @notembed X-Frame-Options SAMEORIGIN
+
+	handle {
+		root * /srv/web
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+}

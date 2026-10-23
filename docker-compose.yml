@@ -1,0 +1,73 @@
+# Produção numa VPS (spec §7). Deploy: git pull && docker compose up -d --build
+# Antes do primeiro up: copie .env.example para .env e rode o ETL (pnpm etl) — os arquivos estáticos
+# ficam em ./public/data/static e são montados em todos os serviços.
+
+x-app: &app
+  build: { context: ., target: app }
+  restart: unless-stopped
+  env_file: .env
+  environment: &env
+    DATA_DIR: /app/public/data
+    VAR_DIR: /app/var
+    REDIS_URL: redis://redis:6379
+    DATABASE_URL: postgres://apuracao:${POSTGRES_PASSWORD}@postgres:5432/apuracao
+  volumes:
+    - ./public/data:/app/public/data
+    - ./var:/app/var
+  depends_on: [redis, postgres]
+  logging: { driver: json-file, options: { max-size: 20m, max-file: '3' } }
+
+x-ws: &ws
+  <<: *app
+  command: ['node_modules/.bin/tsx', 'apps/ws/src/index.ts']
+  ulimits: { nofile: { soft: 1048576, hard: 1048576 } }
+  depends_on: [redis]
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '1gb', '--maxmemory-policy', 'allkeys-lru']
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: apuracao
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: apuracao
+    volumes: [pg:/var/lib/postgresql/data]
+
+  # singleton: nunca suba mais de um poller
+  poller:
+    <<: *app
+    command: ['node_modules/.bin/tsx', 'apps/poller/src/index.ts']
+    ports: ['127.0.0.1:3003:3003'] # /health para o alerta (só local)
+
+  api:
+    <<: *app
+    command: ['node_modules/.bin/tsx', 'apps/api/src/index.ts']
+    environment:
+      <<: *env
+      SERVE_DATA: '0'
+
+  # um worker WS por vCPU; o Caddy balanceia (least_conn)
+  ws1: { <<: *ws, environment: { <<: *env, WORKER_ID: ws1 } }
+  ws2: { <<: *ws, environment: { <<: *env, WORKER_ID: ws2 } }
+  ws3: { <<: *ws, environment: { <<: *env, WORKER_ID: ws3 } }
+  ws4: { <<: *ws, environment: { <<: *env, WORKER_ID: ws4 } }
+
+  caddy:
+    build: { context: ., target: caddy }
+    restart: unless-stopped
+    ports: ['80:80', '443:443']
+    env_file: .env
+    volumes:
+      - ./public/data:/srv/data:ro
+      - caddy_data:/data
+    ulimits: { nofile: { soft: 1048576, hard: 1048576 } }
+    depends_on: [api, ws1, ws2, ws3, ws4]
+
+volumes:
+  pg:
+  caddy_data:
