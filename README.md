@@ -45,7 +45,9 @@ com `/__dev` (proxy do Vite para `:3003/dev`) e não entra no build de produçã
 
 **Roteiro da noite:** `apps/poller/scenarios/domingo.json` (padrão) define a margem nacional de um
 candidato conforme o % apurado — hoje: Bolsonaro começa empatado, abre ~3 pontos, perde fôlego e termina
-50,5% × 49,5%. Crie outros arquivos e use `REPLAY_SCENARIO=<nome>`, ou `REPLAY_SCENARIO=aleatorio`. O replay simula a noite inteira (17h → totalização) em 20 minutos no
+50,5% × 49,5%. Crie outros arquivos e use `REPLAY_SCENARIO=<nome>`, ou `REPLAY_SCENARIO=aleatorio`.
+
+O replay simula a noite inteira (17h → totalização) em 20 minutos no
 mesmo formato JSON do TSE, a partir do 1º turno real de cada UF e município, com viradas.
 Sem Redis o WS lê `public/data/br.json` a cada 2s; sem Postgres os palpites vão para `var/guesses.ndjson`.
 
