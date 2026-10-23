@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+import { detectCandidates, parseResult } from '@apuracao/shared';
+import { emptyState, runCycle, toBoard } from '../src/board';
+import type { History } from '../src/history';
+
+const fx = (f: string) => JSON.parse(readFileSync(new URL(`../../../packages/data/fixtures/${f}`, import.meta.url), 'utf8'));
+const hist: History = { municipalities: [], byTse: new Map(), byIbge: new Map(), t1: null, t1Mun: {}, y22t2Mun: {} };
+
+test('2º turno zerado: não iniciada, e nada sai antes da liberação', () => {
+  const br = parseResult(fx('t2-br.json'));
+  const cands = detectCandidates(br);
+  const map = { a: cands[0].n, b: cands[1].n };
+  const r = runCycle(emptyState(), { cands, br, ufs: [], mun: [], hist, y2022Map: map, bigMunEl: 1 });
+  assert.equal(r.state.br?.status, 'nao_iniciada');
+  assert.equal(r.moments.length, 0);
+  const opts = { cands, y2022Map: map, flags: { chat: true, projection: true, map_mun: true }, hist, releaseAt: new Date(), sourceUrl: '' };
+  const hidden = toBoard(r.state, { ...opts, released: false });
+  assert.equal(hidden.br, null);
+  assert.deepEqual(hidden.ufs, {});
+  assert.equal(hidden.projection, null);
+  assert.equal(toBoard(r.state, { ...opts, released: true }).br?.status, 'nao_iniciada');
+});
+
+test('primeiro ciclo só semeia: não dispara marcos atrasados', () => {
+  const br = parseResult(fx('t1-br.json')); // 100% apurado
+  const cands = detectCandidates(br, { a: '13', b: '22' });
+  const r = runCycle(emptyState(), { cands, br, ufs: [], mun: [], hist, y2022Map: { a: '13', b: '22' }, bigMunEl: 1 });
+  assert.equal(r.moments.length, 0);
+  assert.equal(r.state.curve.length, 1);
+});
