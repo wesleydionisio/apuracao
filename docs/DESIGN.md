@@ -42,3 +42,36 @@ Referências: **Polymarket (forte)** + clareza do **g1 apuração**. Mobile-firs
 Gradientes roxos/azuis, glassmorphism gratuito, cards com ícone gigante + texto genérico, emojis em
 títulos, sombras pesadas, cinco tamanhos de fonte por bloco, cores fora dos tokens, "lorem"/copy vaga,
 skeletons eternos, layout que só funciona no desktop.
+
+## Arquitetura de telas (v3)
+
+- **Ao vivo** (`/`): tela única no celular, sem rolagem da página — placar compacto e muito visível no
+  topo, chat ocupando o resto (como uma live). Chips para mostrar/ocultar referências: **1º turno**,
+  **2022** (2º turno passado) e **Gráfico**. Desktop: placar + gráfico à esquerda, chat fixo à direita.
+- **Painel** (`/painel`): a análise completa (gráfico grande, vira ou não vira, onde falta, projeção,
+  momentos, transferência, virou de lado).
+- **Mapa**, **Cidade**, **Palpite**: como antes, mais ricos.
+- Abas: Ao vivo · Painel · Mapa · Cidade · Palpite. `/chat` redireciona para `/`.
+
+## Chat viral e limpo
+
+- Estilo live (Twitch/YouTube), não "app de mensagens": uma linha por mensagem, apelido colorido pelo
+  `hue`, selo do lado escolhido (13/22 na cor do candidato) ao lado do apelido, texto 14px.
+- **Torcida**: botões "Manda um 13" / "Manda um 22" (`live.cheer`) com selos subindo na tela e um
+  cabo-de-guerra discreto com os totais (`cheer:a` / `cheer:b` no agregado de reações), sempre
+  rotulado "torcida do chat · não é pesquisa".
+- **Emoji de partido**: tokens `:13:` `:22:` `:pt:` `:pl:` no texto viram selos na cor do candidato
+  (número + sigla, sem logotipos oficiais). Seletor de emoji no composer com a linha "Torcida" + emojis.
+- Escolha de lado: `live.side('a'|'b'|null)`, perguntada com elegância na primeira torcida/mensagem,
+  com "prefiro não dizer".
+
+## Riqueza sem slop
+
+- Densidade de informação de mercado: cada linha carrega número + contexto (variação, referência,
+  mini barra). Tabelas alinhadas à direita, tabulares, com divisórias finas.
+- Hierarquia por contraste de peso/tamanho, não por caixas. Agrupe seções numa folha contínua com
+  divisórias em vez de empilhar cards idênticos; use cards só quando separar faz sentido.
+- Cabeçalhos de seção com ícone lucide pequeno + título curto + meta à direita (ex.: "atualizado há 12s").
+- Micro-visualizações em todo lugar que couber: barras bicolores, sparklines, marcadores de referência.
+- Feedback de atualização: número animado, barra com transição, linha que pisca sutilmente quando muda.
+- Estados vazios explicam e oferecem ação; nunca um card em branco.
