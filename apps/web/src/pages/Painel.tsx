@@ -161,7 +161,7 @@ function Live({ board }: { board: Board }) {
       <NightChart board={board} overlays={refs} />
       <RefChips className="mt-3" disabled={{ t1: !values.t1, y22: !values.y22 }} />
       <div ref={watch}>
-        <CandidateRows board={board} snap={br} refs={activeRefs(refs, values)} className="mt-2" />
+        <CandidateRows board={board} snap={br} refs={activeRefs(refs, values)} reserve className="mt-2" />
       </div>
       <Kpis board={board} snap={br} t1={values.t1?.rows.br} className="mt-2 mb-5" />
       {br.status === 'totalizado' && leader && (

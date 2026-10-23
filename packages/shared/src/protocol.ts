@@ -2,6 +2,20 @@
 import type { Flags, Moment, Side, Snap } from './types';
 
 export const MAX_BODY = 240;
+
+/** categorias da moderação (filtro local + modelo de decisão) */
+export type ModCategory = 'palavrao' | 'ofensa' | 'discriminacao' | 'ameaca' | 'sexual' | 'spam' | 'link' | 'outro';
+
+export const MOD_LABEL: Record<ModCategory, string> = {
+  palavrao: 'palavrão',
+  ofensa: 'ofensa a alguém',
+  discriminacao: 'discriminação',
+  ameaca: 'ameaça ou violência',
+  sexual: 'conteúdo sexual',
+  spam: 'spam',
+  link: 'link',
+  outro: 'conteúdo impróprio',
+};
 export const HISTORY_ON_JOIN = 50;
 export const EMOJI_REACTIONS = ['🔥', '😱', '👏', '😂', '👀', '🙏'] as const;
 /** torcida: "manda um 13" / "manda um 22" — agregada como reação, nunca como voto */
@@ -29,6 +43,10 @@ export interface ChatMsg {
   sys?: true;
   /** lado que o autor escolheu torcer (selo ao lado do apelido) */
   side?: Side;
+  /** mensagem barrada pela moderação: o texto não vem, só a categoria */
+  mod?: ModCategory;
+  /** linha só deste aparelho (aviso de mensagem não enviada); nunca vem do servidor */
+  local?: true;
 }
 
 export type ClientMsg =
@@ -52,7 +70,19 @@ export type ServerMsg =
   | { t: 'online'; n: number }
   | { t: 'flags'; flags: Flags; closedRooms?: Room[] }
   | { t: 'slow'; r: Room; seconds: number }
-  | { t: 'err'; code: 'rate' | 'slow' | 'blocked' | 'closed' | 'invalid' | 'off'; r?: Room; wait?: number }
+  | {
+      t: 'err';
+      code: 'rate' | 'slow' | 'blocked' | 'closed' | 'invalid' | 'off' | 'muted';
+      r?: Room;
+      /** segundos até poder mandar de novo (rate, slow, muted) */
+      wait?: number;
+      /** por que a mensagem foi recusada (blocked) */
+      cat?: ModCategory;
+      /** muted: por spam ou por conteúdo impróprio */
+      reason?: 'spam' | 'abuse';
+      /** o bloqueio já apareceu no chat para todos (primeiro bloqueio da pessoa) */
+      public?: true;
+    }
   | { t: 'pong' };
 
 const UF_ROOMS = new Set([

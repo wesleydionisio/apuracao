@@ -380,25 +380,21 @@ export default function NightChart({
       </div>
 
       <figcaption className="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <span className="min-w-0 text-[11px] leading-tight text-muted-foreground">
-          {show22 && showT1 ? (
-            <>
-              <span className="mr-1 inline-block w-3 border-t border-dashed border-muted-foreground align-middle" />
-              Curva tracejada: 2022 (reconstrução). Linhas retas: 1º turno de 2026
-            </>
-          ) : show22 ? (
-            <>
-              <span className="mr-1 inline-block w-3 border-t border-dashed border-muted-foreground align-middle" />
-              2022, reconstrução aproximada
-            </>
-          ) : showT1 ? (
-            <>
-              <span className="mr-1 inline-block w-3 border-t border-dashed border-muted-foreground align-middle" />
-              1º turno de 2026, só os dois finalistas
-            </>
-          ) : (
-            '% dos votos válidos conforme as urnas são apuradas'
-          )}
+        {/* todas as legendas no mesmo lugar, só a ativa visível: a altura não muda com os filtros */}
+        <span className="grid min-w-0 text-[11px] leading-tight text-muted-foreground [&>*]:col-start-1 [&>*]:row-start-1">
+          {(
+            [
+              ['both', show22 && showT1, 'Curva tracejada: 2022 (reconstrução). Linhas retas: 1º turno de 2026'],
+              ['y22', show22 && !showT1, '2022, reconstrução aproximada'],
+              ['t1', showT1 && !show22, '1º turno de 2026, só os dois finalistas'],
+              ['none', !show22 && !showT1, '% dos votos válidos conforme as urnas são apuradas'],
+            ] as const
+          ).map(([k, on, text]) => (
+            <span key={k} className={on ? undefined : 'invisible'} aria-hidden={!on}>
+              {k !== 'none' && <span className="mr-1 inline-block w-3 border-t border-dashed border-muted-foreground align-middle" />}
+              {text}
+            </span>
+          ))}
         </span>
         {!overlays && modes.length > 1 && (
           <ToggleGroup
@@ -421,18 +417,21 @@ export default function NightChart({
           </ToggleGroup>
         )}
       </figcaption>
-      {show22 && c22 && (
-        <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
+      {/* notas empilhadas no mesmo espaço (some a ativa, fica a altura da maior) */}
+      <div className="mt-2 grid text-[12px] leading-relaxed text-muted-foreground [&>*]:col-start-1 [&>*]:row-start-1">
+        <p className={show22 && c22 ? undefined : 'invisible'} aria-hidden={!(show22 && c22)}>
           O TSE não publica a série da noite de 2022: os pontos marcados vêm de registros da imprensa e do TSE, o resto é
           interpolado.{flip22 !== null && <> Em 2022, a virada veio com cerca de {fmtPct(flip22, 0)}% das urnas apuradas.</>}
         </p>
-      )}
-      {showT1 && last && !show22 && (
-        <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
-          Hoje {ca.short} está {fmtPct(Math.abs(last.a - t1!), 1)} pts {last.a >= t1! ? 'acima' : 'abaixo'} do próprio 1º turno no confronto
-          direto. Fonte: TSE.
+        <p className={showT1 && last && !show22 ? undefined : 'invisible'} aria-hidden={!(showT1 && last && !show22)}>
+          {last && t1 !== null && (
+            <>
+              Hoje {ca.short} está {fmtPct(Math.abs(last.a - t1), 1)} pts {last.a >= t1 ? 'acima' : 'abaixo'} do próprio 1º turno no confronto
+              direto. Fonte: TSE.
+            </>
+          )}
         </p>
-      )}
+      </div>
     </figure>
   );
 }

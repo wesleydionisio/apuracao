@@ -6,17 +6,20 @@ import uWS from 'uWebSockets.js';
 import {
   CH,
   cleanNick,
+  hasLink,
   HISTORY_ON_JOIN,
   hueOf,
   isValidRoom,
   KEY,
   Moderator,
+  normalize,
   nickForId,
   REACTIONS,
   roomScope,
   type ChatMsg,
   type ClientMsg,
   type Flags,
+  type ModCategory,
   type Moment,
   type Reaction,
   type Room,
@@ -28,7 +31,9 @@ import { BoardState } from './board';
 import { ChatStore } from './chat';
 import { config } from './config';
 import { Bucket, BucketMap, RateWindow } from './limits';
+import { AiModerator, type Verdict } from './moderation-ai';
 import { connectRedis } from './redis';
+import { Strikes, WEIGHT, type Ladder } from './strikes';
 
 interface UD {
   aid: string;
@@ -43,6 +48,11 @@ interface UD {
   react: Bucket;
   last: Map<Room, number>;
   open: boolean;
+  /** insistências no limite de taxa (3 seguidas viram ponto de spam) */
+  rateHits: number;
+  rateAt: number;
+  /** últimas mensagens (normalizadas) para pegar repetição */
+  recent: { k: string; at: number }[];
 }
 type WS = uWS.WebSocket<UD>;
 
@@ -81,12 +91,15 @@ const reactDelta = new Map<Room, Map<Reaction, number>>();
 const reactAgg = new Map<Room, Partial<Record<Reaction, number>>>();
 const reactSig = new Map<Room, string>();
 const deleted = new Set<string>();
-const m = { in: 0, out: 0, chatIn: 0, blocked: 0, rateLimited: 0, rejectedConns: 0, inRate: 0, outRate: 0 };
+const m = { in: 0, out: 0, chatIn: 0, blocked: 0, punished: 0, muted: 0, rateLimited: 0, rejectedConns: 0, inRate: 0, outRate: 0 };
 let lastIn = 0;
 let lastOut = 0;
 
 const bus = connectRedis(onBus, [CH.snap, CH.moment, CH.chat, CH.del, CH.flags]);
 const store = new ChatStore(bus);
+const strikes = new Strikes(bus);
+const ai = new AiModerator(config.mod);
+console.log(ai.enabled ? `[moderação-ia] ligada: ${config.mod.model}` : '[moderação-ia] desligada (sem OPENROUTER_API_KEY): só filtro local');
 const board = new BoardState({
   onSnaps: (changed) => {
     for (const s of changed) publish(snapTopic(s.s), { t: 'snap', s: s.s, d: s });
@@ -157,40 +170,121 @@ function applyDelete(room: Room, id: string) {
   publish(roomTopic(room), { t: 'del', r: room, id });
 }
 
+async function setNick(ws: WS, raw: unknown) {
+  const ud = ws.getUserData();
+  if (await strikes.muted(ud.pub, ud.ip)) return send(ws, { t: 'err', code: 'invalid' });
+  const n = cleanNick(raw, mod);
+  if (!n) return send(ws, { t: 'err', code: 'invalid' });
+  const v = await ai.classify(n);
+  if (!ud.open) return;
+  if (ai.isFlagged(v) && v.cat !== 'spam') {
+    await strikes.add(ud.pub, ud.ip, 'abuse', WEIGHT[v.cat]);
+    return send(ws, { t: 'err', code: 'invalid' });
+  }
+  ud.nick = n;
+  send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side }, online: Math.max(online, conns), flags });
+}
+
+/** recusa a mensagem, soma pontos na escada e avisa (bloqueio simples ou silêncio) */
+async function punish(ws: WS, room: Room, ladder: Ladder, cat: ModCategory) {
+  const ud = ws.getUserData();
+  const pen = await strikes.add(ud.pub, ud.ip, ladder, ladder === 'abuse' ? WEIGHT[cat] : 1);
+  m.punished++;
+  // primeira mensagem barrada da pessoa: todos veem "bloqueada pela moderação" (sem o texto).
+  // Das seguintes ninguém fica sabendo: não vale dar palco para quem insiste.
+  if (pen.first) {
+    await broadcast(room, { id: newId(), nick: ud.nick, hue: ud.hue, body: '', at: Date.now(), mod: cat, ...(ud.side ? { side: ud.side } : {}) }, ud.pub);
+  }
+  if (!ud.open) return;
+  const pub = pen.first ? { public: true as const } : {};
+  if (pen.mute > 0) {
+    m.muted++;
+    return send(ws, { t: 'err', code: 'muted', r: room, wait: pen.mute, reason: ladder, cat, ...pub });
+  }
+  return send(ws, { t: 'err', code: 'blocked', r: room, cat, ...pub });
+}
+
+/** 3 insistências no limite de taxa em 30s = 1 ponto de spam; devolve true se já respondeu */
+async function rateStrike(ws: WS, room: Room): Promise<boolean> {
+  const ud = ws.getUserData();
+  const now = Date.now();
+  if (now - ud.rateAt > 30_000) ud.rateHits = 0;
+  ud.rateAt = now;
+  if (++ud.rateHits < 3) return false;
+  ud.rateHits = 0;
+  const pen = await strikes.add(ud.pub, ud.ip, 'spam', 1);
+  if (pen.mute > 0 && ud.open) {
+    m.muted++;
+    send(ws, { t: 'err', code: 'muted', r: room, wait: pen.mute, reason: 'spam', cat: 'spam' });
+    return true;
+  }
+  return false;
+}
+
 async function postChat(ws: WS, room: Room, body: unknown) {
   const ud = ws.getUserData();
   if (!flags.chat) return send(ws, { t: 'err', code: 'off', r: room });
   if (!ud.rooms.has(room)) return send(ws, { t: 'err', code: 'invalid', r: room });
   if (closedRooms.has(room)) return send(ws, { t: 'err', code: 'closed', r: room });
+  // 1. silêncio em vigor (por pessoa ou IP)
+  const muted = await strikes.muted(ud.pub, ud.ip);
+  if (muted) return send(ws, { t: 'err', code: 'muted', r: room, wait: muted.wait, reason: muted.reason });
+  // 2. filtro local: tamanho, links, lista de termos
   const chk = mod.check(body);
   if (!chk.ok) {
-    if (chk.reason === 'blocked') m.blocked++;
-    return send(ws, { t: 'err', code: chk.reason, r: room });
+    if (chk.reason === 'invalid') return send(ws, { t: 'err', code: 'invalid', r: room });
+    m.blocked++;
+    const text = String(body);
+    // o filtro local não sabe a gravidade: o modelo diz (palavrão pesa menos que racismo)
+    const v = hasLink(text) ? null : await ai.classify(text);
+    const cat: ModCategory = hasLink(text) ? 'link' : v && ai.isFlagged(v) && v.cat !== 'spam' ? v.cat : 'palavrao';
+    return punish(ws, room, cat === 'link' ? 'spam' : 'abuse', cat);
   }
+  // 3. modo lento e limite de taxa; insistir vira spam
   const now = Date.now();
   const sl = slow.get(room);
   const last = ud.last.get(room) ?? 0;
   if (sl && sl.seconds > 0 && now - last < sl.seconds * 1000) {
     m.rateLimited++;
+    if (await rateStrike(ws, room)) return;
     return send(ws, { t: 'err', code: 'slow', r: room, wait: Math.ceil((sl.seconds * 1000 - (now - last)) / 1000) });
   }
   if (!ipBuckets.take(ud.ip) || !ud.msg.take()) {
     m.rateLimited++;
+    if (await rateStrike(ws, room)) return;
     return send(ws, { t: 'err', code: 'rate', r: room, wait: Math.ceil(ud.msg.wait() / 1000) });
+  }
+  // 4. repetição: a mesma mensagem em 60s
+  const k = normalize(chk.body);
+  ud.recent = ud.recent.filter((r) => now - r.at < 60_000);
+  if (k && ud.recent.some((r) => r.k === k)) return punish(ws, room, 'spam', 'spam');
+  ud.recent.push({ k, at: now });
+  if (ud.recent.length > 5) ud.recent.shift();
+  // 5. modelo de decisão (só o que passou pelos filtros baratos chega aqui)
+  const v: Verdict = await ai.classify(chk.body);
+  if (!ud.open) return;
+  if (ai.isFlagged(v)) {
+    m.blocked++;
+    return punish(ws, room, v.cat === 'spam' ? 'spam' : 'abuse', v.cat);
   }
   ud.last.set(room, now);
   m.chatIn++;
   const msg: ChatMsg = { id: newId(), nick: ud.nick, hue: ud.hue, body: chk.body, at: now, ...(ud.side ? { side: ud.side } : {}) };
+  await broadcast(room, msg, ud.pub);
+}
+
+/** grava e entrega para a sala inteira (todos os workers via Redis, ou local) */
+async function broadcast(room: Room, msg: ChatMsg, author: string) {
   if (bus?.ready()) {
     try {
       await store.persist(room, JSON.stringify(msg));
-      await bus.cmd.publish(CH.chat, JSON.stringify({ r: room, m: msg, a: ud.pub }));
+      await bus.cmd.publish(CH.chat, JSON.stringify({ r: room, m: msg, a: author }));
       return; // volta pela assinatura e é entregue em todos os workers, inclusive este
     } catch (e) {
       console.warn('[chat] Redis falhou, entregando local:', (e as Error).message);
     }
   }
-  deliver(room, msg, ud.pub);
+  deliver(room, msg, author);
 }
 
 async function report(ws: WS, room: Room, id: unknown) {
@@ -438,6 +532,9 @@ app.ws<UD>('/ws', {
         react: new Bucket(config.reactBurst, config.reactRefill),
         last: new Map(),
         open: true,
+        rateHits: 0,
+        rateAt: 0,
+        recent: [],
       },
       key,
       proto,
@@ -477,12 +574,8 @@ app.ws<UD>('/ws', {
         return void postChat(ws, msg.r, msg.body).catch(() => {});
       case 'react':
         return react(ws, msg.r, msg.e);
-      case 'nick': {
-        const n = cleanNick(msg.nick, mod);
-        if (!n) return send(ws, { t: 'err', code: 'invalid' });
-        ud.nick = n;
-        return send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side }, online: Math.max(online, conns), flags });
-      }
+      case 'nick':
+        return void setNick(ws, msg.nick).catch(() => {});
       case 'side': {
         ud.side = msg.side === 'a' || msg.side === 'b' ? msg.side : null;
         return send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side }, online: Math.max(online, conns), flags });
@@ -537,6 +630,18 @@ app.get('/metrics', (res) => {
     `ws_chat_in_total ${m.chatIn}`,
     `ws_chat_blocked_total ${m.blocked}`,
     `ws_chat_rate_limited_total ${m.rateLimited}`,
+    `ws_chat_punished_total ${m.punished}`,
+    `ws_chat_muted_total ${m.muted}`,
+    `ws_mod_ai_enabled ${ai.enabled ? 1 : 0}`,
+    `ws_mod_ai_circuit_open ${ai.circuitOpen ? 1 : 0}`,
+    `ws_mod_ai_calls_total ${ai.stats.calls}`,
+    `ws_mod_ai_messages_total ${ai.stats.messages}`,
+    `ws_mod_ai_cache_hits_total ${ai.stats.cacheHits}`,
+    `ws_mod_ai_flagged_total ${ai.stats.flagged}`,
+    `ws_mod_ai_errors_total ${ai.stats.errors}`,
+    `ws_mod_ai_timeouts_total ${ai.stats.timeouts}`,
+    `ws_mod_ai_unknown_total ${ai.stats.unknown}`,
+    `ws_mod_ai_last_ms ${ai.stats.lastMs}`,
     `ws_conns_rejected_total ${m.rejectedConns}`,
     `ws_slow_rooms ${[...slow.values()].filter((s) => s.seconds > 0).length}`,
     `ws_redis_ready ${bus?.ready() ? 1 : 0}`,

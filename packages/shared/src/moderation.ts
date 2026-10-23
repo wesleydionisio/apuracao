@@ -7,6 +7,8 @@ export const BASE_BLOCKED = [
   'macaco', 'crioulo', 'arrombado', 'arrombada', 'fdp', 'filhodaputa', 'vagabunda', 'vadia',
   'piranha', 'cuzao', 'cu', 'pau no cu', 'retardado', 'mongoloide', 'estupro', 'estuprar',
   'nazista', 'hitler', 'matar', 'morte ao', 'morra', 'bala nele', 'fuzilar', 'enforcar',
+  'foder', 'fuder', 'foda', 'fodase', 'foda se', 'fodido', 'fudido', 'fudeu', 'vsf', 'vtnc', 'tnc', 'pqp',
+  'krl', 'caraio', 'merda', 'bosta', 'otario', 'babaca', 'cuzão', 'desgraçado', 'filha da puta', 'puta que pariu',
 ];
 
 const LEET: Record<string, string> = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', $: 's' };

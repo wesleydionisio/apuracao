@@ -76,6 +76,7 @@ function Row({
   delta,
   final,
   refs,
+  reserve = false,
 }: {
   c: CandidateDef;
   pct: number;
@@ -83,6 +84,7 @@ function Row({
   lead: boolean;
   delta: number | null;
   final: boolean;
+  reserve?: boolean;
   /** referências já convertidas para este candidato (0–100) */
   refs: { k: keyof RowRefs; v: number }[];
 }) {
@@ -127,10 +129,11 @@ function Row({
           />
         ))}
       </div>
-      {refs.length > 0 && (
-        <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
+      {(refs.length > 0 || reserve) && (
+        // reserve: altura fixa mesmo vazia, para ligar/desligar referências não empurrar a página
+        <dl className={cn('mt-2 flex gap-x-4 text-[12px] text-muted-foreground', reserve ? 'h-5 flex-nowrap items-center overflow-hidden' : 'flex-wrap gap-y-1')}>
           {refs.map((r) => (
-            <div key={r.k} className="flex items-center gap-1.5">
+            <div key={r.k} className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
               <dt className="flex items-center gap-1.5">
                 <RefTick k={r.k} />
                 {REF_LABEL[r.k]}
@@ -152,12 +155,15 @@ export function CandidateRows({
   snap,
   className,
   refs,
+  reserve = false,
 }: {
   board: Board;
   snap: Snap;
   className?: string;
   /** referências opcionais (% de A); ausentes = não mostra */
   refs?: RowRefs;
+  /** reserva a linha de referência mesmo sem nenhuma ligada (filtros sem deslocar a tela) */
+  reserve?: boolean;
 }) {
   const [ca, cb] = board.candidates;
   const d = useMemo(() => (snap.s === 'br' ? recentDelta(board.curve) : null), [board.curve, snap.s]);
@@ -174,7 +180,7 @@ export function CandidateRows({
   return (
     <ul className={cn('divide-y', className)} aria-label="Votos por candidato">
       {rows.map((r) => (
-        <Row key={r.c.key} {...r} final={final} />
+        <Row key={r.c.key} {...r} final={final} reserve={reserve} />
       ))}
     </ul>
   );

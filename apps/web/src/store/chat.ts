@@ -6,6 +6,10 @@ const MAX = 200;
 export interface ChatErr {
   code: string;
   wait?: number;
+  /** categoria da moderação (blocked/muted) */
+  cat?: string;
+  /** muted: spam ou conteúdo impróprio */
+  reason?: string;
   at: number;
 }
 

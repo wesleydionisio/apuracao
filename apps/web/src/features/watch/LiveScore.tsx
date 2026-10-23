@@ -2,7 +2,7 @@
 // (1º turno 2026, 2º turno 2022), chips para ligar/desligar as referências e o mini gráfico.
 import type { Board, CandidateDef, Snap } from '@apuracao/shared';
 import NumberFlow from '@number-flow/react';
-import { ChartSpline, ChevronRight, Info } from 'lucide-react';
+import { ChartSpline, ChevronRight, Info, X } from 'lucide-react';
 import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { SourceStamp } from '@/components/core/live';
@@ -13,7 +13,7 @@ import { flipOf, useCurve22, useHistRefs, type HistRefs } from './data';
 
 import { NightSpark } from './NightSpark';
 import { useRefs, type Refs } from './refs';
-import { SplitFill } from '@/components/core/bars';
+import { Fill, SplitFill } from '@/components/core/bars';
 
 const PCT2 = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
 const PCT1 = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
@@ -72,21 +72,35 @@ function Side({
 }
 
 /** Referências ligadas: uma linha por eleição, A à esquerda e B à direita (alinhadas com o placar). */
-function RefTable({ rows }: { rows: { label: string; pa: number }[] }) {
-  if (!rows.length) return null;
+/**
+ * Referências numa linha de altura fixa: ligar ou desligar 1º turno/2022 troca só o conteúdo,
+ * nunca empurra o que vem abaixo.
+ */
+function RefLine({ t1, y22 }: { t1: number | null; y22: number | null }) {
+  const cell = (label: string, title: string, pa: number | null, align: 'l' | 'r') => (
+    <div className={cn('flex min-w-0 items-center gap-1.5', align === 'r' && 'justify-end')} title={title}>
+      {pa !== null && (
+        <>
+          <span className="h-2.5 w-[2px] shrink-0 rounded-full bg-foreground/70" aria-hidden />
+          <span className="truncate text-muted-foreground">{label}</span>
+          <span className="num font-semibold whitespace-nowrap text-foreground/85">
+            {fmt1(pa)} × {fmt1(100 - pa)}
+          </span>
+        </>
+      )}
+    </div>
+  );
   return (
-    <dl className="mt-2 space-y-0.5 text-[12px]">
-      {rows.map((r) => (
-        <div key={r.label} className="num flex items-center justify-between gap-2 leading-5">
-          <dd className="font-semibold text-foreground/85">{fmt1(r.pa)}%</dd>
-          <dt className="flex items-center gap-1.5 truncate text-[11.5px] text-muted-foreground">
-            <span className="h-2.5 w-[2px] rounded-full bg-foreground/70" aria-hidden />
-            {r.label}
-          </dt>
-          <dd className="font-semibold text-foreground/85">{fmt1(100 - r.pa)}%</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="mt-1.5 grid h-5 grid-cols-2 items-center gap-3 text-[12px]" aria-live="polite">
+      {t1 === null && y22 === null ? (
+        <span className="col-span-2 truncate text-[11px] text-muted-foreground">Compare com o 1º turno ou com 2022</span>
+      ) : (
+        <>
+          {cell('1º turno', '1º turno de 2026, só os dois finalistas', t1, 'l')}
+          {cell('2022', '2º turno de 2022, mesmos partidos', y22, 'r')}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -110,7 +124,7 @@ export function VersusBar({
       ? [{ v: (marks[0].v + marks[1].v) / 2, label: `${marks[0].label} · ${marks[1].label}` }]
       : marks;
   return (
-    <div className={cn('relative', marks.length ? 'pt-3.5' : '', className)}>
+    <div className={cn('relative pt-3.5', className)}>
       {labels.map((m) => (
         <span
           key={m.label}
@@ -207,33 +221,41 @@ export function LiveScore({
         <Side c={ca} snap={s} pct={pa} lead={s?.lead === 'a'} align="l" size={size} />
         <Side c={cb} snap={s} pct={pa === null ? null : s!.pb} lead={s?.lead === 'b'} align="r" size={size} />
       </div>
-      <VersusBar board={board} pa={pa} marks={marks} className={size === 'lg' ? 'mt-5' : 'mt-2.5'} />
-      <RefTable
-        rows={[
-          ...(refs.t1 && hist.t1 !== null ? [{ label: '1º turno 2026', pa: hist.t1 }] : []),
-          ...(refs.y22 && hist.y22 !== null ? [{ label: '2º turno 2022 · mesmos partidos', pa: hist.y22 }] : []),
-        ]}
-      />
-      <div className="mt-2 flex items-center justify-between gap-2 text-[11.5px] text-muted-foreground">
-        <span className="num min-w-0 truncate">
-          <span className="font-semibold text-foreground">{s ? s.pst.toLocaleString('pt-BR', PCT2) : '0,00'}%</span> das urnas
-          {status && (
-            <>
-              {' · '}
-              <span className={cn('font-semibold', s?.status === 'nao_iniciada' ? 'text-muted-foreground' : 'text-foreground')}>{status}</span>
-            </>
-          )}
-        </span>
-        <span className="flex shrink-0 items-center gap-1">
-          <SourceStamp at={board.source.at} short className="text-[11.5px]" />
-          {onInfo && (
-            <button type="button" onClick={onInfo} className="relative -mr-1.5 flex size-8 items-center justify-center rounded-full before:absolute before:-inset-1.5 hover:bg-accent" aria-label="Sobre os dados e o projeto">
-              <Info className="size-3.5" aria-hidden />
-            </button>
-          )}
-        </span>
+      {/* apuração em cima da barra de votos: quanto do total aquele placar representa */}
+      <div className={size === 'lg' ? 'mt-5' : 'mt-3'}>
+        <div className="flex items-center justify-between gap-2 text-[12px] text-muted-foreground">
+          <span className="num min-w-0 truncate">
+            <span className="font-semibold text-foreground">{s ? s.pst.toLocaleString('pt-BR', PCT2) : '0,00'}%</span> das urnas apuradas
+            {status && (
+              <>
+                {' · '}
+                <span className={cn('font-semibold', s?.status === 'nao_iniciada' ? 'text-muted-foreground' : 'text-foreground')}>{status}</span>
+              </>
+            )}
+          </span>
+          <span className="flex shrink-0 items-center gap-1">
+            <SourceStamp at={board.source.at} short className="text-[12px]" />
+            {onInfo && (
+              <button type="button" onClick={onInfo} className="relative -mr-1.5 flex size-8 items-center justify-center rounded-full before:absolute before:-inset-1.5 hover:bg-accent" aria-label="Sobre os dados e o projeto">
+                <Info className="size-3.5" aria-hidden />
+              </button>
+            )}
+          </span>
+        </div>
+        <div
+          className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"
+          role="progressbar"
+          aria-label="Urnas apuradas"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={s?.pst ?? 0}
+        >
+          <Fill pct={s?.pst ?? 0} className="rounded-full bg-foreground/80" />
+        </div>
       </div>
-      <div className={cn('flex items-center justify-between gap-2', size === 'lg' ? 'mt-4' : 'mt-2')}>
+      <VersusBar board={board} pa={pa} marks={marks} className={size === 'lg' ? 'mt-3' : 'mt-1.5'} />
+      <RefLine t1={refs.t1 ? hist.t1 : null} y22={refs.y22 ? hist.y22 : null} />
+      <div className={cn('relative flex items-center justify-between gap-2', size === 'lg' ? 'mt-4' : 'mt-2')}>
         <RefChips refs={refs} set={setRefs} hist={hist} showChart={!chartAlways} />
         <Link
           href="/painel"
@@ -242,13 +264,32 @@ export function LiveScore({
           Painel
           <ChevronRight className="size-3.5" aria-hidden />
         </Link>
+        {/* celular: o gráfico abre flutuando sobre o topo do chat, sem empurrar nada */}
+        {showChart && !chartAlways && (
+          <div className="animate-in fade-in-0 slide-in-from-top-1 absolute inset-x-0 top-full z-30 mt-2 rounded-xl border bg-card p-2.5 shadow-lg duration-200">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-[12px] font-semibold">A noite até aqui</span>
+              <button
+                type="button"
+                onClick={() => setRefs({ chart: false })}
+                className="relative -mr-1 flex size-8 items-center justify-center rounded-full before:absolute before:-inset-1.5 hover:bg-accent"
+                aria-label="Fechar gráfico"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            </div>
+            <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={120} />
+            {refs.y22 && curve22 && <p className="mt-1 text-[12px] text-muted-foreground">Curva tracejada: 2022 no mesmo ponto da apuração, reconstrução aproximada</p>}
+          </div>
+        )}
       </div>
-      {showChart && (
-        <div className={cn('animate-in fade-in-0 duration-200', size === 'lg' ? 'mt-4' : 'mt-2')}>
+      {chartAlways && (
+        <div className="mt-4">
           <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={size === 'lg' ? 220 : 104} />
-          {refs.y22 && curve22 && (
-            <p className="mt-1 text-[12px] text-muted-foreground">Curva tracejada: 2022 no mesmo ponto da apuração · reconstrução aproximada</p>
-          )}
+          {/* linha reservada: ligar 2022 não empurra o letreiro */}
+          <p className="mt-1 h-5 text-[12px] text-muted-foreground">
+            {refs.y22 && curve22 ? 'Curva tracejada: 2022 no mesmo ponto da apuração, reconstrução aproximada' : null}
+          </p>
         </div>
       )}
     </section>

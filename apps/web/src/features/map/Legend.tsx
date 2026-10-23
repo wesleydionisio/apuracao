@@ -12,6 +12,7 @@ export function MapLegend({
   compact = false,
   bare = false,
   caption = 'Diferença entre os dois, em pontos',
+  ghost,
 }: {
   cands: CandidateDef[];
   className?: string;
@@ -19,6 +20,8 @@ export function MapLegend({
   /** sem os avatares nas pontas (quando quem está ao lado já mostra) */
   bare?: boolean;
   caption?: string;
+  /** legenda alternativa mais longa: reserva o espaço dela (trocar a legenda não empurra a página) */
+  ghost?: string;
 }) {
   const [a, b] = cands;
   const bands = [4, 3, 2, 1, 0];
@@ -48,12 +51,16 @@ export function MapLegend({
         {!bare && <CandidateAvatar c={b} size="xs" />}
       </div>
       {!compact && (
-        <p className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
-          <span>{caption}</span>
-          <span className="inline-flex items-center gap-1">
-            <span className="inline-block size-2.5 rounded-[3px] bg-border" /> sem dados
-          </span>
-        </p>
+        <div className="grid w-full text-[12px] text-muted-foreground [&>*]:col-start-1 [&>*]:row-start-1">
+          {[caption, ...(ghost && ghost !== caption ? [ghost] : [])].map((c, i) => (
+            <p key={c} className={cn('flex flex-wrap content-start items-center justify-center gap-x-3 gap-y-1', i > 0 && 'invisible')} aria-hidden={i > 0}>
+              <span>{c}</span>
+              <span className="inline-flex items-center gap-1">
+                <span className="inline-block size-2.5 rounded-[3px] bg-border" /> sem dados
+              </span>
+            </p>
+          ))}
+        </div>
       )}
     </div>
   );

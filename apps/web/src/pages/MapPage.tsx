@@ -21,6 +21,21 @@ import { useBoard } from '@/store/board';
 type View = 'map' | 'list';
 
 const COMPARE_KEY = 'map:compare';
+const TITLES = [
+  'Quem lidera em cada estado',
+  'Como cada estado votou no 1º turno',
+  'Como cada estado votou em 2022',
+  'Para onde cada estado andou desde o 1º turno',
+  'Para onde cada estado andou desde 2022',
+];
+/** todas as legendas que o mapa pode mostrar (reservam o espaço da maior) */
+const CAPTIONS = [
+  'Parcial do 2º turno, votos válidos.',
+  'Confronto direto entre os dois finalistas no 1º turno de 2026.',
+  '2º turno de 2022, pelos mesmos partidos.',
+  'Cor de quem ganhou terreno; mais forte quanto maior o deslocamento. Compare a parcial com o 1º turno.',
+  'Cor de quem ganhou terreno; mais forte quanto maior o deslocamento. Compare a parcial com 2022.',
+];
 
 function savedCompare(): RefLayer | null {
   try {
@@ -101,7 +116,14 @@ function MapView({ board }: { board: Board }) {
       <header className="flex items-end justify-between gap-3 pt-1">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">Presidente, 2º turno, por estado</p>
-          <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-balance">{title}</h1>
+          {/* todos os títulos possíveis empilhados, só o ativo visível: trocar a camada não muda a altura */}
+          <h1 className="grid text-[22px] font-semibold leading-tight tracking-tight text-balance [&>*]:col-start-1 [&>*]:row-start-1">
+            {[...new Set([title, ...TITLES])].map((t) => (
+              <span key={t} className={t === title ? undefined : 'invisible'} aria-hidden={t !== title}>
+                {t}
+              </span>
+            ))}
+          </h1>
         </div>
         <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como">
           <ToggleGroupItem value="map" aria-label="Mapa">
@@ -130,8 +152,14 @@ function MapView({ board }: { board: Board }) {
           </ToggleGroup>
           {effective === 'live' && board.br && <span className="num text-xs text-muted-foreground">{fmtPct(board.br.pst, 1)}% apurado</span>}
         </div>
-        {effective === 'live' && (
-          <div className="flex items-center gap-2" role="group" aria-label="Comparar com">
+        {/* sempre no lugar; fora da camada "Agora" fica invisível (não empurra o resto) */}
+        {(
+          <div
+            className={cn('flex items-center gap-2', effective !== 'live' && 'invisible')}
+            role="group"
+            aria-label="Comparar com"
+            aria-hidden={effective !== 'live'}
+          >
             <GitCompareArrows className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="text-xs text-muted-foreground">Comparar com</span>
             {(['t1', 'y2022'] as RefLayer[]).map((r) => {
@@ -174,8 +202,20 @@ function MapView({ board }: { board: Board }) {
             className="mx-auto max-w-[520px]"
             label={swingMode ? 'Mapa do deslocamento por estado' : undefined}
           />
-          <MapLegend cands={cands} className="mt-3" caption={swingMode ? `Deslocamento desde ${REF_LABEL[compare!]}, em pontos` : undefined} />
-          <p className="mt-3 text-center text-xs text-pretty text-muted-foreground">{caption} Toque num estado para ver as cidades.</p>
+          <MapLegend
+            cands={cands}
+            className="mt-3"
+            caption={swingMode ? `Deslocamento desde ${REF_LABEL[compare!]}, em pontos` : undefined}
+            ghost={`Deslocamento desde ${REF_LABEL.y2022.length > REF_LABEL.t1.length ? REF_LABEL.y2022 : REF_LABEL.t1}, em pontos`}
+          />
+          {/* todas as legendas possíveis no mesmo lugar, só a ativa visível: a altura não muda com os filtros, em qualquer largura */}
+          <div className="mt-3 grid text-center text-xs text-pretty text-muted-foreground [&>*]:col-start-1 [&>*]:row-start-1">
+            {[...new Set([caption, ...CAPTIONS])].map((c) => (
+              <p key={c} className={c === caption ? undefined : 'invisible'} aria-hidden={c !== caption}>
+                {c} Toque num estado para ver as cidades.
+              </p>
+            ))}
+          </div>
           {values.ZZ?.pa != null && (
             <button type="button" onClick={() => pick('ZZ')} className="press mx-auto mt-3 flex min-h-10 items-center gap-2 rounded-full border px-3 text-xs">
               Exterior

@@ -205,7 +205,12 @@ function handle(m: ServerMsg) {
       chat.set({ slow: { ...chat.slow, [m.r]: m.seconds } });
       break;
     case 'err':
-      if (m.r) chat.setErr(m.r, { code: m.code, wait: m.wait, at: Date.now() });
+      if (m.r) chat.setErr(m.r, { code: m.code, wait: m.wait, cat: m.cat, reason: m.reason, at: Date.now() });
+      // bloqueio que não foi ao chat (reincidência): aviso só neste aparelho, no próprio feed
+      if (m.r && (m.code === 'blocked' || m.code === 'muted') && m.cat && !m.public) {
+        const me = board.me;
+        chat.push(m.r, { id: `local-${Date.now()}`, nick: me?.nick ?? 'você', hue: me?.hue ?? 0, body: '', at: Date.now(), mod: m.cat, local: true });
+      }
       break;
   }
 }

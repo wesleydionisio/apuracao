@@ -15,7 +15,7 @@ import { EmojiPanel } from './emoji';
 import { FloatLayer, spawnFloat } from './floats';
 import { useKeyboardOpen } from '@/features/watch/hooks';
 import { useMountOnce } from './lazy';
-import { ChatLine, NICK_CLS, NickAvatar, nickColor, PartyBadge, renderBody, SystemLine } from './parts';
+import { ChatLine, ModLine, NICK_CLS, NickAvatar, nickColor, PartyBadge, renderBody, SystemLine } from './parts';
 import { read, write } from './rooms';
 import { markOwn, ownRecent, TorcidaBar } from './torcida';
 
@@ -25,6 +25,13 @@ const ProfileDrawer = lazy(() => import('./drawers').then((m) => ({ default: m.P
 const SideDrawer = lazy(() => import('./drawers').then((m) => ({ default: m.SideDrawer })));
 
 const EMPTY: ChatMsg[] = [];
+
+/** 45 -> "45s"; 130 -> "2:10"; 7200 -> "2h00" */
+function fmtWait(s: number): string {
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  return `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`;
+}
 
 const ERR_TEXT: Record<string, string> = {
   rate: 'Devagar: espere um pouco para mandar outra.',
@@ -132,6 +139,8 @@ export default function ChatView({
 
   useEffect(() => {
     if (err?.wait) setCool(Math.ceil(err.wait));
+    // censurado: limpa o que estava digitado para o aviso com o tempo ficar à vista
+    if (err?.code === 'muted') setText('');
   }, [err]);
 
   const degraded = link !== 'live' && link !== 'demo';
@@ -178,8 +187,17 @@ export default function ChatView({
     });
   }
 
-  const errText = err && Date.now() - err.at < 8000 ? (ERR_TEXT[err.code] ?? 'Não foi possível enviar.') : null;
-  const placeholder = disabled ? 'Chat indisponível agora' : cool ? `Aguarde ${cool}s para a próxima` : 'Comente a apuração…';
+  const mutedNow = err?.code === 'muted' && cool > 0;
+  // moderação: o aviso fica só na caixa de texto (e na linha censurada do chat); sem texto repetido embaixo
+  const modErr = err?.code === 'muted' || err?.code === 'blocked';
+  const errText = err && !modErr && Date.now() - err.at < 8000 ? (ERR_TEXT[err.code] ?? 'Não foi possível enviar.') : null;
+  const placeholder = disabled
+    ? 'Chat indisponível agora'
+    : mutedNow
+      ? `Censurado, melhor se comportar! ${fmtWait(cool)}`
+      : cool
+        ? `Aguarde ${cool}s para a próxima`
+        : 'Comente a apuração…';
   const mySide = me?.side ? cands?.find((c) => c.key === me.side) : null;
   const counts = { a: reacts?.['cheer:a'] ?? 0, b: reacts?.['cheer:b'] ?? 0 };
 
@@ -233,6 +251,8 @@ export default function ChatView({
           {msgs.map((m) =>
             m.sys ? (
               <SystemLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
+            ) : m.mod ? (
+              <ModLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
             ) : (
               <ChatLine
                 key={m.id}
@@ -284,12 +304,12 @@ export default function ChatView({
               maxLength={MAX_BODY}
               enterKeyHint="send"
               placeholder={placeholder}
-              disabled={disabled}
-              className="h-10 w-full rounded-full border border-input bg-muted/50 pr-11 pl-4 outline-none transition-[box-shadow,border-color,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/30 disabled:opacity-60"
+              disabled={disabled || mutedNow}
+              className={cn('h-10 w-full rounded-full border border-input bg-muted/50 pl-4 outline-none transition-[box-shadow,border-color,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/30 disabled:opacity-60', mutedNow ? 'pr-4 placeholder:text-[13px]' : 'pr-11')}
               aria-label="Mensagem"
               aria-describedby="chat-status"
             />
-            <button
+            {!mutedNow && <button
               type="button"
               onPointerDown={(e) => e.preventDefault()}
               onClick={() => setEmojiOpen((o) => !o)}
@@ -301,7 +321,7 @@ export default function ChatView({
               aria-expanded={emojiOpen}
             >
               {emojiOpen ? <X className="size-[18px]" /> : <Smile className="size-[18px]" />}
-            </button>
+            </button>}
           </div>
           {text.trim() ? (
             <Button
@@ -312,7 +332,7 @@ export default function ChatView({
               onPointerDown={(e) => e.preventDefault()}
               aria-label={cool ? `Aguarde ${cool} segundos` : 'Enviar'}
             >
-              {cool ? <span className="num text-[13px] font-semibold">{cool}</span> : <SendHorizontal className="size-[18px]" aria-hidden />}
+              {cool && !mutedNow ? <span className="num text-[12px] font-semibold">{cool}</span> : <SendHorizontal className="size-[18px]" aria-hidden />}
             </Button>
           ) : (
             <ReactButton room={room} disabled={degraded} />
@@ -324,7 +344,7 @@ export default function ChatView({
           aria-live="polite"
         >
           {errText ? (
-            <span className="font-medium text-destructive">{errText}</span>
+            <span className="font-medium text-foreground/80">{errText}</span>
           ) : text.length > 180 ? (
             <span className={cn('num', MAX_BODY - text.length < 20 && 'text-destructive')}>{MAX_BODY - text.length} caracteres</span>
           ) : (

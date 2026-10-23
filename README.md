@@ -64,6 +64,22 @@ Testes: `pnpm test`.
 Cloudflare: proxy laranja em tudo; SSL "Full (strict)"; cache rule para `/data/*` com Edge TTL 5s
 (respeitando `stale-while-revalidate`); cache total para `/assets/*`; rate limiting na regra free em `POST /api/guess`.
 
+### Moderação do chat
+
+Mensagem passa por: silêncio em vigor → filtro local (tamanho, links, termos) → limite de taxa e modo
+lento → repetição → modelo de decisão (OpenRouter, `OPENROUTER_API_KEY`), em lotes de ~200 ms numa só
+chamada. Se o modelo falhar ou estourar a cota, um disjuntor deixa o chat só com o filtro local.
+
+- Permitido: opinião, torcida e críticas/acusações duras a candidatos ("lula ladrão").
+- Barrado: palavrão (inclusive contra candidato), ofensa a outra pessoa do chat, discriminação,
+  ameaça, conteúdo sexual, spam.
+- Punições graduais por pessoa e por IP (o IP precisa do dobro, por causa do CGNAT): palavrão vale 1,
+  ofensa 2, discriminação/ameaça 3; 2 pontos = 2 min, 4 = 15 min, 6 = 2 h, 9 = 24 h. Spam tem escada
+  própria (30 s → 1 h). Os pontos caem com o tempo.
+- A primeira mensagem barrada de alguém aparece para todos como "mensagem censurada" (sem o texto);
+  as seguintes não chegam ao chat de ninguém.
+- Métricas em `/metrics` do WS (`ws_mod_ai_*`, `ws_chat_punished_total`, `ws_chat_muted_total`).
+
 ### Kill switches
 
 ```bash

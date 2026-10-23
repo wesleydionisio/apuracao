@@ -1,6 +1,7 @@
 // Peças do chat de live: selo de torcida, emoji de partido no texto, linha de mensagem, momento.
 import type { CandidateDef, ChatMsg } from '@apuracao/shared';
-import { PARTY_TOKEN_RE } from '@apuracao/shared';
+import { MOD_LABEL, PARTY_TOKEN_RE } from '@apuracao/shared';
+import { ShieldMinus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { fmtHM } from '@/lib/format';
@@ -111,6 +112,40 @@ export function ChatLine({
       <span className="text-muted-foreground">: </span>
       <span className={cn('text-pretty', big && 'text-[22px] leading-[1.3] [&>span]:align-[3px]')}>{renderBody(m.body, cands, big ? 'md' : 'sm')}</span>
     </button>
+  );
+}
+
+/**
+ * Mensagem barrada pela moderação. Tom neutro de propósito: informa sem fazer espetáculo.
+ * - vinda do servidor: a primeira mensagem barrada de alguém, que todos veem (sem o texto);
+ * - local: aviso só para o autor, quando as seguintes nem chegam ao chat.
+ */
+export function ModLine({ m, cands, fresh }: { m: ChatMsg; cands: CandidateDef[] | null; fresh: boolean }) {
+  const side = m.side ? cands?.find((c) => c.key === m.side) : null;
+  const why = m.mod ? MOD_LABEL[m.mod] : undefined;
+  // uma linha só: informa sem ocupar o chat
+  return (
+    <div
+      className={cn('flex min-w-0 items-center gap-1.5 px-3 py-[3px] text-[13px] leading-[1.45] text-muted-foreground', fresh && 'animate-in fade-in-0 duration-200')}
+      role="note"
+      title={why ? `Motivo: ${why}` : undefined}
+    >
+      <ShieldMinus className="size-3.5 shrink-0 opacity-70" aria-hidden />
+      <span className="min-w-0 truncate">
+        {m.local ? (
+          'Sua mensagem foi censurada'
+        ) : (
+          <>
+            {side && <PartyBadge c={side} className="mr-1.5 opacity-60" />}
+            <span className={cn('font-semibold opacity-80', NICK_CLS)} style={nickColor(m.hue)}>
+              {m.nick}
+            </span>
+            <span>: </span>
+            <span className="italic">mensagem censurada</span>
+          </>
+        )}
+      </span>
+    </div>
   );
 }
 
