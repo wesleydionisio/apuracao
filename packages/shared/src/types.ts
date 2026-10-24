@@ -196,4 +196,6 @@ export interface Guess {
   mun: string | null;
   munPa: number | null;
   createdAt: string;
+  /** muda a cada ajuste: versiona a URL do card (a CDN não serve o antigo) */
+  updatedAt?: string;
 }

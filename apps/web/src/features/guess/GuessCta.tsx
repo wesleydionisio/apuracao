@@ -156,7 +156,9 @@ export function GuessCta({ board, className }: { board: Board; className?: strin
 const DISMISS = 'guess-cta-off';
 
 /** faixa sobre o topo do chat: some ao fechar (nesta visita) ou depois de palpitar */
-export function GuessStrip({ board }: { board: Board | null }) {
+export function GuessStrip() {
+  // só o horário de fechar: snapshot novo do placar não re-renderiza o chat
+  const releaseAt = useBoard((s) => s.board?.releaseAt);
   const stats = useBoard((s) => s.stats);
   const [off, setOff] = useState(() => {
     try {
@@ -165,7 +167,7 @@ export function GuessStrip({ board }: { board: Board | null }) {
       return false;
     }
   });
-  if (off || !guessesOpen(board) || myGuessId()) return null;
+  if (off || !releaseAt || Date.now() >= Date.parse(releaseAt) || myGuessId()) return null;
   return (
     <div className="flex items-center gap-2 border-b bg-card/95 py-1.5 pr-1.5 pl-3 text-[12.5px] backdrop-blur animate-in fade-in-0 duration-300">
       <Pulse />

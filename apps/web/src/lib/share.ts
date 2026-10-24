@@ -9,15 +9,34 @@ export interface ShareInput {
 
 const blobCache = new Map<string, Promise<Blob | null>>();
 
-/** Comece a baixar o PNG no pointerdown para o share ainda estar dentro do gesto do usuário. */
+/** Comece a baixar o PNG no pointerdown para o share ainda estar dentro do gesto do usuário. Falha (503 com a
+ * fila de cards cheia, rede) não fica guardada: o próximo toque tenta de novo. */
 export function prefetchImage(src?: string) {
   if (!src || blobCache.has(src)) return;
   blobCache.set(
     src,
     fetch(src)
       .then((r) => (r.ok && r.headers.get('content-type')?.startsWith('image/') ? r.blob() : null))
-      .catch(() => null),
+      .catch(() => null)
+      .then((b) => {
+        if (!b) blobCache.delete(src);
+        return b;
+      }),
   );
+}
+
+/** o PNG já chegou (o share sai na hora, ainda dentro do gesto) */
+const ready = new Set<string>();
+export function imageReady(src: string) {
+  return ready.has(src);
+}
+
+/** baixa o PNG (gerado só agora, no toque) e devolve se deu */
+export async function loadImage(src: string): Promise<boolean> {
+  prefetchImage(src);
+  const ok = !!(await blobCache.get(src));
+  if (ok) ready.add(src);
+  return ok;
 }
 
 export type ShareResult = 'shared' | 'copied' | 'cancelled' | 'failed';
@@ -52,10 +71,14 @@ export async function share(i: ShareInput): Promise<ShareResult> {
   }
 }
 
-export function downloadImage(src: string, filename = 'apuracao.png') {
+/** salva o PNG; com o blob em mãos, sai dele (sem pedir o card de novo); senão, o link direto */
+export async function downloadImage(src: string, filename = 'apuracao.png') {
+  prefetchImage(src);
+  const blob = await blobCache.get(src);
   const a = document.createElement('a');
-  a.href = src;
+  a.href = blob ? URL.createObjectURL(blob) : src;
   a.download = filename;
   a.rel = 'noopener';
   a.click();
+  if (blob) setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
 }

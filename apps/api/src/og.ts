@@ -1,6 +1,6 @@
 // Cards PNG para compartilhar (Stories 1080×1350, OG 1200×630). satori → SVG → resvg → PNG.
 // Mesmo visual do site: grafite, fotos oficiais do TSE, um número protagonista, barra bicolor.
-// Cache em disco por chave de conteúdo: cada card é gerado uma vez por versão dos dados.
+// Cache por chave de conteúdo (disco; palpites só em memória): cada card é gerado uma vez por versão dos dados.
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -137,20 +137,67 @@ function footer(left: string, size: number): Node {
 async function render(node: Node, fmt: Format): Promise<Buffer> {
   const [w, hgt] = SIZE[fmt];
   const svg = await satori(node as never, { width: w, height: hgt, fonts: loadFonts() });
-  return Buffer.from(new Resvg(svg, { fitTo: { mode: 'width', value: w } }).render().asPng());
+  // o satori já entrega o texto como caminhos: sem isso o resvg varre as fontes do sistema a cada card (>1 s de CPU)
+  return Buffer.from(new Resvg(svg, { fitTo: { mode: 'width', value: w }, font: { loadSystemFonts: false } }).render().asPng());
 }
 
 const cacheDir = () => path.join(config.varDir, 'og');
 
-/** gera (ou devolve do disco) o PNG da chave; `build` só roda em cache miss */
-export async function cached(kind: string, keyData: unknown, build: () => Promise<Buffer>): Promise<Buffer> {
-  const key = createHash('sha1').update(JSON.stringify([DESIGN, keyData])).digest('hex').slice(0, 20);
-  const file = path.join(cacheDir(), `${kind}-${key}.png`);
-  if (existsSync(file)) return readFile(file);
-  const png = await build();
-  mkdirSync(cacheDir(), { recursive: true });
-  await writeFile(file, png);
-  return png;
+/** cards de palpite: um por pessoa, então ficam só na memória (no disco seriam ~300 KB × cada palpite) */
+const MEM_MAX = 200;
+const mem = new Map<string, Buffer>();
+/** o mesmo card pedido por várias pessoas ao mesmo tempo renderiza uma vez só */
+const inflight = new Map<string, Promise<Buffer>>();
+
+/** fila com um render por vez: o render ocupa a CPU e a API tem de seguir respondendo palpites e login */
+const QUEUE_MAX = 20;
+let running = 0;
+const waiting: (() => void)[] = [];
+export class Busy extends Error {}
+async function slot<T>(fn: () => Promise<T>): Promise<T> {
+  if (running > 0) {
+    if (waiting.length >= QUEUE_MAX) throw new Busy('fila de cards cheia');
+    await new Promise<void>((r) => waiting.push(r));
+  }
+  running++;
+  try {
+    return await fn();
+  } finally {
+    running--;
+    waiting.shift()?.();
+  }
+}
+
+/**
+ * Gera (ou devolve do cache) o PNG da chave; `build` só roda em cache miss. `disk: false` guarda só num LRU em memória.
+ * Lança `Busy` quando a fila de renders está cheia (a rota responde 503 e a CDN/cliente tenta de novo).
+ */
+export async function cached(kind: string, keyData: unknown, build: () => Promise<Buffer>, disk = true): Promise<Buffer> {
+  const key = `${kind}-${createHash('sha1').update(JSON.stringify([DESIGN, keyData])).digest('hex').slice(0, 20)}`;
+  const file = path.join(cacheDir(), `${key}.png`);
+  const hit = mem.get(key);
+  if (hit) {
+    mem.delete(key);
+    mem.set(key, hit);
+    return hit;
+  }
+  if (disk && existsSync(file)) return readFile(file);
+  const busy = inflight.get(key);
+  if (busy) return busy;
+  const job = slot(build)
+    .then(async (png) => {
+      if (disk) {
+        mkdirSync(cacheDir(), { recursive: true });
+        await writeFile(file, png);
+      } else {
+        mem.set(key, png);
+        if (mem.size > MEM_MAX) mem.delete(mem.keys().next().value!);
+      }
+      return png;
+    })
+    .finally(() => inflight.delete(key));
+  inflight.set(key, job);
+  return job;
 }
 
 /** "top 2% do Brasil" quando vale a pena mostrar; senão a posição */

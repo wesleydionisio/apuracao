@@ -73,7 +73,6 @@ export default function ChatView({
   const closed = useChat((s) => s.closed.includes(room));
   const link = useBoard((s) => s.link);
   const me = useBoard((s) => s.me);
-  const board = useBoard((s) => s.board);
   const scOn = useSite((s) => s.site.superchat);
   const cands = useCandidates();
   // digitando no celular: a torcida sai do caminho para sobrar espaço às mensagens
@@ -285,7 +284,7 @@ export default function ChatView({
         <div className="relative min-h-0 flex-1">
           {/* avisos flutuam sobre o topo da lista: aparecer ou sumir não empurra as mensagens */}
           <div className="absolute inset-x-0 top-0 z-10">
-            {!disabled && <GuessStrip board={board} />}
+            {!disabled && <GuessStrip />}
             {disabled && (
               <div className="flex items-center gap-2 border-b bg-muted/95 px-4 py-1.5 text-[12px] text-muted-foreground backdrop-blur" role="status">
                 <WifiOff className="size-3.5 shrink-0" aria-hidden />
@@ -313,7 +312,8 @@ export default function ChatView({
             className="h-full overflow-y-auto overscroll-contain py-1.5"
             role="log"
             aria-label="Mensagens do chat"
-            aria-live="polite"
+            // várias por segundo: anunciar cada uma afoga o leitor de tela (role=log já seria "polite")
+            aria-live="off"
           >
             {!msgs.length && <EmptyChat disabled={disabled} cands={cands} />}
             {msgs.map((m) =>

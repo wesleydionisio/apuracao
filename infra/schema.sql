@@ -56,6 +56,8 @@ create table if not exists guesses (
   ip_hash text
 );
 create index if not exists guesses_mun_idx on guesses (mun_ibge);
+-- sync incremental da API a cada 15 s (where updated_at >= $1)
+create index if not exists guesses_updated_idx on guesses (updated_at);
 
 create table if not exists moments (
   id text primary key,

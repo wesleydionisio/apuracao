@@ -2,7 +2,7 @@
 // por um tempo que depende do valor (a fita encolhe até sair).
 import type { CandidateDef, ChatMsg, Room } from '@apuracao/shared';
 import { fmtBrl, scTier } from '@apuracao/shared';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useNow } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { useChat } from '@/store/chat';
@@ -24,7 +24,7 @@ export function scColors(m: Pick<ChatMsg, 'sc' | 'side'>, cands: CandidateDef[] 
   return { bg: tier.color, ink: tier.ink, base: tier.color, side: null };
 }
 
-export function SuperLine({ m, cands, fresh, className }: { m: ChatMsg; cands: CandidateDef[] | null; fresh?: boolean; className?: string }) {
+export const SuperLine = memo(function SuperLine({ m, cands, fresh, className }: { m: ChatMsg; cands: CandidateDef[] | null; fresh?: boolean; className?: string }) {
   const { bg, ink, base, side } = scColors(m, cands);
   return (
     <article
@@ -44,7 +44,7 @@ export function SuperLine({ m, cands, fresh, className }: { m: ChatMsg; cands: C
       )}
     </article>
   );
-}
+});
 
 /** quanto tempo cada Super Chat novo fica inteiro no topo, para todo mundo ler, antes de recolher para a fita */
 const FEATURE_MS = 5000;

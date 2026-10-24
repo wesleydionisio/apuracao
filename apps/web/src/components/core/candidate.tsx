@@ -1,13 +1,13 @@
 // Identidade visual dos candidatos: foto oficial do TSE, cor e nome. Usado em todas as telas.
 import type { Board, CandidateDef, Side } from '@apuracao/shared';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 
-/** candidatos do Board atual (null antes do primeiro carregamento) */
+/** candidatos do Board atual (null antes do primeiro carregamento); a mesma tupla enquanto não mudam */
 export function useCandidates(): [CandidateDef, CandidateDef] | null {
   const c = useBoard((s) => s.board?.candidates);
-  return c && c.length === 2 ? [c[0], c[1]] : null;
+  return useMemo(() => (c && c.length === 2 ? [c[0], c[1]] : null), [c]);
 }
 
 export const candOf = (b: Board | null | undefined, side: Side) => b?.candidates.find((c) => c.key === side);

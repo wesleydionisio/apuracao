@@ -37,7 +37,11 @@ export const useBoard = create<BoardState>((set, get) => ({
   heroVisible: false,
   setBoard: (b) => {
     const cur = get().board;
+    // mesmo arquivo (304 da CDN): nada muda na tela, só o frescor
+    if (cur && b.generatedAt === cur.generatedAt) return set({ seenAt: Date.now(), loadError: false });
     if (cur) {
+      // candidatos iguais: mesma referência (memos de quem desenha com as cores não refazem)
+      if (JSON.stringify(cur.candidates) === JSON.stringify(b.candidates)) b = { ...b, candidates: cur.candidates };
       // um snapshot recebido via WS pode ser mais novo que o JSON estático em cache na CDN
       if (cur.br && b.br && !newer(cur.br, b.br)) b = { ...b, br: cur.br };
       const ufs = { ...b.ufs };

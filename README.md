@@ -87,6 +87,17 @@ compose que não publica porta nenhuma para fora: o nginx da máquina termina o 
   saudável, volta sozinho para a versão anterior. Um deploy por vez.
 - **Na pressa (noite da apuração):** GitHub → Actions → Deploy → Run workflow, com "Pular typecheck e testes".
 - **Voltar uma versão:** Run workflow com `rollback` (ou um commit), ou na VPS: `./infra/deploy.sh rollback`.
+- **O chat não cai à toa:** os workers WS só reiniciam quando o código deles (`apps/ws`, `packages`, dependências,
+  compose) muda, um de cada vez. Ajuste só na API ou no site não derruba conexão nenhuma. Cirúrgico, na VPS:
+  `./infra/deploy.sh --only api` (ou `--only caddy`, `--only api,poller`). Depois das 17h, nunca `ws1`/`ws2` juntos.
+- **O /ws não passa pelo Caddy:** o nginx da máquina manda direto para os workers (`127.0.0.1:3012` e `3013`,
+  `least_conn`); o Caddy pode reiniciar sem derrubar o chat. O nginx também só aceita o `CF-Connecting-IP` vindo das
+  faixas da Cloudflare (quem bate direto no IP com o cabeçalho inventado vira o próprio IP).
+- **Limites da máquina** (aplicados em 24/10): nginx com `worker_rlimit_nofile 262144` e `worker_connections 65536`
+  (`/etc/nginx/nginx.conf`, backup `.bak-*` ao lado); `infra/sysctl-apuracao.conf` em `/etc/sysctl.d/99-apuracao.conf`
+  (portas de saída, conntrack de 1 M). Cada container tem teto de memória (`infra/compose.ovh.yml`).
+- **Na noite:** `tail -f var/metrics.log` (uma linha por minuto: conexões e heap de cada worker, memória livre, load,
+  conntrack) e `sudo tail -f /var/log/nginx/error.log`. O alerta no Telegram cobre poller, API e os dois workers.
 - **Entrar na VPS:** `ssh -i ~/.ssh/urnadigital_ovh ubuntu@51.222.220.40` → `cd /opt/apuracao`, `docker compose ps`,
   `docker compose logs -f api ws1 poller`, `tail var/deploy.log`.
 - Segredos do Actions: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`. A VPS lê o repositório com uma deploy key só de leitura.
@@ -97,13 +108,15 @@ compose que não publica porta nenhuma para fora: o nginx da máquina termina o 
 2. `cp .env.example .env` e preencha (`SECRET`, `ADMIN_TOKEN`, `POSTGRES_PASSWORD`, `SITE_HOST`, `PUBLIC_URL`).
 3. `pnpm install && pnpm etl` (gera `public/data/static`, `apps/web/public/geo`, fontes dos cards).
 4. `docker compose up -d --build`
-5. Cron do alerta: `* * * * * cd /opt/apuracao && ./infra/alert.sh >> var/alert.log 2>&1`
+5. Cron do alerta e das métricas: `* * * * * cd /opt/apuracao && ./infra/alert.sh >> var/alert.log 2>&1` e
+   `* * * * * cd /opt/apuracao && ./infra/metrics.sh`
 
 Cloudflare: proxy laranja em tudo; SSL "Full (strict)"; cache rule para `/data/*` com Edge TTL 5s
 (respeitando `stale-while-revalidate`); cache total para `/assets/*`; rate limiting na regra free em `POST /api/guess`.
 Uma segunda cache rule, "Eligible for cache" + "Use cache-control header", para `GET /api/stats`,
-`/api/guesses/hist`, `/api/guess/*` e `/api/city/*`: sem ela o Cloudflare não guarda caminho sem extensão e cada
-visitante bate na VPS. As respostas pessoais já saem `private, no-store` e continuam fora do cache.
+`/api/guesses/hist`, `/api/guess/*`, `/api/city/*` e o HTML das rotas públicas (`/`, `/tv`, `/embed/placar`, `/painel`,
+`/mapa*`, `/palpite`, `/chat`, `/cidade*`, `/p/*`, `/m/*`, `/sala/*`): sem ela o Cloudflare não guarda caminho sem
+extensão e cada visitante bate na VPS. Tiered Cache ligado (os PoPs pequenos pedem ao grande, não à VPS). As respostas pessoais já saem `private, no-store` e continuam fora do cache.
 `stale-if-error` nos arquivos de `/data`: se a VPS cair, a CDN segue servindo o último placar por até 1 h.
 
 ### Salas grandes (subsalas invisíveis)

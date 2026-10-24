@@ -113,7 +113,7 @@ export class PgStore implements GuessStore {
     url: string,
     private schemaFile: string,
   ) {
-    this.pool = new pg.Pool({ connectionString: url, max: 10 });
+    this.pool = new pg.Pool({ connectionString: url, max: 6 });
   }
 
   async init() {
@@ -122,20 +122,22 @@ export class PgStore implements GuessStore {
     this.timer = setInterval(() => this.sync().catch((e) => console.warn('[pg] sync', e.message)), 15_000);
   }
 
+  // >= : dois palpites no mesmo milissegundo não se perdem; o que já está no índice com a mesma data é pulado
   private async sync() {
     const { rows } = await this.pool.query(
       `select id, nick, anon_id, pct_a, uf, uf_pct_a, mun_ibge, mun_pct_a, created_at, updated_at
-         from guesses where updated_at > $1 order by updated_at`,
+         from guesses where updated_at >= $1 order by updated_at`,
       [this.since],
     );
     for (const r of rows) {
+      this.since = r.updated_at;
+      if (this.index.byId.get(r.id)?.updatedAt === r.updated_at.toISOString()) continue; // já visto
       this.index.upsert({
         id: r.id, nick: r.nick, anonId: r.anon_id, pa: Number(r.pct_a), uf: r.uf,
         ufPa: r.uf_pct_a === null ? null : Number(r.uf_pct_a), mun: r.mun_ibge,
         munPa: r.mun_pct_a === null ? null : Number(r.mun_pct_a),
         createdAt: r.created_at.toISOString(), updatedAt: r.updated_at.toISOString(), ipHash: '',
       });
-      this.since = r.updated_at;
     }
   }
 

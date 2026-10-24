@@ -3,6 +3,7 @@
 import { DEFAULT_SITE, type SiteConfig } from '@apuracao/shared';
 import { create } from 'zustand';
 import { getJSON } from './api';
+import { poll } from './poll';
 
 const LS = 'site';
 
@@ -24,17 +25,14 @@ export function startSite() {
   if (started) return;
   started = true;
   const load = () =>
-    getJSON<SiteConfig>('/data/site.json', { cache: 'no-cache' })
-      .then((s) => {
-        const site = { ...DEFAULT_SITE, ...s };
-        useSite.setState({ site });
-        try {
-          localStorage.setItem(LS, JSON.stringify(site));
-        } catch {
-          /* sem storage */
-        }
-      })
-      .catch(() => {});
-  load();
-  setInterval(load, 60_000);
+    getJSON<SiteConfig>('/data/site.json', { cache: 'no-cache' }).then((s) => {
+      const site = { ...DEFAULT_SITE, ...s };
+      useSite.setState({ site });
+      try {
+        localStorage.setItem(LS, JSON.stringify(site));
+      } catch {
+        /* sem storage */
+      }
+    });
+  poll(load, 60_000);
 }

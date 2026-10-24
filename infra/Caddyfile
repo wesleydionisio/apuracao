@@ -4,6 +4,8 @@
 		timeouts {
 			idle 5m
 		}
+		# o nginx da máquina (e a rede do Docker) na frente: aceita o X-Forwarded-For deles
+		trusted_proxies static private_ranges
 	}
 }
 

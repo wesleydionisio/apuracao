@@ -5,7 +5,7 @@ import NumberFlow from '@number-flow/react';
 import { Moon, Sun } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
-import { LivePill } from '@/components/core/live';
+import { LivePill, StalePill } from '@/components/core/live';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
@@ -42,6 +42,17 @@ export function headerMini(path: string): 'none' | 'hero' | 'pinned' {
   return path.startsWith('/painel') ? 'hero' : 'pinned';
 }
 
+/** ao vivo, mas sem placar novo há mais de 90 s (poller/CDN/rede): mostra de quando é. O /painel tem o próprio "atualizado há" */
+function HeaderStatus() {
+  const link = useBoard((s) => s.link);
+  const at = useBoard((s) => (s.board?.released ? (s.board.br?.at ?? s.board.source.at) : null));
+  const seenAt = useBoard((s) => s.seenAt);
+  const [path] = useLocation();
+  const now = useNow(10_000);
+  if (at && seenAt && now - seenAt > 90_000 && !path.startsWith('/painel')) return <StalePill at={at} className="shrink-0" />;
+  return <LivePill link={link} className="shrink-0" />;
+}
+
 /** altura da faixa do mini-placar (px): reservada no topo das telas "pinned" */
 export const MINI_H = 58;
 
@@ -50,7 +61,6 @@ const FROST = 'bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-b
 
 export function Header() {
   const board = useBoard((s) => s.board);
-  const link = useBoard((s) => s.link);
   const hero = useBoard((s) => s.heroVisible);
   const [path] = useLocation();
   const live = !!board?.released && !!board.br;
@@ -75,7 +85,7 @@ export function Header() {
                 2º turno
               </span>
             </Link>
-            <LivePill link={link} className="shrink-0" />
+            <HeaderStatus />
             <ThemeToggle />
           </div>
         </div>

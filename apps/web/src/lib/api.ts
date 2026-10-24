@@ -71,8 +71,24 @@ export class HttpError extends Error {
 /** Em modo mock, o placar (/data/br.json, /data/mun/*) vem de /dev-fixtures; o histórico é o real. */
 const dataUrl = (path: string) => (MOCK ? path.replace(/^\/data\/(br\.json|mun\/)/, '/dev-fixtures/$1') : path);
 
-export async function getJSON<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(dataUrl(path), { credentials: 'same-origin', ...init });
+/** AbortSignal.timeout com recurso para Safari < 16 */
+function timeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const c = new AbortController();
+  setTimeout(() => c.abort(new DOMException('timeout', 'TimeoutError')), ms);
+  return c.signal;
+}
+
+export type FetchInit = RequestInit & {
+  /** ms até desistir (padrão: 8 s no GET, 20 s no POST); ignorado com `signal` próprio */
+  timeout?: number;
+};
+
+/** Sempre com prazo: origem pendurada vira erro e o polling segue (mantém o último dado). */
+export async function getJSON<T>(path: string, init?: FetchInit): Promise<T> {
+  const { timeout, signal, ...rest } = init ?? {};
+  const ms = timeout ?? (rest.method && rest.method !== 'GET' ? 20_000 : 8_000);
+  const r = await fetch(dataUrl(path), { credentials: 'same-origin', ...rest, signal: signal ?? timeoutSignal(ms) });
   if (!r.ok) {
     let code: string | undefined;
     try {
@@ -89,9 +105,9 @@ export async function getJSON<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /** Igual a getJSON, mas devolve null em 404 (arquivo estático ainda não gerado). */
-export async function getOptional<T>(path: string): Promise<T | null> {
+export async function getOptional<T>(path: string, init?: FetchInit): Promise<T | null> {
   try {
-    return await getJSON<T>(path);
+    return await getJSON<T>(path, init);
   } catch (e) {
     if (e instanceof HttpError && (e.status === 404 || e.status === 403)) return null;
     throw e;
@@ -102,7 +118,8 @@ export async function getOptional<T>(path: string): Promise<T | null> {
 const memo = new Map<string, Promise<unknown>>();
 export function cached<T>(path: string): Promise<T | null> {
   if (!memo.has(path)) {
-    const p = getOptional<T>(path).catch((e) => {
+    // arquivos grandes (até ~180 KB gz): prazo folgado para rede móvel lenta
+    const p = getOptional<T>(path, { timeout: 30_000 }).catch((e) => {
       memo.delete(path);
       throw e;
     });
@@ -240,7 +257,8 @@ const mock: typeof real = {
 export const api = MOCK ? mock : real;
 
 export const ogUrl = {
-  guess: (id: string, f: 'story' | 'og' = 'story') => `/api/og/guess/${id}.png?f=${f}`,
+  /** `v` (updatedAt do palpite): ajustou o palpite, a CDN não serve o card antigo */
+  guess: (id: string, f: 'story' | 'og' = 'story', v?: string) => `/api/og/guess/${id}.png?f=${f}${v ? `&v=${Date.parse(v).toString(36)}` : ''}`,
   city: (ibge: string) => `/api/og/city/${ibge}.png`,
   moment: (id: string) => `/api/og/moment/${encodeURIComponent(id)}.png`,
   board: () => `/api/og/board.png`,

@@ -7,6 +7,8 @@ import { useChat } from '../store/chat';
 import { MOCK } from './env';
 
 const MAX_BACKOFF = 30_000;
+/** handshake pendurado (proxy/CDN engasgado): desiste e reagenda */
+const CONNECT_TIMEOUT = 10_000;
 
 class Live {
   private ws: WebSocket | null = null;
@@ -14,6 +16,7 @@ class Live {
   private attempt = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private ping: ReturnType<typeof setInterval> | null = null;
+  private connectTimer: ReturnType<typeof setTimeout> | null = null;
   private started = false;
 
   start() {
@@ -36,6 +39,7 @@ class Live {
     if (MOCK) return;
     if (this.timer) clearTimeout(this.timer);
     if (this.ping) clearInterval(this.ping);
+    if (this.connectTimer) clearTimeout(this.connectTimer);
     const old = this.ws;
     this.ws = null;
     if (old) {
@@ -46,7 +50,7 @@ class Live {
     this.connect();
   }
 
-  /** reconecta já se estiver caído (voltou a rede / voltou para a aba) */
+  /** reconecta já se estiver caído (voltou a rede / voltou para a aba). Handshake em curso: o timeout de 10 s cuida dele */
   private kick() {
     if (this.ws && this.ws.readyState <= WebSocket.OPEN) return;
     if (this.timer) clearTimeout(this.timer);
@@ -57,6 +61,7 @@ class Live {
   private connect() {
     const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
     useBoard.getState().set({ link: this.attempt ? 'reconnecting' : 'connecting' });
+    if (this.ping) clearInterval(this.ping);
     let ws: WebSocket;
     try {
       ws = new WebSocket(url);
@@ -64,12 +69,23 @@ class Live {
       return this.schedule();
     }
     this.ws = ws;
+    if (this.connectTimer) clearTimeout(this.connectTimer);
+    this.connectTimer = setTimeout(() => {
+      this.connectTimer = null;
+      if (this.ws !== ws || ws.readyState !== WebSocket.CONNECTING) return;
+      ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
+      ws.close();
+      this.ws = null;
+      this.schedule();
+    }, CONNECT_TIMEOUT);
     ws.onopen = () => {
+      if (this.connectTimer) clearTimeout(this.connectTimer);
       this.attempt = 0;
       useBoard.getState().set({ link: 'live' });
       this.raw({ t: 'join', rooms: [...this.rooms.keys()] });
       if (this.ping) clearInterval(this.ping);
-      this.ping = setInterval(() => this.raw({ t: 'ping' }), 25_000);
+      // o uWS já faz ping de protocolo; este só segura proxies com idle curto (o do Caddy é 5 min)
+      this.ping = setInterval(() => this.raw({ t: 'ping' }), 50_000);
     };
     ws.onmessage = (ev) => {
       try {
@@ -79,7 +95,10 @@ class Live {
       }
     };
     ws.onclose = () => {
+      // kick() pode ter aberto outro enquanto este fechava: só o atual reagenda
+      if (this.ws !== ws) return;
       if (this.ping) clearInterval(this.ping);
+      if (this.connectTimer) clearTimeout(this.connectTimer);
       this.ws = null;
       this.schedule();
     };
@@ -89,8 +108,9 @@ class Live {
   private schedule() {
     this.attempt++;
     useBoard.getState().set({ link: this.attempt > 4 ? 'offline' : 'reconnecting' });
-    const base = Math.min(MAX_BACKOFF, 1000 * 2 ** Math.min(this.attempt, 6));
-    const delay = base * (0.5 + Math.random()); // jitter: evita estouro de reconexões simultâneas
+    // jitter cheio, janela larga: um worker reiniciado não recebe todo mundo no mesmo segundo (1–9 s, 1–17 s, …)
+    const delay = 1000 + Math.random() * Math.min(MAX_BACKOFF, 4000 * 2 ** Math.min(this.attempt, 4));
+    if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => this.connect(), delay);
   }
 

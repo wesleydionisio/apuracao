@@ -111,6 +111,14 @@ const reactSig = new Map<Room, string>();
 const deleted = new Set<string>();
 /** Super Chats recentes por sala (modo memória; com Redis a lista fica em KEY.superchats) */
 const pinsMem = new Map<Room, ChatMsg[]>();
+/**
+ * frames de histórico e de pins já serializados por sala: uma rajada de joins (reconexão em massa) usa a
+ * mesma string. O histórico vale enquanto a sala não muda (versão do espelho); os pins, até chegar/sair um Super Chat.
+ */
+const JOIN_CACHE_MS = 1000;
+const histFrames = new Map<Room, { at: number; v: number; s: Promise<string> }>();
+const pinFrames = new Map<Room, { at: number; s: Promise<string | null> }>();
+let joinCacheHits = 0;
 const m = { superchats: 0, in: 0, out: 0, chatIn: 0, blocked: 0, punished: 0, muted: 0, rateLimited: 0, busy: 0, rejectedConns: 0, inRate: 0, outRate: 0 };
 let lastIn = 0;
 let lastOut = 0;
@@ -140,9 +148,12 @@ const app = uWS.App();
 const zip = (s: string) => config.compress && s.length >= config.compressMin;
 
 function send(ws: WS, msg: ServerMsg) {
+  sendRaw(ws, JSON.stringify(msg));
+}
+
+function sendRaw(ws: WS, s: string) {
   if (!ws.getUserData().open) return;
   try {
-    const s = JSON.stringify(msg);
     ws.send(s, false, zip(s));
     m.out++;
   } catch {
@@ -215,6 +226,7 @@ function deliverSuper(room: Room, msg: ChatMsg) {
   list.push(msg);
   if (list.length > PINS_KEEP) list.splice(0, list.length - PINS_KEEP);
   pinsMem.set(room, list);
+  pinFrames.delete(room);
   m.superchats++;
   publish(roomTopic(room), { t: 'chat', r: room, m: msg });
 }
@@ -266,6 +278,7 @@ function applyDelete(room: Room, id: string) {
   void store.remove(room, id);
   const pins = pinsMem.get(room);
   if (pins) pinsMem.set(room, pins.filter((x) => x.id !== id));
+  pinFrames.delete(room);
   publish(roomTopic(room), { t: 'del', r: room, id });
 }
 
@@ -609,6 +622,40 @@ async function reportOnline() {
 }
 
 // ---------- join / leave ----------
+function cacheSet<T>(map: Map<Room, T>, r: Room, e: T) {
+  map.set(r, e);
+  if (map.size > 5000) map.delete(map.keys().next().value!);
+}
+
+function historyFrame(r: Room): Promise<string> {
+  const now = Date.now();
+  const v = store.version(r);
+  const c = histFrames.get(r);
+  if (c && c.v === v && now - c.at < JOIN_CACHE_MS) {
+    joinCacheHits++;
+    return c.s;
+  }
+  const s = store.history(r, HISTORY_ON_JOIN).then((h) => {
+    const msg: ServerMsg = { t: 'history', r, m: h.filter((x) => !deleted.has(x.id)) };
+    return JSON.stringify(msg);
+  });
+  cacheSet(histFrames, r, { at: now, v, s });
+  return s;
+}
+
+function pinsFrame(r: Room): Promise<string | null> {
+  const now = Date.now();
+  const c = pinFrames.get(r);
+  if (c && now - c.at < JOIN_CACHE_MS) return c.s;
+  const s = pinsOf(r).then((p) => {
+    const live = p.filter((x) => !deleted.has(x.id));
+    const msg: ServerMsg = { t: 'pins', r, m: live };
+    return live.length ? JSON.stringify(msg) : null;
+  });
+  cacheSet(pinFrames, r, { at: now, s });
+  return s;
+}
+
 async function join(ws: WS, rooms: unknown) {
   const ud = ws.getUserData();
   if (!Array.isArray(rooms)) return send(ws, { t: 'err', code: 'invalid' });
@@ -640,11 +687,10 @@ async function join(ws: WS, rooms: unknown) {
     if (agg) send(ws, { t: 'react', r, agg });
     const sl = slow.get(shardId(r, k));
     if (sl?.seconds) send(ws, { t: 'slow', r, seconds: sl.seconds });
-    const [hist, pins] = await Promise.all([store.history(r, HISTORY_ON_JOIN), pinsOf(r)]);
+    const [hist, pins] = await Promise.all([historyFrame(r), pinsFrame(r)]);
     if (!ud.open || !ud.rooms.has(r)) continue;
-    send(ws, { t: 'history', r, m: hist.filter((x) => !deleted.has(x.id)) });
-    const live = pins.filter((x) => !deleted.has(x.id));
-    if (live.length) send(ws, { t: 'pins', r, m: live });
+    sendRaw(ws, hist);
+    if (pins) sendRaw(ws, pins);
   }
 }
 
@@ -851,6 +897,10 @@ app.get('/metrics', (res) => {
     `ws_chat_punished_total ${m.punished}`,
     `ws_chat_muted_total ${m.muted}`,
     `ws_superchats_total ${m.superchats}`,
+    `ws_history_mem_total ${store.stats.mem}`,
+    `ws_history_redis_total ${store.stats.redis}`,
+    `ws_join_cache_hits_total ${joinCacheHits}`,
+    `ws_muted_cache_hits_total ${strikes.cacheHits}`,
     `ws_mod_ai_enabled ${ai.enabled ? 1 : 0}`,
     `ws_mod_ai_circuit_open ${ai.circuitOpen ? 1 : 0}`,
     `ws_mod_ai_calls_total ${ai.stats.calls}`,

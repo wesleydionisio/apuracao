@@ -30,6 +30,7 @@ import {
   type RefMark,
 } from '@/features/map/parts';
 import { api, HttpError, ogUrl, type CityView } from '@/lib/api';
+import { poll } from '@/lib/poll';
 import { fmtCompact, fmtInt } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
@@ -106,11 +107,10 @@ function CityDetail({ board, uf, slug, onPick }: { board: Board; uf: string; slu
           pushRecent(v.mun);
         })
         .catch((e) => alive && setErr(e instanceof HttpError && e.status === 404 ? '404' : 'net'));
-    load();
-    const t = setInterval(load, 30_000);
+    const stop = poll(load, 30_000);
     return () => {
       alive = false;
-      clearInterval(t);
+      stop();
     };
   }, [UF, slug]);
 

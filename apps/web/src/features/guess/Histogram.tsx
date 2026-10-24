@@ -5,6 +5,7 @@ import { fmtPct } from '@apuracao/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { getJSON, HttpError } from '@/lib/api';
+import { poll } from '@/lib/poll';
 import { MOCK } from '@/lib/env';
 import { fmtInt } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -37,18 +38,19 @@ export function useGuessHist(): GuessHist | null {
   useEffect(() => {
     if (MOCK) return;
     let alive = true;
-    let stop = false;
-    const load = () =>
-      getJSON<GuessHist>('/api/guesses/hist')
+    let gone = false;
+    const load = async () => {
+      if (gone) return;
+      await getJSON<GuessHist>('/api/guesses/hist')
         .then((x) => alive && setH(x))
         .catch((e) => {
-          if (e instanceof HttpError && e.status === 404) stop = true;
+          if (e instanceof HttpError && e.status === 404) gone = true;
         });
-    load();
-    const t = setInterval(() => !stop && load(), 60_000);
+    };
+    const stop = poll(load, 60_000);
     return () => {
       alive = false;
-      clearInterval(t);
+      stop();
     };
   }, []);
   return h;

@@ -10,6 +10,7 @@ import { lastReleased } from './lib/ghost';
 import { aroundNav, pages } from './lib/nav';
 import { api, fetchBoard } from './lib/api';
 import { live, savedSide } from './lib/live';
+import { poll } from './lib/poll';
 import { startSite } from './lib/site';
 import ChatPage, { SalaPage } from './pages/ChatPage';
 import Home from './pages/Home';
@@ -27,26 +28,25 @@ const TvPage = lazy(() => import('./pages/Standalone').then((m) => ({ default: m
 const EmbedPage = lazy(() => import('./pages/Standalone').then((m) => ({ default: m.EmbedPage })));
 const AdminPage = lazy(() => import('./pages/Admin'));
 
-/** placar: polling do JSON estático (10s sem WS, 30s com WS) */
+/** placar: polling do JSON estático (10s sem WS, 30s com WS; ×3 com a aba oculta, na hora ao voltar para ela) */
 function useBoardPolling() {
   const link = useBoard((s) => s.link);
   useEffect(() => {
     let alive = true;
-    let t: ReturnType<typeof setTimeout>;
-    const every = link === 'live' ? 30_000 : 10_000;
-    const tick = async () => {
-      try {
-        const b = await fetchBoard();
-        if (alive) useBoard.getState().setBoard(b);
-      } catch {
-        if (alive && !useBoard.getState().board) useBoard.getState().set({ loadError: true });
-      }
-      if (alive) t = setTimeout(tick, document.visibilityState === 'hidden' ? every * 3 : every);
-    };
-    tick();
+    // getJSON tem prazo de 8 s: origem pendurada vira erro e o laço segue com o último placar
+    const load = () =>
+      fetchBoard().then(
+        (b) => alive && useBoard.getState().setBoard(b),
+        (e) => {
+          if (alive && !useBoard.getState().board) useBoard.getState().set({ loadError: true });
+          throw e;
+        },
+      );
+    // WS acabou de conectar: o snap chega por ele, sem buscar o JSON de novo agora
+    const stop = poll(load, link === 'live' ? 30_000 : 10_000, { now: !(link === 'live' && useBoard.getState().board) });
     return () => {
       alive = false;
-      clearTimeout(t);
+      stop();
     };
   }, [link]);
 }
@@ -67,14 +67,7 @@ function useIdentityAndStats() {
         useBoard.getState().set({ me: { ...me, nick: nick ?? me.nick, side: savedSide() } });
       })
       .catch(() => {});
-    const load = () =>
-      api
-        .stats()
-        .then((stats) => useBoard.getState().set({ stats }))
-        .catch(() => {});
-    load();
-    const t = setInterval(load, 30_000);
-    return () => clearInterval(t);
+    return poll(() => api.stats().then((stats) => useBoard.getState().set({ stats })), 30_000);
   }, []);
 }
 

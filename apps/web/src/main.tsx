@@ -11,6 +11,20 @@ if (import.meta.env.DEV) {
   if (document.cookie.includes('shiftlog=1')) void import('./dev/shiftlog');
 }
 
+// deploy no meio da visita: a CDN ainda serve o HTML antigo por até ~1 min e um chunk dele pode não existir mais.
+// Recarrega uma vez para pegar a versão nova (no máximo uma vez a cada 30 s, para nunca virar laço)
+window.addEventListener('vite:preloadError', (e) => {
+  try {
+    const last = Number(sessionStorage.getItem('reloadAt') ?? 0);
+    if (Date.now() - last < 30_000) return;
+    sessionStorage.setItem('reloadAt', String(Date.now()));
+  } catch {
+    return;
+  }
+  e.preventDefault();
+  location.reload();
+});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

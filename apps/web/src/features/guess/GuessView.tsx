@@ -1,7 +1,7 @@
 // /p/:id — o palpite como card compartilhável + ticker ao vivo (distância e ranking).
 import type { Board, CandidateDef } from '@apuracao/shared';
 import { ufName } from '@apuracao/shared';
-import { ChartColumn, Download, Link2, Medal, Share2, Trophy } from 'lucide-react';
+import { ChartColumn, Download, Link2, Loader2, Medal, Share2, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'wouter';
 import { CandidateAvatar, candOf } from '@/components/core/candidate';
@@ -12,7 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { api, HttpError, ogUrl, type GuessLive, type GuessView as View } from '@/lib/api';
 import { fmtInt, fmtPct } from '@/lib/format';
-import { downloadImage, prefetchImage, share } from '@/lib/share';
+import { poll } from '@/lib/poll';
+import { downloadImage, imageReady, loadImage, prefetchImage, share } from '@/lib/share';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 import { Pct, SplitBar } from './bits';
@@ -30,16 +31,24 @@ export function useGuess(id: string | undefined) {
   useEffect(() => {
     if (!id) return;
     let alive = true;
+    let got = false;
     const load = () =>
       api
         .guess(id)
-        .then((x) => alive && setV(x))
-        .catch((e) => alive && e instanceof HttpError && e.status === 404 && setNotFound(true));
-    load();
-    const t = setInterval(load, 15_000);
+        .then((x) => {
+          got = true;
+          if (alive) setV(x);
+        })
+        .catch((e) => {
+          if (alive && e instanceof HttpError && e.status === 404) setNotFound(true);
+          // ainda sem nada na tela: tenta de novo logo; com dado, segue no ritmo normal
+          else if (!got) throw e;
+        });
+    // cada id é único (a CDN quase não ajuda): 45–60 s, ×3 com a aba oculta, na hora ao voltar para ela
+    const stop = poll(load, 45_000, { jitter: 0.33, retry: 10_000 });
     return () => {
       alive = false;
-      clearInterval(t);
+      stop();
     };
   }, [id]);
   return { v, notFound };
@@ -76,7 +85,7 @@ function GuessDetail({ board, v, mine }: { board: Board; v: View; mine: boolean 
     state === 'final' && live
       ? `Errei por ${fmtPct(live.dist, 2)} ${pts(live.dist)} o 2º turno${top! <= 50 ? `, top ${fmtTop(top!)}% do Brasil` : ''}. E você?`
       : `Meu palpite pro 2º turno: ${ca.short} ${fmtPct(g.pa, 1)}% × ${fmtPct(100 - g.pa, 1)}% ${cb.short}. Qual é o seu?`;
-  const story = ogUrl.guess(g.id, 'story');
+  const story = ogUrl.guess(g.id, 'story', g.updatedAt);
 
   return (
     <div className="space-y-3 pt-1">
@@ -134,7 +143,29 @@ function GuessDetail({ board, v, mine }: { board: Board; v: View; mine: boolean 
         {live && <Ticker live={live} state={state} g={g} pst={board.br?.pst ?? 0} />}
       </section>
 
-      <ShareBlock id={g.id} story={story} text={shareText} url={url} final={state === 'final'} />
+      <ShareBlock
+        story={story}
+        text={shareText}
+        url={url}
+        final={state === 'final'}
+        preview={
+          <CardPreview
+            nick={g.nick}
+            pa={g.pa}
+            ca={ca}
+            cb={cb}
+            headline={
+              state === 'final' && live
+                ? live.dist < 0.005
+                  ? 'Na mosca!'
+                  : `Errei por ${fmtPct(live.dist, 2)} ponto${live.dist >= 2 ? 's' : ''}`
+                : 'Meu palpite para o 2º turno'
+            }
+            foot={state === 'final' && live ? `TSE: ${fmtPct(live.pa, 2)}% × ${fmtPct(100 - live.pa, 2)}%` : 'Palpite · não é pesquisa nem projeção'}
+            cta={state === 'final' ? 'E você?' : 'Qual é o seu?'}
+          />
+        }
+      />
 
       {hist && hist.total > 0 && (
         <section className="rounded-2xl border bg-card p-4">
@@ -327,24 +358,67 @@ function Ticker({ live, state, g, pst }: { live: GuessLive; state: 'live' | 'fin
   );
 }
 
-function ShareBlock({ story, text, url, final }: { id: string; story: string; text: string; url: string; final: boolean }) {
-  const [busy, setBusy] = useState(false);
-  const [noPreview, setNoPreview] = useState(false);
+/**
+ * Prévia do card de Stories desenhada aqui mesmo: o PNG custa ~1 s de CPU na API e só é pedido quando a pessoa
+ * toca em compartilhar ou baixar (e quando o WhatsApp busca a prévia do link).
+ */
+function CardPreview({ nick, pa, ca, cb, headline, foot, cta }: { nick: string; pa: number; ca: CandidateDef; cb: CandidateDef; headline: string; foot: string; cta: string }) {
+  const side = (c: CandidateDef, v: number, dim: boolean) => (
+    <div className="flex min-w-0 flex-col items-center gap-1">
+      <CandidateAvatar c={c} size="sm" ring={!dim && v !== 50} />
+      <span className="max-w-full truncate text-[8.5px] font-semibold">{c.short}</span>
+      <span className={cn('num text-[15px] leading-none font-extrabold tracking-tight', dim && 'text-muted-foreground')}>{fmtPct(v, 1)}%</span>
+    </div>
+  );
+  return (
+    <div
+      role="img"
+      aria-label={`Prévia do card: ${headline}, ${ca.short} ${fmtPct(pa, 1)}% × ${fmtPct(100 - pa, 1)}% ${cb.short}`}
+      className="flex aspect-[1080/1350] w-[38%] max-w-44 shrink-0 flex-col overflow-hidden rounded-xl border bg-background p-2.5 shadow-[var(--shadow-card)] select-none"
+    >
+      <div className="text-[7.5px] font-semibold tracking-wide text-muted-foreground uppercase">2º turno · 25 de outubro</div>
+      <div className="flex flex-1 flex-col justify-center gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-[8.5px] text-muted-foreground">{nick}</div>
+          <div className="text-[12px] leading-[1.1] font-extrabold tracking-tight text-balance">{headline}</div>
+        </div>
+        <div className="rounded-lg border bg-card px-1.5 py-2">
+          <div className="grid grid-cols-2 gap-1">
+            {side(ca, pa, pa < 50)}
+            {side(cb, 100 - pa, pa > 50)}
+          </div>
+          <div className="mt-2 flex h-1 gap-px overflow-hidden rounded-full" aria-hidden>
+            <div style={{ flexBasis: `${pa}%`, background: ca.color }} />
+            <div className="flex-1" style={{ background: cb.color }} />
+          </div>
+          <div className="mt-1.5 truncate text-center text-[7px] text-muted-foreground">{foot}</div>
+        </div>
+        <div className="mx-auto rounded-full bg-foreground px-2 py-1 text-[7.5px] font-bold text-background">{cta}</div>
+      </div>
+    </div>
+  );
+}
+
+function ShareBlock({
+  story,
+  text,
+  url,
+  final,
+  preview,
+}: {
+  story: string;
+  text: string;
+  url: string;
+  final: boolean;
+  preview: React.ReactNode;
+}) {
+  const [busy, setBusy] = useState<'gen' | 'share' | 'dl' | null>(null);
+  // sem Web Share (desktop) o share só copia o link: nem pede o PNG
+  const canShare = typeof navigator.share === 'function';
   return (
     <section className="rounded-2xl border bg-card p-4">
       <div className="flex gap-4">
-        {!noPreview && (
-          <img
-            onError={() => setNoPreview(true)}
-            src={story}
-            alt="Prévia do card para Stories e WhatsApp"
-            width={1080}
-            height={1350}
-            loading="lazy"
-            decoding="async"
-            className="aspect-[1080/1350] w-[38%] max-w-44 shrink-0 rounded-xl border bg-muted object-cover shadow-[var(--shadow-card)]"
-          />
-        )}
+        {preview}
         <div className="flex min-w-0 flex-1 flex-col">
           <h2 className="text-[17px] leading-tight font-semibold text-balance">{final ? 'Mostre seu resultado' : 'Mande no grupo'}</h2>
           <p className="mt-1 text-[13px] text-muted-foreground text-pretty">
@@ -357,21 +431,34 @@ function ShareBlock({ story, text, url, final }: { id: string; story: string; te
         <Button
           size="lg"
           className="col-span-2 h-12 rounded-xl text-[15px]"
-          disabled={busy}
-          onPointerDown={() => prefetchImage(story)}
+          disabled={!!busy}
+          onPointerDown={() => canShare && prefetchImage(story)}
           onClick={async () => {
-            setBusy(true);
+            // o card só é gerado agora; se demorar, o gesto pode expirar antes do share
+            const waited = canShare && !imageReady(story);
+            setBusy(waited ? 'gen' : 'share');
+            if (waited) await loadImage(story);
+            setBusy('share');
             const r = await share({ title: 'Meu palpite', text, url, image: story, filename: 'palpite.png' });
-            setBusy(false);
+            setBusy(null);
             if (r === 'copied') toast('Link copiado. Cole no WhatsApp');
-            else if (r === 'failed') toast('Não deu para compartilhar daqui');
+            else if (r === 'failed') toast(waited && imageReady(story) ? 'Imagem pronta: toque de novo para compartilhar' : 'Não deu para compartilhar daqui');
           }}
         >
-          <Share2 className="size-4" aria-hidden />
-          {final ? 'Compartilhar resultado' : 'Compartilhar no WhatsApp'}
+          {busy === 'gen' ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Share2 className="size-4" aria-hidden />}
+          {busy === 'gen' ? 'Gerando imagem…' : final ? 'Compartilhar resultado' : 'Compartilhar no WhatsApp'}
         </Button>
-        <Button variant="outline" className="h-11 rounded-xl" onClick={() => downloadImage(story, 'palpite.png')}>
-          <Download className="size-4" aria-hidden />
+        <Button
+          variant="outline"
+          className="h-11 rounded-xl"
+          disabled={!!busy}
+          onClick={async () => {
+            setBusy('dl');
+            await downloadImage(story, 'palpite.png');
+            setBusy(null);
+          }}
+        >
+          {busy === 'dl' ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Download className="size-4" aria-hidden />}
           Imagem p/ Stories
         </Button>
         <Button

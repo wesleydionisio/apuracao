@@ -4,6 +4,7 @@
 import type { Board } from '@apuracao/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { getJSON } from '@/lib/api';
+import { poll } from '@/lib/poll';
 import { hash01, type HexLevel } from './hex';
 import type { HexReply, HexRequest } from './hex.worker';
 
@@ -37,7 +38,7 @@ export type Values = { pst: Float32Array; pa: Float32Array };
 export const RADII = [6.5, 3.25, 1.625, 0.8125];
 
 let dotsP: Promise<DotsFile> | null = null;
-const loadDots = () => (dotsP ??= getJSON<DotsFile>('/data/static/dots.json'));
+const loadDots = () => (dotsP ??= getJSON<DotsFile>('/data/static/dots.json', { timeout: 30_000 }));
 
 export function useDots() {
   const [dots, setDots] = useState<DotsFile | null>(null);
@@ -111,32 +112,36 @@ export function dotGeo(dots: DotsFile): DotGeo {
   return g;
 }
 
+const sameArr = (x: number[], y: number[]) => x.length === y.length && x.every((v, i) => v === y[i]);
+const sameGrid = (x: Grid, y: Grid) => x.at === y.at && sameArr(x.p, y.p) && sameArr(x.a, y.a);
+
 /** % apurado e % de A por cidade, para a camada escolhida (`enabled` falso: nada, nem busca) */
 export function useCityValues(dots: DotsFile | null, layer: DotLayer, board: Board | null, enabled = true): Values | null {
   const [grid, setGrid] = useState<Grid | null>(null);
-  const at = board?.source.at;
+  const released = !!board?.released;
   useEffect(() => {
-    if (!enabled || layer !== 'live' || !board?.released) return;
+    if (!enabled || layer !== 'live' || !released) return;
     let alive = true;
+    // sem query de cache-buster: a URL fixa deixa a CDN segurar o arquivo (s-maxage=5); no-cache revalida (304)
+    // mesma grade: mantém o objeto, para o mapa não recalcular nem animar à toa
     const load = () =>
-      // sem query de cache-buster: a URL fixa deixa a CDN segurar o arquivo (s-maxage=5)
-      getJSON<Grid>('/data/mungrid.json', { cache: 'no-store' })
-        .then((g) => alive && setGrid(g))
-        .catch(() => {});
-    load();
-    const id = setInterval(load, 15_000);
+      getJSON<Grid>('/data/mungrid.json', { cache: 'no-cache' }).then((g) => alive && setGrid((cur) => (cur && sameGrid(cur, g) ? cur : g)));
+    const stop = poll(load, 15_000, { hidden: 'pause' });
     return () => {
       alive = false;
-      clearInterval(id);
+      stop();
     };
-  }, [enabled, layer, board?.released, at]);
+  }, [enabled, layer, released]);
 
+  // do placar só interessam o número de A (1º turno) e o de A em 2022: snapshot novo não refaz a grade
+  const has = !!board;
+  const aT1 = board?.candidates[0]?.n;
+  const aY22 = board?.y2022Map.a;
   return useMemo(() => {
-    if (!enabled || !dots || !board) return null;
+    if (!enabled || !dots || !has) return null;
     const n = dots.mun.length;
     const pst = new Float32Array(n);
     const pa = new Float32Array(n).fill(NaN);
-    const [ca] = board.candidates;
     if (layer === 'live') {
       if (!grid || grid.p.length !== n) return { pst, pa };
       for (let i = 0; i < n; i++) {
@@ -146,7 +151,7 @@ export function useCityValues(dots: DotsFile | null, layer: DotLayer, board: Boa
     } else {
       // referências: tudo "apurado"; o arquivo guarda o % do primeiro finalista, A pode ser o outro
       const src = layer === 't1' ? dots.ref.t1 : dots.ref.y22;
-      const aNum = layer === 't1' ? ca.n : board.y2022Map.a;
+      const aNum = layer === 't1' ? aT1 : aY22;
       const flip = aNum !== dots.ref.n[0];
       for (let i = 0; i < n; i++) {
         pst[i] = 100;
@@ -154,7 +159,7 @@ export function useCityValues(dots: DotsFile | null, layer: DotLayer, board: Boa
       }
     }
     return { pst, pa };
-  }, [enabled, dots, board, layer, grid]);
+  }, [enabled, dots, has, layer, grid, aT1, aY22]);
 }
 
 // A grade sai de um worker (o nível mais fino tem ~200 mil hexágonos e uma busca em largura) e fica guardada:

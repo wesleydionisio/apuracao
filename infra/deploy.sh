@@ -3,7 +3,9 @@
 #   ./infra/deploy.sh                 a main do GitHub
 #   ./infra/deploy.sh <branch|commit>  uma versão específica (ex.: voltar para um commit anterior)
 #   ./infra/deploy.sh rollback        a versão que estava no ar antes do último deploy
+#   ./infra/deploy.sh --only api [ref] só esses serviços (separados por vírgula: api,poller,caddy,ws1,ws2)
 # Builda com os containers no ar, troca, confere a saúde e, se falhar, volta sozinho para a versão anterior.
+# Os workers WS (o chat de todo mundo) só reiniciam se o código deles mudou, um de cada vez.
 # Só mexe no projeto "apuracao" do docker compose (os outros projetos da máquina não são tocados).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -14,9 +16,16 @@ flock -n 9 || { echo "outro deploy em andamento"; exit 1; }
 
 log() { echo "$(date '+%F %T') $*" | tee -a var/deploy.log; }
 
+only=
+if [ "${1:-}" = --only ]; then
+  only=${2:?"--only precisa da lista de serviços"}
+  shift 2
+fi
 ref=${1:-main}
 cur=$(git rev-parse HEAD)
+full=
 if [ "$ref" = rollback ]; then
+  full=1
   ref=$(cat var/deploy.prev 2>/dev/null) || { log "sem versão anterior registrada"; exit 1; }
 fi
 
@@ -25,10 +34,39 @@ git fetch --quiet origin
 target=$(git rev-parse --verify -q "origin/$ref^{commit}" || git rev-parse --verify "$ref^{commit}")
 log "deploy $(git log -1 --format='%h %s' "$target") (no ar: ${cur:0:7})"
 
+# o que muda o WS (ou a forma de subir os containers): só aí os workers reiniciam
+WS_PATHS=(apps/ws packages pnpm-lock.yaml package.json Dockerfile docker-compose.yml infra/compose.ovh.yml)
+ws_changed() { [ -n "$full" ] || ! git diff --quiet "$1" "$2" -- "${WS_PATHS[@]}"; }
+
 up() {
+  local from
+  from=$(git rev-parse HEAD)
   git reset --quiet --hard "$1"
+  if [ -n "$only" ]; then
+    # shellcheck disable=SC2086
+    docker compose build --quiet ${only//,/ }
+    # shellcheck disable=SC2086
+    docker compose up -d --no-deps ${only//,/ }
+    return
+  fi
   docker compose build --quiet
-  docker compose up -d --remove-orphans
+  local rest
+  rest=$(docker compose config --services | grep -vx 'ws[0-9]*' | tr '\n' ' ')
+  # --no-deps: sem isso o compose recriaria os workers junto, por serem dependência do Caddy
+  # shellcheck disable=SC2086
+  docker compose up -d --no-deps --remove-orphans $rest
+  if ws_changed "$from" "$1"; then
+    # um worker por vez: quem estava nele reconecta no outro (o nginx manda para o de menos conexões)
+    local first=1
+    for w in $(docker compose config --services | grep -x 'ws[0-9]*'); do
+      [ -z "$first" ] && sleep 20
+      first=
+      log "reiniciando $w"
+      docker compose up -d --no-deps "$w"
+    done
+  else
+    log "WS sem mudança: workers seguem no ar"
+  fi
 }
 
 healthy() {
@@ -51,5 +89,6 @@ if up "$target" && healthy; then
 fi
 
 log "FALHOU: voltando para ${cur:0:7}"
+full=1
 up "$cur" && healthy && log "voltou para ${cur:0:7}" || log "ATENÇÃO: a versão anterior também não ficou saudável"
 exit 1

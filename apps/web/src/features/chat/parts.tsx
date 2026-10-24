@@ -2,7 +2,7 @@
 import type { CandidateDef, ChatMsg } from '@apuracao/shared';
 import { MOD_LABEL, PARTY_TOKEN_RE } from '@apuracao/shared';
 import { ShieldMinus } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { fmtHM } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -78,8 +78,9 @@ export function isEmojiOnly(body: string): boolean {
   return body.length <= 40 && EMOJI_ONLY.test(body) && /\S/.test(body);
 }
 
-/** Uma linha por mensagem, estilo live: Apelido: texto (sem o selo do lado: o apelido já basta) */
-export function ChatLine({
+/** Uma linha por mensagem, estilo live: Apelido: texto (sem o selo do lado: o apelido já basta). Memo: o chat
+ * re-renderiza a cada lote, e as 200 linhas antigas não mudam */
+export const ChatLine = memo(function ChatLine({
   m,
   cands,
   fresh,
@@ -111,14 +112,14 @@ export function ChatLine({
       <span className={cn('text-pretty', big && 'text-[22px] leading-[1.3] [&>span]:align-[3px]')}>{renderBody(m.body, cands, big ? 'md' : 'sm')}</span>
     </button>
   );
-}
+});
 
 /**
  * Mensagem barrada pela moderação. Tom neutro de propósito: informa sem fazer espetáculo.
  * - vinda do servidor: a primeira mensagem barrada de alguém, que todos veem (sem o texto);
  * - local: aviso só para o autor, quando as seguintes nem chegam ao chat.
  */
-export function ModLine({ m, fresh }: { m: ChatMsg; cands: CandidateDef[] | null; fresh: boolean }) {
+export const ModLine = memo(function ModLine({ m, fresh }: { m: ChatMsg; cands: CandidateDef[] | null; fresh: boolean }) {
   const why = m.mod ? MOD_LABEL[m.mod] : undefined;
   // uma linha só: informa sem ocupar o chat
   return (
@@ -143,10 +144,10 @@ export function ModLine({ m, fresh }: { m: ChatMsg; cands: CandidateDef[] | null
       </span>
     </div>
   );
-}
+});
 
 /** Momento da apuração no meio do chat: linha destacada com o candidato citado. */
-export function SystemLine({ m, cands, fresh }: { m: ChatMsg; cands: CandidateDef[] | null; fresh: boolean }) {
+export const SystemLine = memo(function SystemLine({ m, cands, fresh }: { m: ChatMsg; cands: CandidateDef[] | null; fresh: boolean }) {
   const { Icon, kind, text } = momentParts(m.body);
   const who = mentioned(cands, text).slice(0, 2);
   const lead = favored(cands, text);
@@ -181,7 +182,7 @@ export function SystemLine({ m, cands, fresh }: { m: ChatMsg; cands: CandidateDe
       </div>
     </div>
   );
-}
+});
 
 /** inicial do apelido sobre a cor estável do autor (perfil, gaveta de ações) */
 export function NickAvatar({ m, className }: { m: Pick<ChatMsg, 'nick' | 'hue'>; className?: string }) {

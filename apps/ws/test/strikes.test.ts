@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import type { Bus } from '../src/redis';
 import { muteFor, Strikes, WEIGHT } from '../src/strikes';
 
 test('escada de conteúdo impróprio: aviso, depois silêncios crescentes', () => {
@@ -44,4 +45,24 @@ test('Strikes: spam começa leve (30s)', async () => {
   const s = new Strikes(null);
   assert.equal((await s.add('u3', '3.3.3.3', 'spam', 1)).mute, 0);
   assert.equal((await s.add('u3', '3.3.3.3', 'spam', 1)).mute, 30);
+});
+
+test('Strikes: muted() guarda o veredito 5 s, e a punição deste worker vale na hora', async () => {
+  const db = new Map<string, string>();
+  let gets = 0;
+  const bus = {
+    cmd: {
+      get: async (k: string) => (gets++, db.get(k) ?? null),
+      set: async (k: string, v: string) => (db.set(k, v), 'OK'),
+    },
+    ready: () => true,
+  } as unknown as Bus;
+  const s = new Strikes(bus);
+  assert.equal(await s.muted('u5', '5.5.5.5'), null);
+  assert.equal(gets, 2);
+  assert.equal(await s.muted('u5', '5.5.5.5'), null);
+  assert.equal(gets, 2); // do cache
+  await s.add('u5', '5.5.5.5', 'abuse', WEIGHT.discriminacao);
+  const m = await s.muted('u5', '5.5.5.5');
+  assert.equal(m?.reason, 'abuse');
 });

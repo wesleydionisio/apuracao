@@ -40,6 +40,8 @@ const STEPS: Record<Ladder, [number, number][]> = {
 const DECAY_MS: Record<Ladder, number> = { abuse: 30 * 60_000, spam: 5 * 60_000 };
 const IP_FACTOR = 2;
 const TTL_S = 24 * 3600;
+/** muted() guarda o veredito por chave: sem 2 GET no Redis a cada tentativa de mensagem */
+const VERDICT_MS = 5000;
 
 interface Record_ {
   pts: Record<Ladder, number>;
@@ -78,6 +80,10 @@ export interface Penalty {
 
 export class Strikes {
   private mem = new Map<string, Record_>();
+  /** silêncio conhecido por chave; add() deste worker atualiza na hora, os outros workers em até 5 s */
+  private verdict = new Map<string, { at: number; gen: number; muteUntil: number; reason: Ladder | null }>();
+  private gen = 0;
+  cacheHits = 0;
 
   constructor(private bus: Bus | null) {}
 
@@ -100,15 +106,31 @@ export class Strikes {
     if (this.bus?.ready()) await this.bus.cmd.set(`strike:${key}`, JSON.stringify(r), 'EX', TTL_S).catch(() => {});
   }
 
+  private remember(key: string, r: Record_, at: number) {
+    const v = { at, gen: ++this.gen, muteUntil: r.muteUntil, reason: r.reason };
+    this.verdict.delete(key);
+    this.verdict.set(key, v);
+    if (this.verdict.size > 100_000) this.verdict.delete(this.verdict.keys().next().value!);
+    return v;
+  }
+
   /** silêncio em vigor para esta pessoa ou este IP */
   async muted(user: string, ip: string): Promise<{ wait: number; reason: Ladder } | null> {
     const now = Date.now();
     let best: { wait: number; reason: Ladder } | null = null;
     for (const k of [`u:${user}`, `ip:${ip}`]) {
-      const r = await this.load(k);
-      if (r.muteUntil > now && r.reason) {
-        const wait = Math.ceil((r.muteUntil - now) / 1000);
-        if (!best || wait > best.wait) best = { wait, reason: r.reason };
+      let v = this.verdict.get(k);
+      if (v && now - v.at < VERDICT_MS) this.cacheHits++;
+      else {
+        const g = v?.gen;
+        const r = await this.load(k);
+        // add() gravou durante o load: o veredito dele é o mais novo
+        const cur = this.verdict.get(k);
+        v = cur && cur.gen !== g ? cur : this.remember(k, r, now);
+      }
+      if (v.muteUntil > now && v.reason) {
+        const wait = Math.ceil((v.muteUntil - now) / 1000);
+        if (!best || wait > best.wait) best = { wait, reason: v.reason };
       }
     }
     return best;
@@ -136,6 +158,7 @@ export class Strikes {
         out.first = !r.blocks;
         r.blocks = (r.blocks ?? 0) + 1;
       }
+      this.remember(k, r, Date.now());
       await this.save(k, r);
       if (mute > out.mute) out = { ...out, mute };
     }

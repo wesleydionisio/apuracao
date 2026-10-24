@@ -37,6 +37,20 @@ export function LivePill({ link, className }: { link: LinkStatus; className?: st
   );
 }
 
+/** placar parado há mais de 90 s neste aparelho: diz de quando é, em vez de "Ao vivo" */
+export function StalePill({ at, className }: { at: string; className?: string }) {
+  return (
+    <span
+      className={cn('inline-flex min-w-[6.75rem] items-center justify-end gap-1.5 text-xs font-medium whitespace-nowrap text-muted-foreground', className)}
+      role="status"
+      aria-live="polite"
+    >
+      <span className="relative inline-flex size-2 rounded-full bg-warning" aria-hidden />
+      <span className="num">Placar das {fmtBrt(at, { hour: '2-digit', minute: '2-digit' })}</span>
+    </span>
+  );
+}
+
 /** "Dados oficiais do TSE · 18:42:10" — link obrigatório com a hora da última atualização */
 export function SourceStamp({ at, className, short = false }: { at?: string | null; className?: string; short?: boolean }) {
   return (

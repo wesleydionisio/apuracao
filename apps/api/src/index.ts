@@ -41,13 +41,19 @@ import { FileAccounts, PgAccounts, type Account, type AccountStore } from './acc
 import { config } from './config';
 import { board, cityPayload, munBoard, municipalities } from './data';
 import { renderHtml, type Meta } from './html';
-import { cached, guessCard, scoreCard, stripEmoji, teaserCard, type Format } from './og';
+import { Busy, cached, guessCard, scoreCard, stripEmoji, teaserCard, type Format } from './og';
 import { createCharge, fetchPayment, providerOf, qrPng, simulateWooviPayment, wooviSandbox } from './pix';
 import { cleanSite, Site } from './site';
 import { FileStore, newId, PgStore, type GuessStore, type StoredGuess } from './store';
 import { SuperChats, type SuperChat } from './superchats';
 
-const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' }, trustProxy: true, bodyLimit: 4096 });
+// em produção, sem as 2 linhas de log por requisição (a 300 req/s viram 600 linhas/s no json-file do Docker); warn/error seguem
+const app = Fastify({
+  logger: { level: process.env.LOG_LEVEL ?? 'info' },
+  disableRequestLogging: config.production,
+  trustProxy: true,
+  bodyLimit: 4096,
+});
 const mod = new Moderator();
 mod.add(config.blockedTerms);
 if (config.blockedFile) {
@@ -65,7 +71,7 @@ const store: GuessStore = config.databaseUrl
   ? new PgStore(config.databaseUrl, path.join(config.repo, 'infra/schema.sql'))
   : new FileStore(config.varDir);
 const accounts: AccountStore = config.databaseUrl
-  ? new PgAccounts(new pg.Pool({ connectionString: config.databaseUrl, max: 4 }))
+  ? new PgAccounts(new pg.Pool({ connectionString: config.databaseUrl, max: 3 }))
   : new FileAccounts(config.varDir);
 const google = config.googleClientId ? new OAuth2Client(config.googleClientId) : null;
 const redis = config.redisUrl ? new Redis(config.redisUrl, { maxRetriesPerRequest: 2, enableOfflineQueue: false }) : null;
@@ -128,7 +134,7 @@ const pctOrNull = (v: unknown): number | null => {
 };
 
 function publicGuess(g: StoredGuess) {
-  const { anonId: _a, ipHash: _i, updatedAt: _u, ...pub } = g;
+  const { anonId: _a, ipHash: _i, ...pub } = g;
   return pub;
 }
 
@@ -217,7 +223,7 @@ app.get('/api/auth/me', async (req, reply) => {
 
 app.post<{ Body: Record<string, unknown> }>('/api/auth/google', async (req, reply) => {
   if (!google) return reply.code(404).send({ error: 'off' });
-  if (!allow(`auth:${ipOf(req)}`, 10, 0.2)) return reply.code(429).send({ error: 'rate' });
+  if (!allow(`auth:${ipOf(req)}`, 60, 1)) return reply.code(429).send({ error: 'rate' });
   const credential = req.body?.credential;
   if (typeof credential !== 'string') return reply.code(400).send({ error: 'invalid' });
   try {
@@ -238,7 +244,7 @@ app.post<{ Body: Record<string, unknown> }>('/api/auth/dev', async (req, reply) 
 });
 
 app.post<{ Body: Record<string, unknown> }>('/api/auth/signup', async (req, reply) => {
-  if (!allow(`signup:${ipOf(req)}`, 10, 0.1)) return reply.code(429).send({ error: 'rate' });
+  if (!allow(`signup:${ipOf(req)}`, 60, 1)) return reply.code(429).send({ error: 'rate' });
   const b = req.body ?? {};
   const p = verifyToken<Pending>(typeof b.token === 'string' ? b.token : null, config.secret);
   if (!p?.sub) return reply.code(401).send({ error: 'expired' });
@@ -270,7 +276,7 @@ app.post<{ Body: Record<string, unknown> }>('/api/guess', async (req, reply) => 
   reply.header('cache-control', 'no-store');
   if (isReleased(new Date(), config.releaseAt)) return reply.code(403).send({ error: 'closed' });
   const ip = ipOf(req);
-  if (!allow(`g:${ip}`, 5, 1 / 12)) return reply.code(429).send({ error: 'rate' });
+  if (!allow(`g:${ip}`, 60, 2)) return reply.code(429).send({ error: 'rate' });
   const anonId = identity(req, reply);
   const b = req.body ?? {};
   const pa = pctOrNull(b.pa);
@@ -710,6 +716,12 @@ function sendPng(reply: FastifyReply, png: Buffer, maxAge: number) {
   return reply.header('content-type', 'image/png').header('cache-control', `public, max-age=${maxAge}, s-maxage=${maxAge}`).send(png);
 }
 
+// fila de cards cheia: a CDN e o navegador tentam de novo em instantes
+app.setErrorHandler((err, _req, reply) => {
+  if (err instanceof Busy) return reply.code(503).header('retry-after', '5').header('cache-control', 'no-store').send({ error: 'ocupado' });
+  reply.send(err);
+});
+
 const noCands = (reply: FastifyReply) => reply.code(503).send({ error: 'sem dados de candidatos ainda' });
 
 app.get<{ Params: { file: string }; Querystring: { f?: string } }>('/api/og/guess/:file', async (req, reply) => {
@@ -725,8 +737,11 @@ app.get<{ Params: { file: string }; Querystring: { f?: string } }>('/api/og/gues
     const dist = Math.abs(g.pa - final.pa);
     result = { pa: final.pa, dist, rank: store.index.national.rank(final.pa, dist), total: store.index.national.total };
   }
-  const png = await cached('guess', [g.id, g.updatedAt, g.nick, fmt, result, cands], () =>
-    guessCard(fmt, { nick: g.nick, pa: g.pa, cands, result }),
+  const png = await cached(
+    'guess',
+    [g.id, g.updatedAt, g.nick, fmt, result, cands],
+    () => guessCard(fmt, { nick: g.nick, pa: g.pa, cands, result }),
+    false,
   );
   return sendPng(reply, png, final ? 300 : 3600);
 });

@@ -2,15 +2,35 @@
 #   COMPOSE_FILE=docker-compose.yml:infra/compose.ovh.yml
 # - nenhuma porta pública: o nginx da máquina termina o HTTPS de urnadigital.online e repassa para o Caddy
 #   em 127.0.0.1:8090 (infra/nginx-urnadigital.conf); o Caddy atende em HTTP puro (SITE_HOST=":80" no .env)
-# - 2 workers WS, um por vCPU (WS_UPSTREAMS e WS_URLS no .env listam os dois)
-# - Redis e Postgres com memória contida, para sobrar para o hub
+# - 2 workers WS, um por vCPU (WS_UPSTREAMS e WS_URLS no .env listam os dois). O nginx manda o /ws direto para
+#   eles (127.0.0.1:3012 e 3013), sem passar pelo Caddy: um proxy a menos por conexão longa, e o Caddy pode
+#   reiniciar sem derrubar o chat
+# - Redis e Postgres com memória contida, e teto de memória em cada container: um vazamento derruba o container,
+#   não a máquina inteira (o hub junto). Soma ≈ 2,5 GB, o que sobra além do hub
 services:
   redis:
     command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '256mb', '--maxmemory-policy', 'allkeys-lru']
+    mem_limit: 300m
   postgres:
     command: ['postgres', '-c', 'shared_buffers=128MB', '-c', 'max_connections=40']
+    mem_limit: 300m
+  api:
+    mem_limit: 600m
+    environment: { NODE_OPTIONS: --max-old-space-size=448 }
+  poller:
+    mem_limit: 300m
+    environment: { NODE_OPTIONS: --max-old-space-size=224 }
+  ws1:
+    mem_limit: 700m
+    environment: { NODE_OPTIONS: --max-old-space-size=512 }
+    ports: ['127.0.0.1:3012:3002']
+  ws2:
+    mem_limit: 700m
+    environment: { NODE_OPTIONS: --max-old-space-size=512 }
+    ports: ['127.0.0.1:3013:3002']
   ws3: { profiles: [off] }
   ws4: { profiles: [off] }
   caddy:
     ports: !override ['127.0.0.1:8090:80']
     depends_on: !override [api, ws1, ws2]
+    mem_limit: 300m
