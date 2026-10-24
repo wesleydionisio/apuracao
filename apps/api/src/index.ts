@@ -39,7 +39,7 @@ import { config } from './config';
 import { board, cityPayload, munBoard, municipalities } from './data';
 import { renderHtml, type Meta } from './html';
 import { cached, guessCard, scoreCard, stripEmoji, type Format } from './og';
-import { createCharge, fetchPayment, providerOf, qrPng, webhookSignatureOk } from './pix';
+import { createCharge, fetchPayment, providerOf, qrPng, simulateWooviPayment, wooviSandbox } from './pix';
 import { cleanSite, Site } from './site';
 import { FileStore, newId, PgStore, type GuessStore, type StoredGuess } from './store';
 import { SuperChats, type SuperChat } from './superchats';
@@ -426,7 +426,7 @@ app.post<{ Body: Record<string, unknown> }>('/api/admin/flags', async (req, repl
 
 // ---------- Super Chat (Pix) ----------
 // A mensagem passa pela mesma moderação do chat ANTES do Pix ser gerado: ninguém paga por algo que seria barrado.
-// Pago (webhook do Mercado Pago, consulta de status ou conferência manual no painel), vai para o chat da sala.
+// Pago (webhook da Woovi, consulta de status ou conferência manual no painel), vai para o chat da sala.
 const scView = async (s: SuperChat): Promise<ScCharge> => ({
   id: s.id,
   status: superchats.statusOf(s),
@@ -435,6 +435,7 @@ const scView = async (s: SuperChat): Promise<ScCharge> => ({
   qrPng: await qrPng(s.qr),
   expiresAt: s.expiresAt,
   provider: s.provider,
+  ...(s.provider === 'woovi' && wooviSandbox(config.pix) ? { sandbox: true } : {}),
 });
 
 /** o mesmo id público que o WS usa para a conta (as punições do chat ficam guardadas por ele) */
@@ -484,10 +485,10 @@ async function markPaid(s: SuperChat, via: string) {
   await toWs({ t: 'sc', r: s.room, m: msg }, s.json).catch((e) => app.log.error({ err: (e as Error).message, id: s.id }, 'superchat não entregue ao WS'));
 }
 
-/** pendente no Mercado Pago: consulta no máximo a cada 5s por cobrança (o webhook pode atrasar ou nem vir) */
+/** pendente na Woovi: consulta no máximo a cada 5s por cobrança (o webhook pode atrasar ou nem vir) */
 const lastCheck = new Map<string, number>();
 async function refresh(s: SuperChat) {
-  if (s.provider !== 'mp' || !s.pid || superchats.statusOf(s) !== 'pending') return;
+  if (s.provider !== 'woovi' || !s.pid || superchats.statusOf(s) !== 'pending') return;
   if (Date.now() - (lastCheck.get(s.id) ?? 0) < 5000) return;
   lastCheck.set(s.id, Date.now());
   const p = await fetchPayment(config.pix, s.pid).catch(() => null);
@@ -568,22 +569,27 @@ app.get<{ Params: { id: string } }>('/api/superchat/:id', async (req, reply) => 
 app.post<{ Params: { id: string } }>('/api/superchat/:id/dev-pay', async (req, reply) => {
   const sess = verifySession(req.cookies[SESSION_COOKIE], config.secret);
   const s = superchats.byId.get(req.params.id);
-  if (!sess || !s || s.uid !== sess.uid || s.provider !== 'dev') return reply.code(404).send({ error: 'not_found' });
+  const sandbox = s?.provider === 'woovi' && wooviSandbox(config.pix);
+  if (!sess || !s || s.uid !== sess.uid || (s.provider !== 'dev' && !sandbox)) return reply.code(404).send({ error: 'not_found' });
   if (superchats.statusOf(s) === 'expired') return reply.code(410).send({ error: 'expired' });
-  await markPaid(s, 'dev');
+  if (sandbox) {
+    // paga de verdade no sandbox; a confirmação vem pelo webhook ou pela consulta, como em produção
+    if (!(await simulateWooviPayment(config.pix, s.pid!).catch(() => false))) return reply.code(502).send({ error: 'pix' });
+    lastCheck.delete(s.id);
+    await refresh(s);
+  } else await markPaid(s, 'dev');
   return scView(s);
 });
 
-// Mercado Pago avisa aqui (?data.id=<pagamento>&type=payment). O aviso só dispara a consulta: o que vale é a API deles.
-app.post<{ Querystring: Record<string, string>; Body: Record<string, any> }>('/api/pix/webhook', async (req, reply) => {
-  if (pixProvider !== 'mp') return { ok: true };
-  const pid = String(req.query['data.id'] ?? req.body?.data?.id ?? '');
-  const type = String(req.query.type ?? req.body?.type ?? '');
-  if (!pid || (type && type !== 'payment')) return { ok: true };
-  if (!webhookSignatureOk(config.pix, req.headers, pid)) return reply.code(401).send({ error: 'signature' });
-  const p = await fetchPayment(config.pix, pid).catch(() => null);
-  const s = p?.ref ? superchats.byId.get(p.ref) : undefined;
-  if (p?.approved && s && p.cents >= s.amount) await markPaid(s, 'webhook');
+// A Woovi avisa aqui (evento OPENPIX:CHARGE_COMPLETED, com a cobrança no corpo). O aviso só dispara a consulta:
+// o que vale é a API deles, então um POST forjado não paga nada. O teste de cadastro do webhook recebe 200.
+app.post<{ Body: Record<string, any> }>('/api/pix/webhook', async (req) => {
+  if (pixProvider !== 'woovi') return { ok: true };
+  const ref = String(req.body?.charge?.correlationID ?? '');
+  const s = ref ? superchats.byId.get(ref) : undefined;
+  if (!s?.pid) return { ok: true };
+  const p = await fetchPayment(config.pix, s.pid).catch(() => null);
+  if (p?.approved && p.cents >= s.amount) await markPaid(s, 'webhook');
   return { ok: true };
 });
 
@@ -841,7 +847,7 @@ await store.init();
 await accounts.init();
 await superchats.init();
 site.publish(!!pixProvider);
-app.log.info(pixProvider ? `super chat: Pix via ${pixProvider}` : 'super chat desligado (sem MP_ACCESS_TOKEN nem PIX_KEY)');
+app.log.info(pixProvider ? `super chat: Pix via ${pixProvider}` : 'super chat desligado (sem WOOVI_APP_ID nem PIX_KEY)');
 app.log.info(`palpites carregados: ${store.index.byId.size}`);
 await app.listen({ port: config.port, host: config.host });
 

@@ -25,12 +25,12 @@ export const config = {
   serveData: env.SERVE_DATA ? env.SERVE_DATA === '1' : env.NODE_ENV !== 'production',
   /** login com o Google no chat (Client ID web do Google Cloud). Vazio = só o login de teste em dev */
   googleClientId: env.GOOGLE_CLIENT_ID ?? '',
-  siteName: env.SITE_NAME ?? 'Urna.digi',
+  siteName: env.SITE_NAME ?? 'urna.digi',
   production: env.NODE_ENV === 'production',
-  /** Super Chat: Mercado Pago (automático) ou só uma chave Pix (conferência manual no painel) */
+  /** Super Chat: Woovi (automático) ou só uma chave Pix (conferência manual no painel) */
   pix: {
-    mpAccessToken: env.MP_ACCESS_TOKEN ?? '',
-    mpWebhookSecret: env.MP_WEBHOOK_SECRET ?? '',
+    wooviAppId: env.WOOVI_APP_ID ?? '',
+    wooviApi: (env.WOOVI_API || 'https://api.woovi.com').replace(/\/$/, ''),
     pixKey: env.PIX_KEY ?? '',
     pixName: env.PIX_NAME ?? 'Urna Digital',
     pixCity: env.PIX_CITY ?? 'Sao Paulo',

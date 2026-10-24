@@ -55,8 +55,10 @@ export interface ScCharge {
   /** QR em data URL (PNG) */
   qrPng: string;
   expiresAt: string;
-  /** quem confere o pagamento: Mercado Pago (automático), manual (no painel) ou dev (botão de teste) */
-  provider: 'mp' | 'manual' | 'dev';
+  /** quem confere o pagamento: Woovi (automático), manual (no painel) ou dev (botão de teste) */
+  provider: 'woovi' | 'manual' | 'dev';
+  /** Woovi em modo de teste: a tela mostra "simular pagamento" (paga com a conta de teste do sandbox) */
+  sandbox?: true;
 }
 
 /** /data/site.json: o que o front precisa saber do site, editado no painel admin */

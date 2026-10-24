@@ -19,7 +19,7 @@ export interface SuperChat {
   amount: number;
   status: ScStatus;
   provider: Provider;
-  /** id da cobrança no Mercado Pago */
+  /** id da cobrança na Woovi */
   pid: string | null;
   qr: string;
   createdAt: string;

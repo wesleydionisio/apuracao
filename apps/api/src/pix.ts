@@ -1,15 +1,16 @@
 // Pix do Super Chat. Três jeitos de receber, escolhidos pelo .env:
-//  - mp: Mercado Pago (MP_ACCESS_TOKEN). Cobrança com QR dinâmico; o webhook (e a consulta de status) confirmam sozinhos.
+//  - woovi: Woovi (WOOVI_APP_ID; WOOVI_API aponta para o sandbox nos testes). Cobrança com QR dinâmico; o webhook
+//    (e a consulta de status) confirmam sozinhos.
 //  - manual: só uma chave Pix (PIX_KEY). QR estático com valor e identificador; o pagamento é conferido no painel admin.
 //  - dev: fora de produção, sem nada configurado. QR de mentira e um botão "simular pagamento".
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import QRCode from 'qrcode';
 
-export type Provider = 'mp' | 'manual' | 'dev';
+export type Provider = 'woovi' | 'manual' | 'dev';
 
 export interface PixConfig {
-  mpAccessToken: string;
-  mpWebhookSecret: string;
+  wooviAppId: string;
+  /** https://api.woovi.com (produção) ou https://api.woovi-sandbox.com (testes) */
+  wooviApi: string;
   pixKey: string;
   pixName: string;
   pixCity: string;
@@ -18,11 +19,11 @@ export interface PixConfig {
 }
 
 export const providerOf = (c: PixConfig): Provider | null =>
-  c.mpAccessToken ? 'mp' : c.pixKey ? 'manual' : c.production ? null : 'dev';
+  c.wooviAppId ? 'woovi' : c.pixKey ? 'manual' : c.production ? null : 'dev';
 
 export interface Charge {
   qr: string;
-  /** id da cobrança no Mercado Pago */
+  /** id da cobrança na Woovi (o correlationID, que é o nosso id) */
   pid: string | null;
 }
 
@@ -59,8 +60,24 @@ export function brCode(o: { key: string; name: string; city: string; cents: numb
 
 export const qrPng = (qr: string) => QRCode.toDataURL(qr, { margin: 1, width: 320, errorCorrectionLevel: 'M' });
 
-// ---------- Mercado Pago ----------
-const MP = 'https://api.mercadopago.com/v1/payments';
+// ---------- Woovi ----------
+// A cobrança leva o nosso id como correlationID: o webhook e a consulta chegam nela sem tabela de-para.
+interface WooviCharge {
+  correlationID?: string;
+  /** id do Pix (txid): é o que o pagamento de teste do sandbox usa */
+  identifier?: string;
+  status?: 'ACTIVE' | 'COMPLETED' | 'EXPIRED';
+  value?: number;
+  brCode?: string;
+}
+
+const woovi = (c: PixConfig, path: string, init?: RequestInit) =>
+  fetch(`${c.wooviApi}${path}`, {
+    ...init,
+    // a Woovi recebe o AppID cru, sem "Bearer"
+    headers: { authorization: c.wooviAppId, 'content-type': 'application/json', ...init?.headers },
+    signal: AbortSignal.timeout(10_000),
+  });
 
 export async function createCharge(
   c: PixConfig,
@@ -69,57 +86,37 @@ export async function createCharge(
 ): Promise<Charge> {
   if (p === 'manual') return { qr: brCode({ key: c.pixKey, name: c.pixName, city: c.pixCity, cents: o.cents, txid: o.id }), pid: null };
   if (p === 'dev') return { qr: brCode({ key: 'teste@exemplo.com', name: 'TESTE', city: 'SAO PAULO', cents: o.cents, txid: o.id }), pid: null };
-  const r = await fetch(MP, {
+  const r = await woovi(c, '/api/v1/charge', {
     method: 'POST',
-    headers: { authorization: `Bearer ${c.mpAccessToken}`, 'content-type': 'application/json', 'x-idempotency-key': o.id },
     body: JSON.stringify({
-      transaction_amount: o.cents / 100,
-      description: o.description,
-      payment_method_id: 'pix',
-      payer: { email: o.email },
-      external_reference: o.id,
-      date_of_expiration: o.expiresAt.toISOString().replace('Z', '-00:00'),
-      // o Mercado Pago só aceita URL pública com https
-      ...(c.publicUrl.startsWith('https') ? { notification_url: `${c.publicUrl}/api/pix/webhook` } : {}),
+      correlationID: o.id,
+      value: o.cents,
+      comment: o.description,
+      expiresIn: Math.max(60, Math.round((o.expiresAt.getTime() - Date.now()) / 1000)),
     }),
-    signal: AbortSignal.timeout(10_000),
   });
-  const d = (await r.json().catch(() => null)) as MpPayment | null;
-  const qr = d?.point_of_interaction?.transaction_data?.qr_code;
-  if (!r.ok || !qr || !d?.id) throw new Error(`mercado pago ${r.status}: ${JSON.stringify(d)?.slice(0, 300)}`);
-  return { qr, pid: String(d.id) };
+  const d = (await r.json().catch(() => null)) as { charge?: WooviCharge } | null;
+  const qr = d?.charge?.brCode;
+  if (!r.ok || !qr) throw new Error(`woovi ${r.status}: ${JSON.stringify(d)?.slice(0, 300)}`);
+  return { qr, pid: o.id };
 }
 
-interface MpPayment {
-  id?: number;
-  status?: string;
-  transaction_amount?: number;
-  external_reference?: string;
-  point_of_interaction?: { transaction_data?: { qr_code?: string } };
+export const wooviSandbox = (c: PixConfig) => c.wooviApi.includes('sandbox');
+
+/** só no sandbox: paga a cobrança com a conta de teste da Woovi (dispara o webhook como um pagamento de verdade) */
+export async function simulateWooviPayment(c: PixConfig, pid: string): Promise<boolean> {
+  if (!wooviSandbox(c)) return false;
+  const r = await woovi(c, `/api/v1/charge/${encodeURIComponent(pid)}`);
+  const id = r.ok ? ((await r.json()) as { charge?: WooviCharge }).charge?.identifier : undefined;
+  if (!id) return false;
+  const t = await woovi(c, `/openpix/testing?transactionID=${encodeURIComponent(id)}`);
+  return t.ok;
 }
 
-/** consulta a cobrança no Mercado Pago (a fonte da verdade: o webhook só avisa que algo mudou) */
+/** consulta a cobrança na Woovi (a fonte da verdade: o webhook só avisa que algo mudou) */
 export async function fetchPayment(c: PixConfig, pid: string): Promise<{ approved: boolean; ref: string | null; cents: number } | null> {
-  const r = await fetch(`${MP}/${encodeURIComponent(pid)}`, {
-    headers: { authorization: `Bearer ${c.mpAccessToken}` },
-    signal: AbortSignal.timeout(8000),
-  });
+  const r = await woovi(c, `/api/v1/charge/${encodeURIComponent(pid)}`);
   if (!r.ok) return null;
-  const d = (await r.json()) as MpPayment;
-  return { approved: d.status === 'approved', ref: d.external_reference ?? null, cents: Math.round((d.transaction_amount ?? 0) * 100) };
-}
-
-/**
- * Assinatura do webhook (x-signature: "ts=...,v1=..."), quando MP_WEBHOOK_SECRET está definido.
- * Mesmo sem ela o pagamento só vale depois de consultado na API do Mercado Pago.
- */
-export function webhookSignatureOk(c: PixConfig, headers: Record<string, unknown>, dataId: string): boolean {
-  if (!c.mpWebhookSecret) return true;
-  const sig = String(headers['x-signature'] ?? '');
-  const reqId = String(headers['x-request-id'] ?? '');
-  const parts = Object.fromEntries(sig.split(',').map((kv) => kv.trim().split('=') as [string, string]));
-  if (!parts.ts || !parts.v1) return false;
-  const manifest = `id:${dataId.toLowerCase()};request-id:${reqId};ts:${parts.ts};`;
-  const want = createHmac('sha256', c.mpWebhookSecret).update(manifest).digest('hex');
-  return want.length === parts.v1.length && timingSafeEqual(Buffer.from(want), Buffer.from(parts.v1));
+  const ch = ((await r.json()) as { charge?: WooviCharge }).charge;
+  return ch ? { approved: ch.status === 'COMPLETED', ref: ch.correlationID ?? null, cents: ch.value ?? 0 } : null;
 }

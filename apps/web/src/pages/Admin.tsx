@@ -51,7 +51,7 @@ interface Overview {
     guessesLastHour: number;
     recent: { username: string; name: string; email: string; createdAt: string }[];
   };
-  superchat: { provider: 'mp' | 'manual' | 'dev' | null; today: Totals; all: Totals };
+  superchat: { provider: 'woovi' | 'manual' | 'dev' | null; today: Totals; all: Totals };
 }
 
 interface ScRow {
@@ -141,7 +141,7 @@ function Login({ onToken }: { onToken: (t: string) => void }) {
         }}
       >
         <div className="flex items-center gap-2">
-          <Logo className="size-6" />
+          <Logo className="text-[16px]" />
           <h1 className="text-[16px] font-semibold">Painel admin</h1>
         </div>
         <label className="mt-4 block text-[12.5px] font-medium">
@@ -189,7 +189,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     <div className="min-h-dvh bg-background">
       <header className="sticky top-0 z-10 border-b bg-background/85 backdrop-blur-xl">
         <div className="mx-auto flex h-13 max-w-6xl items-center gap-2 px-4">
-          <Logo className="size-6" />
+          <Logo className="text-[16px]" />
           <span className="text-[16px] font-semibold">Admin</span>
           <span className="num ml-2 hidden text-[12px] text-muted-foreground sm:inline">{ov ? `atualizado ${when(ov.at)}` : 'carregando…'}</span>
           {err && <span className="ml-2 truncate text-[12px] font-medium text-destructive">{err}</span>}
@@ -369,7 +369,7 @@ const STATUS: Record<ScStatus, { label: string; cls: string }> = {
 };
 
 const PROVIDER: Record<string, string> = {
-  mp: 'Mercado Pago (confirma sozinho)',
+  woovi: 'Woovi (confirma sozinho)',
   manual: 'Chave Pix (confira no extrato e aprove aqui)',
   dev: 'teste local',
 };
@@ -392,7 +392,7 @@ function Superchats({ rows, provider, token, onChange }: { rows: ScRow[] | null;
   return (
     <Section
       title="Super Chats"
-      right={<span className="text-[12px] text-muted-foreground">{provider ? PROVIDER[provider] : 'desligado: configure MP_ACCESS_TOKEN ou PIX_KEY'}</span>}
+      right={<span className="text-[12px] text-muted-foreground">{provider ? PROVIDER[provider] : 'desligado: configure WOOVI_APP_ID ou PIX_KEY'}</span>}
     >
       <div className="overflow-x-auto">
         <table className="w-full text-[12.5px]">
@@ -423,7 +423,7 @@ function Superchats({ rows, provider, token, onChange }: { rows: ScRow[] | null;
                   <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', STATUS[s.status].cls)}>{STATUS[s.status].label}</span>
                 </td>
                 <td className="py-1 text-right whitespace-nowrap">
-                  {(s.status === 'pending' || s.status === 'expired') && s.provider !== 'mp' && (
+                  {(s.status === 'pending' || s.status === 'expired') && s.provider !== 'woovi' && (
                     <Button size="sm" variant="outline" className="h-8 rounded-full" disabled={busy === s.id} onClick={() => act(s.id, 'approve')}>
                       <Check className="size-3.5" aria-hidden />
                       Pagou

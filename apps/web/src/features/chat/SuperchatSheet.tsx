@@ -332,13 +332,13 @@ function PayStep({ charge, onPaidClose, onRetry, onDevPaid }: { charge: ScCharge
         <Loader2 className="size-4 animate-spin" aria-hidden />
         {charge.provider === 'manual' ? 'Aguardando a confirmação do pagamento (pode levar alguns minutos)…' : 'Aguardando o pagamento…'}
       </p>
-      {charge.provider === 'dev' && (
+      {(charge.provider === 'dev' || charge.sandbox) && (
         <Button
           variant="secondary"
           className="mt-3 h-10 w-full rounded-xl text-[13px]"
           onClick={() => superchatApi.devPay(charge.id).then(onDevPaid).catch(() => toast('Não deu para simular'))}
         >
-          Simular pagamento (só em dev)
+          {charge.sandbox ? 'Simular pagamento (sandbox da Woovi)' : 'Simular pagamento (só em dev)'}
         </Button>
       )}
     </div>

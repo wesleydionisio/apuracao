@@ -68,13 +68,11 @@ export function Header() {
         <SponsorStrip />
         <div className="mx-auto max-w-3xl px-4 lg:max-w-6xl">
           <div className="flex h-13 items-center gap-2">
-            <Link href="/" className="flex min-w-0 flex-1 items-center gap-2" aria-label="Urna.digi, início">
-              <Logo />
-              <span className="truncate text-[16px] font-semibold tracking-[-0.02em]">
-                Urna<span className="text-muted-foreground">.digi</span>
-              </span>
-              <span className="hidden h-5 shrink-0 items-center rounded-full border bg-muted/60 px-2 text-[11px] leading-none font-medium text-muted-foreground min-[350px]:inline-flex">
-                2º Turno
+            <Link href="/" className="flex min-w-0 flex-1 items-center gap-2.5" aria-label="urna.digi, início">
+              <Logo className="text-[19px]" />
+              {/* rótulo seco: caixa alta pequena, separada por um fio, sem pílula */}
+              <span className="hidden border-l pl-2.5 text-[10.5px] leading-none font-semibold tracking-[0.14em] text-muted-foreground uppercase min-[340px]:inline">
+                2º turno
               </span>
             </Link>
             <LivePill link={link} className="shrink-0" />

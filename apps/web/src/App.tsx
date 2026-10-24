@@ -122,10 +122,10 @@ function Frame() {
       </div>
       <main
         className="pb-tabbar mx-auto max-w-3xl px-4 lg:max-w-6xl"
-        style={{ paddingTop: `calc(var(--header-total, 64px) + ${mini === 'pinned' ? MINI_H : 0}px + 12px)` }}
+        style={{ paddingTop: `calc(var(--header-total, 64px) + ${mini === 'pinned' ? MINI_H : 0}px + var(--page-top))` }}
       >
         {/* a página ocupa ao menos a tela, mesmo enquanto o conteúdo carrega */}
-        <div style={{ minHeight: `calc(100dvh - var(--header-total, 64px) - ${mini === 'pinned' ? MINI_H : 0}px - 12px)` }}>
+        <div style={{ minHeight: `calc(100dvh - var(--header-total, 64px) - ${mini === 'pinned' ? MINI_H : 0}px - var(--page-top))` }}>
           <Suspense fallback={<PageFallback path={path} />}>
             <Switch>
               <Route path="/" component={Home} />

@@ -34,24 +34,10 @@ export function SplitBar({ b, h = 8, className }: { b: Board; h?: number; classN
   );
 }
 
-/** Marca Urna.digi: urna com a cédula entrando, só traço em currentColor (branca no escuro, grafite no claro). */
+/** Marca urna.digi: urna com a cédula entrando, só traço em currentColor (branca no escuro, grafite no claro). */
+/** Marca: só o nome, em bold minúsculo (sem ícone). O tamanho vem do texto em volta ou do className. */
 export function Logo({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={cn('size-6 shrink-0', className)}
-      aria-hidden
-    >
-      <path d="M7.5 11V4.5C7.5 3.67 8.17 3 9 3h6c.83 0 1.5.67 1.5 1.5V11" />
-      <path d="m10 7.2 1.5 1.5 2.7-2.9" />
-      <rect x="3" y="11" width="18" height="10" rx="2.5" />
-    </svg>
-  );
+  return <span className={cn('shrink-0 font-bold tracking-[-0.035em] lowercase', className)}>urna.digi</span>;
 }
 
 /** Rodapé enxuto: marca, uma linha de aviso e os links legais. */
@@ -59,10 +45,7 @@ export function LegalFooter() {
   return (
     <footer className="mt-10 border-t pt-4 pb-2 text-[12px] leading-relaxed text-muted-foreground">
       <div className="flex flex-wrap items-center justify-between gap-x-4">
-        <div className="flex items-center gap-2 text-foreground">
-          <Logo className="size-5" />
-          <span className="text-[13px] font-semibold tracking-[-0.01em]">Urna.digi</span>
-        </div>
+        <Logo className="text-[14px] text-foreground" />
         <nav className="flex gap-4 font-medium text-foreground/80" aria-label="Informações legais">
           <Link href="/privacidade" className="inline-flex min-h-11 items-center hover:text-foreground">
             Privacidade

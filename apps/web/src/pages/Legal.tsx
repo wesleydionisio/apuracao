@@ -50,8 +50,7 @@ export function PrivacyPage() {
         </li>
         <li>
           <strong>No Super Chat:</strong> a mensagem, o valor e a situação do pagamento. O Pix é processado pelo seu banco e,
-          quando usado, pelo Mercado Pago; não recebemos dados do seu cartão nem da sua conta bancária. O e-mail da conta é
-          informado ao Mercado Pago como identificação de quem paga.
+          quando usado, pela Woovi (instituição de pagamento); não recebemos dados do seu cartão nem da sua conta bancária.
         </li>
       </ul>
       <h2>Para que usamos</h2>

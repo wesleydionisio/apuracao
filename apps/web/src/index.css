@@ -67,6 +67,8 @@
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.12), 0 8px 24px -8px rgb(0 0 0 / 0.35);
 
   --tabbar-h: 60px;
+  /* respiro entre o cabeçalho fixo e o começo de cada tela (maior no celular, onde o conteúdo vai de ponta a ponta) */
+  --page-top: 24px;
   --vvh: 100dvh;
   --tabbar-total: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   color-scheme: light;
@@ -341,5 +343,11 @@ html.kb nav[aria-label="Navegação"] {
   ::view-transition-old(*),
   ::view-transition-new(*) {
     animation: none !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --page-top: 16px;
   }
 }

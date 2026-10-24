@@ -137,7 +137,8 @@ chamada. Se o modelo falhar ou estourar a cota, um disjuntor deixa o chat só co
 - **Super Chat** (ícone de cifrão na caixa do chat): valor + mensagem → Pix. A mensagem passa pelo filtro local e pelo
   modelo de moderação **antes** do Pix ser gerado; pago, vira um cartão colorido para a sala inteira (todas as subsalas, sem
   teto nem modo lento) e, a partir de R$ 10, fica fixado no topo por 2 min a 2 h conforme a faixa (`packages/shared/src/superchat.ts`).
-  Recebimento: `MP_ACCESS_TOKEN` (Mercado Pago; webhook em `/api/pix/webhook`, confirma sozinho) ou só `PIX_KEY` (QR estático
+  Recebimento: `WOOVI_APP_ID` (Woovi; webhook "Cobrança paga" em `/api/pix/webhook`, confirma sozinho; `WOOVI_API` aponta para o
+  sandbox nos testes) ou só `PIX_KEY` (QR estático
   com valor; aprove em `/admin` ao ver no extrato). Em dev, sem nada configurado, a tela do Pix tem "Simular pagamento".
 - **Faixa do topo:** patrocinador (nome, texto, link, logo) ou "anuncie aqui" com link para o WhatsApp (`AD_WHATSAPP`).
   Editada em `/admin`, publicada em `/data/site.json` (a CDN serve como o placar).
