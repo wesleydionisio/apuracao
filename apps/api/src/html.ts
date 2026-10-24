@@ -32,6 +32,8 @@ export interface Meta {
   image: string;
   imageW?: number;
   imageH?: number;
+  /** texto alternativo da imagem do card */
+  imageAlt?: string;
   /** fora dos buscadores (TV, embed): continua com prévia nas redes */
   noindex?: boolean;
   /** dados estruturados (JSON-LD) */
@@ -51,11 +53,14 @@ export function renderHtml(m: Meta): string {
     `<meta property="og:image" content="${esc(img)}">`,
     `<meta property="og:image:width" content="${m.imageW ?? 1200}">`,
     `<meta property="og:image:height" content="${m.imageH ?? 630}">`,
+    `<meta property="og:image:type" content="image/png">`,
+    `<meta property="og:image:alt" content="${esc(m.imageAlt ?? m.title)}">`,
     `<meta property="og:locale" content="pt_BR">`,
     `<meta name="twitter:card" content="summary_large_image">`,
     `<meta name="twitter:title" content="${esc(m.title)}">`,
     `<meta name="twitter:description" content="${esc(m.description)}">`,
     `<meta name="twitter:image" content="${esc(img)}">`,
+    `<meta name="twitter:image:alt" content="${esc(m.imageAlt ?? m.title)}">`,
     `<link rel="canonical" href="${esc(url)}">`,
     ...(m.noindex ? ['<meta name="robots" content="noindex">'] : []),
     // "<" escapado: o JSON não fecha o <script> por acidente

@@ -20,7 +20,7 @@ const h = (style: Style, ...children: Child[]): Node => ({
 });
 
 /** muda quando o desenho muda: invalida o cache em disco dos cards antigos */
-const DESIGN = 'v2';
+const DESIGN = 'v3';
 
 let fonts: { name: string; data: Buffer; weight: 400 | 800; style: 'normal' }[] | null = null;
 function loadFonts() {
@@ -240,6 +240,68 @@ function guessOg(o: GuessIn) {
 }
 
 // ---------------------------------------------------------------- placar, cidade, momento
+
+/**
+ * Card de divulgação (antes das 17h): o convite, não o placar. Título grande, os dois candidatos frente a frente
+ * nas cores de cada lado e o que o site tem (placar, chat, palpite). É o que aparece ao colar o link no X/WhatsApp.
+ */
+export function teaserCard(cands: CandidateDef[]) {
+  const [ca, cb] = cands;
+  const side = (c: CandidateDef, align: 'left' | 'right') =>
+    h(
+      { flexDirection: 'column', alignItems: align === 'left' ? 'flex-start' : 'flex-end', gap: 14 },
+      h(
+        { borderRadius: 40, padding: 6, background: c.color },
+        photo(c, 168, 34),
+      ),
+      h(
+        { flexDirection: 'column', alignItems: align === 'left' ? 'flex-start' : 'flex-end', gap: 2 },
+        h({ fontSize: 34, fontWeight: 800, letterSpacing: -0.8 }, c.short),
+        h({ fontSize: 22, color: MUTED }, [c.n, c.party].filter(Boolean).join(' · ')),
+      ),
+    );
+  return render(
+    h(
+      {
+        width: 1200,
+        height: 630,
+        background: BG,
+        // cada lado com um brilho da cor do seu candidato
+        backgroundImage: `linear-gradient(90deg, ${ca.color}40 0%, ${ca.color}10 28%, transparent 46%, transparent 54%, ${cb.color}10 72%, ${cb.color}40 100%)`,
+        color: FG,
+        fontFamily: 'Inter',
+        flexDirection: 'column',
+        padding: '44px 64px 40px',
+      },
+      h(
+        { justifyContent: 'space-between', alignItems: 'center' },
+        h({ alignItems: 'center', gap: 16 }, h({ fontSize: 30, fontWeight: 800, letterSpacing: -1 }, 'urna.digi'), h({ fontSize: 18, color: MUTED, letterSpacing: 3 }, '2º TURNO')),
+        h(
+          { alignItems: 'center', gap: 10, fontSize: 20, fontWeight: 800, letterSpacing: 1.5, color: FG, border: `1px solid ${LINE}`, borderRadius: 999, padding: '8px 18px', background: CARD },
+          dot('#22c55e', 12),
+          'AO VIVO DOMINGO, 17H',
+        ),
+      ),
+      h(
+        { flexDirection: 'column', marginTop: 34 },
+        h({ fontSize: 64, fontWeight: 800, letterSpacing: -2.4, lineHeight: 1.02 }, 'Apuração do 2º turno'),
+        h({ fontSize: 64, fontWeight: 800, letterSpacing: -2.4, lineHeight: 1.02, color: MUTED }, 'com chat em tempo real'),
+      ),
+      h(
+        { flexGrow: 1, alignItems: 'flex-end', justifyContent: 'space-between' },
+        side(ca, 'left'),
+        h(
+          { flexDirection: 'column', alignItems: 'center', gap: 10, paddingBottom: 30 },
+          h({ fontSize: 56, fontWeight: 800, color: MUTED }, '×'),
+          h({ fontSize: 20, color: MUTED }, 'Dados oficiais do TSE'),
+          h({ fontSize: 22, fontWeight: 800 }, host()),
+        ),
+        side(cb, 'right'),
+      ),
+    ),
+    'og',
+  );
+}
 
 export function scoreCard(o: { title: string; snap: Snap | null; cands: CandidateDef[]; subtitle?: string; at?: string | null }) {
   const [ca, cb] = o.cands;

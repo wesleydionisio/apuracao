@@ -41,7 +41,7 @@ import { FileAccounts, PgAccounts, type Account, type AccountStore } from './acc
 import { config } from './config';
 import { board, cityPayload, munBoard, municipalities } from './data';
 import { renderHtml, type Meta } from './html';
-import { cached, guessCard, scoreCard, stripEmoji, type Format } from './og';
+import { cached, guessCard, scoreCard, stripEmoji, teaserCard, type Format } from './og';
 import { createCharge, fetchPayment, providerOf, qrPng, simulateWooviPayment, wooviSandbox } from './pix';
 import { cleanSite, Site } from './site';
 import { FileStore, newId, PgStore, type GuessStore, type StoredGuess } from './store';
@@ -736,7 +736,9 @@ app.get('/api/og/board.png', async (_req, reply) => {
   const cands = b?.candidates;
   if (!b || !cands) return noCands(reply);
   const s = b.released ? b.br : null;
-  const title = !s ? 'Apuração do 2º turno ao vivo a partir das 17h' : s.status === 'totalizado' ? 'Resultado final do 2º turno' : 'Apuração do 2º turno ao vivo';
+  // antes do placar: o card de divulgação (o link colado no X/WhatsApp vira convite)
+  if (!s) return sendPng(reply, await cached('teaser', [cands], () => teaserCard(cands)), 300);
+  const title = s.status === 'totalizado' ? 'Resultado final do 2º turno' : 'Apuração do 2º turno com chat ao vivo';
   const png = await cached('board', [title, s?.pst, s?.a, s?.b, cands], () => scoreCard({ title, snap: s, cands, at: b.source.at }));
   return sendPng(reply, png, 15);
 });
@@ -778,7 +780,9 @@ const versus = () => {
   return c ? `${c[0].short} x ${c[1].short}` : 'presidente';
 };
 const DEFAULT_DESC =
-  'Apuração do 2º turno da eleição presidencial de 2026 em tempo real, com dados oficiais do TSE: resultado por estado e por cidade, projeção, palpite e chat ao vivo.';
+  'Acompanhe a apuração do 2º turno ao vivo com dados oficiais do TSE e comente em tempo real no chat, com a torcida de cada lado. Resultado por estado e por cidade, e seu palpite antes das 17h.';
+/** muda quando o card de compartilhamento muda: X e WhatsApp guardam a imagem pelo endereço */
+const OG_VER = 'c3';
 
 function sendHtml(reply: FastifyReply, meta: Meta) {
   return reply.header('content-type', 'text/html; charset=utf-8').header('cache-control', 'public, s-maxage=30, stale-while-revalidate=60').send(renderHtml(meta));
@@ -789,13 +793,14 @@ const boardMeta = (p: string): Meta => {
   const s = b?.released ? b.br : null;
   const c = b?.candidates;
   const desc = s && c && s.valid
-    ? `${fmtPct(s.pst, 1)}% das urnas apuradas: ${c[0].short} ${fmtPct(s.pa)}% × ${fmtPct(s.pb)}% ${c[1].short}. Resultado do 2º turno ao vivo, por estado e por cidade, com dados oficiais do TSE.`
-    : DEFAULT_DESC;
+    ? `${fmtPct(s.pst, 1)}% das urnas apuradas: ${c[0].short} ${fmtPct(s.pa)}% × ${fmtPct(s.pb)}% ${c[1].short}. Acompanhe ao vivo e comente no chat em tempo real. Dados oficiais do TSE.`
+    : `${versus()}: ${DEFAULT_DESC.charAt(0).toLowerCase()}${DEFAULT_DESC.slice(1)}`;
   return {
-    title: `Apuração 2º turno 2026 ao vivo: ${versus()} | ${BRAND}`,
+    title: `Apuração do 2º turno com chat em tempo real | ${BRAND}`,
     description: desc,
     path: p,
-    image: `/api/og/board.png?v=${s?.pst ?? 0}`,
+    image: `/api/og/board.png?v=${OG_VER}-${s?.pst ?? 0}`,
+    imageAlt: `Apuração do 2º turno com chat em tempo real: ${versus()}`,
     ...(p === '/'
       ? { jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: BRAND, url: config.publicUrl, inLanguage: 'pt-BR', description: DEFAULT_DESC } }
       : { noindex: true }),
@@ -830,7 +835,7 @@ const pages: Record<string, () => Omit<Meta, 'path' | 'image'>> = {
   '/termos': () => ({ title: `Termos de uso | ${BRAND}`, description: 'Regras de uso do site e do chat da apuração.' }),
 };
 for (const [p, meta] of Object.entries(pages)) {
-  app.get(p, async (_req, reply) => sendHtml(reply, { ...meta(), path: p, image: `/api/og/board.png?v=${board()?.br?.pst ?? 0}` }));
+  app.get(p, async (_req, reply) => sendHtml(reply, { ...meta(), path: p, image: `/api/og/board.png?v=${OG_VER}-${board()?.br?.pst ?? 0}` }));
 }
 
 app.get<{ Params: { uf: string } }>('/mapa/:uf', async (req, reply) => {
@@ -843,7 +848,7 @@ app.get<{ Params: { uf: string } }>('/mapa/:uf', async (req, reply) => {
       ? `${fmtPct(s.pst, 1)}% apurado ${inUf(uf)}. Resultado por cidade, quanto falta e comparação com o 1º turno e 2022.`
       : `Como ${ufName(uf)} votou no 1º turno e a apuração do 2º turno ao vivo, cidade por cidade.`,
     path: `/mapa/${uf}`,
-    image: `/api/og/board.png?v=${s?.pst ?? 0}`,
+    image: `/api/og/board.png?v=${OG_VER}-${s?.pst ?? 0}`,
   });
 });
 
@@ -856,8 +861,13 @@ app.get('/robots.txt', async (_req, reply) =>
       [
         'User-agent: *',
         'Allow: /',
-        'Allow: /api/og/',
-        'Disallow: /api/',
+        // só as rotas internas da API; /api/og (imagens dos cards) fica liberada para X, WhatsApp e Google
+        'Disallow: /api/admin/',
+        'Disallow: /api/auth/',
+        'Disallow: /api/superchat',
+        'Disallow: /api/pix/',
+        'Disallow: /api/guess',
+        'Disallow: /api/me',
         'Disallow: /admin',
         'Disallow: /embed',
         'Disallow: /tv',
@@ -940,7 +950,7 @@ app.get<{ Params: { slug: string } }>('/sala/:slug', async (req, reply) =>
     title: 'Assista à apuração comigo · sala ao vivo',
     description: 'Entre na sala para acompanhar a apuração do 2º turno e conversar em tempo real.',
     path: `/sala/${encodeURIComponent(req.params.slug)}`,
-    image: `/api/og/board.png?v=${board()?.br?.pst ?? 0}`,
+    image: `/api/og/board.png?v=${OG_VER}-${board()?.br?.pst ?? 0}`,
   }),
 );
 
