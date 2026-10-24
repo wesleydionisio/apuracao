@@ -53,7 +53,8 @@ function open() {
   // HOST=urnadigital.online com WS_URL=wss://<ip da VPS>/ws: testa a origem sem a Cloudflare (que limita conexões
   // simultâneas por IP de quem testa); o certificado de origem não vale para o IP, daí o rejectUnauthorized
   if (env.HOST) headers.host = env.HOST;
-  const ws = new WebSocket(URL_, env.HOST ? { headers, servername: env.HOST, rejectUnauthorized: false } : { headers });
+  const opts: WebSocket.ClientOptions = env.HOST ? { headers, servername: env.HOST, rejectUnauthorized: false } : { headers };
+  const ws = new WebSocket(URL_, opts);
   ws.on('open', () => {
     stats.opened++;
     ws.send(JSON.stringify({ t: 'join', rooms: ONLY ? [ONLY] : ['br', room] }));
