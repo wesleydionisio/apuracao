@@ -45,7 +45,7 @@
 	}
 
 	# rotas compartilháveis: HTML com <meta og:*> gerado pela API
-	@share path / /p/* /cidade/* /m/* /sala/* /tv /embed/placar
+	@share path / /p/* /cidade /cidade/* /m/* /sala/* /tv /embed/placar /painel /mapa /mapa/* /palpite /chat /privacidade /termos /robots.txt /sitemap.xml
 	handle @share {
 		reverse_proxy api:3001
 	}

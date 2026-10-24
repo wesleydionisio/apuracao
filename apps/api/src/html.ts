@@ -32,6 +32,10 @@ export interface Meta {
   image: string;
   imageW?: number;
   imageH?: number;
+  /** fora dos buscadores (TV, embed): continua com prévia nas redes */
+  noindex?: boolean;
+  /** dados estruturados (JSON-LD) */
+  jsonLd?: object;
 }
 
 export function renderHtml(m: Meta): string {
@@ -53,6 +57,9 @@ export function renderHtml(m: Meta): string {
     `<meta name="twitter:description" content="${esc(m.description)}">`,
     `<meta name="twitter:image" content="${esc(img)}">`,
     `<link rel="canonical" href="${esc(url)}">`,
+    ...(m.noindex ? ['<meta name="robots" content="noindex">'] : []),
+    // "<" escapado: o JSON não fecha o <script> por acidente
+    ...(m.jsonLd ? [`<script type="application/ld+json">${JSON.stringify(m.jsonLd).replace(/</g, '\\u003c')}</script>`] : []),
   ].join('\n    ');
   return template()
     .replace(/<title>[^<]*<\/title>/, `<title>${esc(m.title)}</title>`)

@@ -13,6 +13,7 @@ import {
   fmtPct,
   hasLink,
   hueOf,
+  inUf,
   isReleased,
   isValidRoom,
   KEY,
@@ -29,6 +30,8 @@ import {
   type ModCategory,
   type Municipality,
   type ScCharge,
+  ufName,
+  UFS,
 } from '@apuracao/shared';
 import { AiModerator, aiModConfig } from '@apuracao/shared/moderation-ai';
 import { AID_COOKIE, clientIp, newAid, SESSION_COOKIE, signToken, verifyAid, verifySession, verifyToken } from '@apuracao/shared/server';
@@ -768,7 +771,14 @@ app.get<{ Params: { file: string } }>('/api/og/moment/:file', async (req, reply)
 });
 
 // ---------- HTML com metas ----------
-const DEFAULT_DESC = 'Apuração do 2º turno em tempo real com dados oficiais do TSE: palpite, sua cidade, chat ao vivo e comparação com 2022.';
+// Títulos começam pelo que as pessoas buscam ("apuração 2º turno", "resultado", o nome da cidade); a marca vai no fim.
+const BRAND = config.siteName;
+const versus = () => {
+  const c = candidates();
+  return c ? `${c[0].short} x ${c[1].short}` : 'presidente';
+};
+const DEFAULT_DESC =
+  'Apuração do 2º turno da eleição presidencial de 2026 em tempo real, com dados oficiais do TSE: resultado por estado e por cidade, projeção, palpite e chat ao vivo.';
 
 function sendHtml(reply: FastifyReply, meta: Meta) {
   return reply.header('content-type', 'text/html; charset=utf-8').header('cache-control', 'public, s-maxage=30, stale-while-revalidate=60').send(renderHtml(meta));
@@ -779,12 +789,114 @@ const boardMeta = (p: string): Meta => {
   const s = b?.released ? b.br : null;
   const c = b?.candidates;
   const desc = s && c && s.valid
-    ? `${fmtPct(s.pst, 1)}% apurado: ${c[0].short} ${fmtPct(s.pa)}% × ${fmtPct(s.pb)}% ${c[1].short}. Dados oficiais do TSE.`
+    ? `${fmtPct(s.pst, 1)}% das urnas apuradas: ${c[0].short} ${fmtPct(s.pa)}% × ${fmtPct(s.pb)}% ${c[1].short}. Resultado do 2º turno ao vivo, por estado e por cidade, com dados oficiais do TSE.`
     : DEFAULT_DESC;
-  return { title: `${config.siteName} · 2º turno 2026`, description: desc, path: p, image: `/api/og/board.png?v=${s?.pst ?? 0}` };
+  return {
+    title: `Apuração 2º turno 2026 ao vivo: ${versus()} | ${BRAND}`,
+    description: desc,
+    path: p,
+    image: `/api/og/board.png?v=${s?.pst ?? 0}`,
+    ...(p === '/'
+      ? { jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: BRAND, url: config.publicUrl, inLanguage: 'pt-BR', description: DEFAULT_DESC } }
+      : { noindex: true }),
+  };
 };
 
 for (const p of ['/', '/tv', '/embed/placar']) app.get(p, async (_req, reply) => sendHtml(reply, boardMeta(p)));
+
+// telas do app com título e descrição próprios (antes saíam com o HTML genérico, sem canonical)
+const pages: Record<string, () => Omit<Meta, 'path' | 'image'>> = {
+  '/painel': () => ({
+    title: `Resultado do 2º turno 2026 em tempo real: ${versus()} | ${BRAND}`,
+    description: 'Painel completo da apuração: votos, projeção, quanto falta apurar, viradas e comparação com o 1º turno e com 2022. Dados oficiais do TSE.',
+  }),
+  '/mapa': () => ({
+    title: `Mapa da apuração do 2º turno 2026 por estado e cidade | ${BRAND}`,
+    description: 'Quem lidera em cada estado e em cada cidade, ao vivo. Mapa da eleição presidencial com dados oficiais do TSE.',
+  }),
+  '/cidade': () => ({
+    title: `Apuração do 2º turno na sua cidade: resultado ao vivo | ${BRAND}`,
+    description: 'Busque sua cidade e acompanhe a apuração do 2º turno: parcial do município comparada com o estado, o Brasil, o 1º turno e 2022.',
+  }),
+  '/palpite': () => ({
+    title: `Palpite do 2º turno 2026: quem vence, ${versus()}? | ${BRAND}`,
+    description: 'Dê seu palpite para o resultado do 2º turno antes das 17h e veja, durante a apuração, quão perto você chegou. Gere seu card para compartilhar.',
+  }),
+  '/chat': () => ({
+    title: `Chat ao vivo da apuração do 2º turno | ${BRAND}`,
+    description: 'Comente a apuração do 2º turno em tempo real com quem está acompanhando, com a torcida de cada lado.',
+  }),
+  '/privacidade': () => ({ title: `Política de privacidade | ${BRAND}`, description: 'Quais dados o site trata, para quê e os seus direitos (LGPD).' }),
+  '/termos': () => ({ title: `Termos de uso | ${BRAND}`, description: 'Regras de uso do site e do chat da apuração.' }),
+};
+for (const [p, meta] of Object.entries(pages)) {
+  app.get(p, async (_req, reply) => sendHtml(reply, { ...meta(), path: p, image: `/api/og/board.png?v=${board()?.br?.pst ?? 0}` }));
+}
+
+app.get<{ Params: { uf: string } }>('/mapa/:uf', async (req, reply) => {
+  const uf = req.params.uf.toUpperCase();
+  if (!UFS[uf] || uf === 'ZZ') return sendHtml(reply, { ...pages['/mapa'](), path: '/mapa', image: '/api/og/board.png' });
+  const s = board()?.released ? board()?.ufs[`uf:${uf}`] : null;
+  return sendHtml(reply, {
+    title: `Apuração ${inUf(uf)} no 2º turno 2026: resultado ao vivo | ${BRAND}`,
+    description: s
+      ? `${fmtPct(s.pst, 1)}% apurado ${inUf(uf)}. Resultado por cidade, quanto falta e comparação com o 1º turno e 2022.`
+      : `Como ${ufName(uf)} votou no 1º turno e a apuração do 2º turno ao vivo, cidade por cidade.`,
+    path: `/mapa/${uf}`,
+    image: `/api/og/board.png?v=${s?.pst ?? 0}`,
+  });
+});
+
+// ---------- buscadores ----------
+app.get('/robots.txt', async (_req, reply) =>
+  reply
+    .header('content-type', 'text/plain; charset=utf-8')
+    .header('cache-control', 'public, max-age=3600')
+    .send(
+      [
+        'User-agent: *',
+        'Allow: /',
+        'Allow: /api/og/',
+        'Disallow: /api/',
+        'Disallow: /admin',
+        'Disallow: /embed',
+        'Disallow: /tv',
+        'Disallow: /p/',
+        'Disallow: /m/',
+        'Disallow: /sala/',
+        '',
+        `Sitemap: ${config.publicUrl}/sitemap.xml`,
+        '',
+      ].join('\n'),
+    ),
+);
+
+// telas principais, os 27 estados e as ~5570 cidades (a busca "apuração <cidade>" é a cauda longa da noite)
+let sitemapMemo: { at: number; xml: string } | null = null;
+app.get('/sitemap.xml', async (_req, reply) => {
+  if (!sitemapMemo || Date.now() - sitemapMemo.at > 3_600_000) {
+    const today = new Date().toISOString().slice(0, 10);
+    const url = (p: string, priority: string, freq = 'hourly') =>
+      `<url><loc>${config.publicUrl}${p}</loc><lastmod>${today}</lastmod><changefreq>${freq}</changefreq><priority>${priority}</priority></url>`;
+    const urls = [
+      url('/', '1.0', 'always'),
+      url('/painel', '0.9', 'always'),
+      url('/mapa', '0.9', 'always'),
+      url('/cidade', '0.8'),
+      url('/palpite', '0.8'),
+      url('/chat', '0.5'),
+      ...Object.keys(UFS).filter((u) => u !== 'ZZ').map((u) => url(`/mapa/${u}`, '0.8')),
+      ...municipalities()
+        .list.filter((m) => m.uf !== 'ZZ')
+        .map((m) => url(`/cidade/${m.uf.toLowerCase()}/${m.slug}`, '0.6')),
+    ];
+    sitemapMemo = {
+      at: Date.now(),
+      xml: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`,
+    };
+  }
+  return reply.header('content-type', 'application/xml; charset=utf-8').header('cache-control', 'public, max-age=3600').send(sitemapMemo.xml);
+});
 
 app.get<{ Params: { id: string } }>('/p/:id', async (req, reply) => {
   const g = store.index.byId.get(req.params.id);
@@ -803,8 +915,10 @@ app.get<{ Params: { uf: string; slug: string } }>('/cidade/:uf/:slug', async (re
   if (!m) return sendHtml(reply, boardMeta(req.url));
   const now = cityPayload(m).now;
   return sendHtml(reply, {
-    title: `${m.name} (${m.uf}) · apuração do 2º turno`,
-    description: now ? `${fmtPct(now.pst, 1)}% apurado em ${m.name}. Compare com o 1º turno e com 2022.` : `Como ${m.name} votou no 1º turno e em 2022, e a apuração ao vivo no domingo.`,
+    title: `Apuração em ${m.name} (${m.uf}) no 2º turno 2026: resultado ao vivo | ${BRAND}`,
+    description: now
+      ? `${fmtPct(now.pst, 1)}% apurado em ${m.name}: ${versus()}. Compare com ${m.uf}, o Brasil, o 1º turno e 2022. Dados oficiais do TSE.`
+      : `Resultado do 2º turno em ${m.name} (${m.uf}) ao vivo a partir das 17h de domingo, e como a cidade votou no 1º turno e em 2022.`,
     path: `/cidade/${m.uf.toLowerCase()}/${m.slug}`,
     image: `/api/og/city/${m.ibge}.png?v=${now?.pst ?? 0}`,
   });

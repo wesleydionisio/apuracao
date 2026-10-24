@@ -1,10 +1,38 @@
 // Mini gráfico da noite para a tela Ao vivo: % dos válidos × % de urnas apuradas.
-// Eixo x fixo em 0–100% apurado, para a curva de 2022 (tracejada) ficar no mesmo ponto da noite.
+// O eixo x dá zoom conforme a apuração: no começo mostra só o trecho inicial (a curva não fica espremida num canto)
+// e vai abrindo até 0–100% perto do fim. A curva de 2022 (tracejada) segue o mesmo eixo, só o pedaço visível.
 import type { Board } from '@apuracao/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 type P = [number, number];
+
+/** até onde o eixo x vai: ~1,3× o apurado com folga, em degraus de 5 pontos; de 75% em diante, a noite inteira */
+export function xWindow(pst: number): number {
+  if (pst >= 75) return 100;
+  return Math.min(100, Math.max(15, Math.ceil((pst * 1.3 + 6) / 5) * 5));
+}
+
+/** acompanha o alvo com uma transição curta (o zoom "abre" em vez de pular) */
+function useTween(target: number, ms = 600): number {
+  const [v, setV] = useState(target);
+  const cur = useRef(target);
+  useEffect(() => {
+    const from = cur.current;
+    if (from === target) return;
+    const t0 = performance.now();
+    let raf = 0;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - t0) / ms);
+      cur.current = from + (target - from) * (1 - (1 - t) ** 3);
+      setV(cur.current);
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, ms]);
+  return v;
+}
 
 /** cúbica monotônica (não "passa do ponto" entre amostras) */
 function path(pts: P[]): string {
@@ -69,19 +97,27 @@ export function NightSpark({
   const iw = Math.max(80, w - padL - padR);
   const ih = height - padT - padB;
 
+  const xMax = useTween(xWindow(last?.pst ?? 0));
+  const full = xMax > 99.5;
+  // o eixo y também só considera o trecho visível de 2022
+  const vis22 = (curve22 ?? []).filter((p) => p.pst <= xMax);
   const dev = Math.max(
     4,
     ...pts.map((p) => Math.abs(p.pa - 50)),
-    ...(curve22 ?? []).map((p) => Math.abs(p.pa - 50)),
+    ...vis22.map((p) => Math.abs(p.pa - 50)),
     t1 != null ? Math.abs(t1 - 50) : 0,
   );
   const span = Math.ceil((dev + 1) / 5) * 5;
-  const x = (pst: number) => padL + (Math.min(100, Math.max(0, pst)) / 100) * iw;
+  const x = (pst: number) => padL + (Math.min(xMax, Math.max(0, pst)) / xMax) * iw;
+  const xEnd = padL + iw;
+  /** posição relativa na largura (0–1), para decidir onde cabe rótulo */
+  const frac = (pst: number) => Math.min(1, Math.max(0, pst / xMax));
   const y = (pa: number) => padT + ((50 + span - pa) / (2 * span)) * ih;
 
   const lineA = path(pts.map((p) => [x(p.pst), y(p.pa)]));
   const lineB = path(pts.map((p) => [x(p.pst), y(100 - p.pa)]));
-  const g22 = curve22?.length ? curve22 : null;
+  // até o primeiro ponto depois da janela (o recorte do svg corta o excesso)
+  const g22 = curve22?.length ? curve22.slice(0, Math.min(curve22.length, curve22.findIndex((p) => p.pst > xMax) + 1 || curve22.length)) : null;
   const a22 = g22 ? path(g22.map((p) => [x(p.pst), y(p.pa)])) : '';
   const b22 = g22 ? path(g22.map((p) => [x(p.pst), y(100 - p.pa)])) : '';
 
@@ -90,7 +126,7 @@ export function NightSpark({
   const release = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pstAt = (clientX: number) => {
     const r = ref.current?.getBoundingClientRect();
-    return r ? Math.max(0, Math.min(100, ((clientX - r.left - padL) / iw) * 100)) : null;
+    return r ? Math.max(0, Math.min(xMax, ((clientX - r.left - padL) / iw) * xMax)) : null;
   };
   const onPointer = (e: React.PointerEvent) => {
     if (e.pointerType !== 'mouse' && e.type === 'pointermove' && !e.buttons) return;
@@ -136,27 +172,35 @@ export function NightSpark({
           <pattern id="spark-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="6" className="stroke-border" strokeWidth="1" />
           </pattern>
+          <clipPath id="spark-plot">
+            <rect x={padL} y={0} width={iw} height={height} />
+          </clipPath>
         </defs>
         {/* o que falta apurar */}
         {last && last.pst < 99.5 && (
-          <rect x={x(last.pst)} y={padT} width={x(100) - x(last.pst)} height={ih} fill="url(#spark-hatch)" opacity={0.55} />
+          <rect x={x(last.pst)} y={padT} width={Math.max(0, xEnd - x(last.pst))} height={ih} fill="url(#spark-hatch)" opacity={0.55} />
         )}
-        <line x1={padL} x2={x(100)} y1={y(50)} y2={y(50)} className="stroke-muted-foreground/40" strokeDasharray="3 4" />
-        <text x={x(100) + 6} y={y(50) + 3.5} className="fill-muted-foreground text-[11px] font-medium tabular-nums">
+        <line x1={padL} x2={xEnd} y1={y(50)} y2={y(50)} className="stroke-muted-foreground/40" strokeDasharray="3 4" />
+        <text x={xEnd + 6} y={y(50) + 3.5} className="fill-muted-foreground text-[11px] font-medium tabular-nums">
           50%
         </text>
-        <text x={x(100) + 6} y={padT + 4} className="fill-muted-foreground/70 text-[11px] tabular-nums">
+        <text x={xEnd + 6} y={padT + 4} className="fill-muted-foreground/70 text-[11px] tabular-nums">
           {50 + span}
         </text>
-        <text x={x(100) + 6} y={padT + ih} className="fill-muted-foreground/70 text-[11px] tabular-nums">
+        <text x={xEnd + 6} y={padT + ih} className="fill-muted-foreground/70 text-[11px] tabular-nums">
           {50 - span}
         </text>
         {/* virada de 2022: linha vertical no % apurado em que a liderança trocou — a zona de atenção da noite */}
-        {flip22 && (
+        {flip22 && flip22.pst <= xMax && (
           <g aria-hidden>
             <line x1={x(flip22.pst)} x2={x(flip22.pst)} y1={padT} y2={padT + ih} className="stroke-foreground/50" strokeWidth={1.25} strokeDasharray="2 3" />
             <circle cx={x(flip22.pst)} cy={y(50)} r={3.5} fill={(flip22.lead === 'a' ? ca : cb).color} className="stroke-background" strokeWidth={1.5} />
-            <text x={x(flip22.pst) - 4} y={padT + 8} textAnchor="end" className="fill-foreground/80 text-[11px] font-medium tabular-nums">
+            <text
+              x={frac(flip22.pst) < 0.45 ? x(flip22.pst) + 4 : x(flip22.pst) - 4}
+              y={padT + 8}
+              textAnchor={frac(flip22.pst) < 0.45 ? 'start' : 'end'}
+              className="fill-foreground/80 text-[11px] font-medium tabular-nums"
+            >
               virada em 2022 · {fmt(flip22.pst)}%
             </text>
           </g>
@@ -168,14 +212,14 @@ export function NightSpark({
             { c: cb, v: 100 - t1 },
           ].map(({ c, v }) => (
             <g key={`t1-${c.key}`}>
-              <line x1={padL} x2={x(100)} y1={y(v)} y2={y(v)} stroke={c.color} strokeOpacity={0.6} strokeWidth={1.25} strokeDasharray="6 4" />
-              <text x={x(100) - 4} y={v > 50 ? y(v) - 4 : y(v) + 11} textAnchor="end" className="text-[11px] font-medium tabular-nums" fill={c.color}>
+              <line x1={padL} x2={xEnd} y1={y(v)} y2={y(v)} stroke={c.color} strokeOpacity={0.6} strokeWidth={1.25} strokeDasharray="6 4" />
+              <text x={xEnd - 4} y={v > 50 ? y(v) - 4 : y(v) + 11} textAnchor="end" className="text-[11px] font-medium tabular-nums" fill={c.color}>
                 1º turno {fmt(v)}%
               </text>
             </g>
           ))}
         {g22 && (
-          <g opacity={0.4}>
+          <g opacity={0.4} clipPath="url(#spark-plot)">
             <path d={a22} fill="none" stroke={ca.color} strokeWidth={1.5} strokeDasharray="3 3" />
             <path d={b22} fill="none" stroke={cb.color} strokeWidth={1.5} strokeDasharray="3 3" />
           </g>
@@ -191,7 +235,7 @@ export function NightSpark({
               <g key={c.key}>
                 <circle cx={x(last.pst)} cy={py} r={7} fill={c.color} opacity={0.18} className="live-ping" style={{ transformOrigin: `${x(last.pst)}px ${py}px` }} />
                 <circle cx={x(last.pst)} cy={py} r={3.5} fill={c.color} className="stroke-background" strokeWidth={1.5} />
-                {last.pst < 86 && (
+                {frac(last.pst) < 0.86 && (
                   <text x={x(last.pst) + 8} y={ly + 3.5} className="text-[11px] font-semibold tabular-nums" fill={c.color}>
                     {fmt(v)}%
                   </text>
@@ -213,10 +257,10 @@ export function NightSpark({
         <text x={padL} y={height - 2} className="fill-muted-foreground text-[11px] tabular-nums">
           0%
         </text>
-        <text x={x(100)} y={height - 2} textAnchor="end" className="fill-muted-foreground text-[11px] tabular-nums">
-          100% apurado
+        <text x={xEnd} y={height - 2} textAnchor="end" className="fill-muted-foreground text-[11px] tabular-nums">
+          {full ? '100% apurado' : `${Math.round(xMax)}%`}
         </text>
-        {last && last.pst > 8 && last.pst < 88 && (
+        {last && frac(last.pst) > 0.08 && frac(last.pst) < 0.85 && (
           <text x={x(last.pst)} y={height - 2} textAnchor="middle" className="fill-foreground text-[11px] font-medium tabular-nums">
             {fmt(last.pst)}%
           </text>
