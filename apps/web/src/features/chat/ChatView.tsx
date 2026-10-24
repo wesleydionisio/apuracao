@@ -389,7 +389,7 @@ export default function ChatView({
                   onPointerDown={(e) => e.preventDefault()}
                   onClick={openSuperchat}
                   disabled={disabled}
-                  className="absolute top-1/2 right-9 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                  className="absolute top-1/2 right-9 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-amber-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400 disabled:opacity-50 dark:text-amber-400 dark:hover:text-amber-300"
                   aria-label="Mandar um Super Chat (Pix)"
                 >
                   <BadgeDollarSign className="size-[18px]" />

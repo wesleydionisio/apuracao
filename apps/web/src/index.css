@@ -351,3 +351,13 @@ html.kb nav[aria-label="Navegação"] {
     --page-top: 16px;
   }
 }
+
+/* barra do destaque do Super Chat novo: esvazia nos segundos em que ele fica inteiro no topo */
+@keyframes sc-feature {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}

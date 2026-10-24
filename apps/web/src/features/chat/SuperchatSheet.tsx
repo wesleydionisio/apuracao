@@ -13,7 +13,7 @@ import { superchatApi, HttpError } from '@/lib/api';
 import { savedSide } from '@/lib/live';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
-import { SuperLine } from './superchat';
+import { scColors, SuperLine } from './superchat';
 
 const PENDING = 'sc-pending';
 
@@ -158,7 +158,8 @@ export default function SuperchatSheet({
             <div className="overflow-y-auto px-4 pb-4">
               <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Valor">
                 {SC_PRESETS.map((v) => {
-                  const t = scTier(v);
+                  // na cor do lado de quem compra (a mesma do cartão que vai sair no chat)
+                  const c = scColors({ sc: v, side: savedSide() ?? undefined }, cands);
                   const on = amount === v && !custom;
                   return (
                     <button
@@ -171,9 +172,9 @@ export default function SuperchatSheet({
                         setCustom('');
                       }}
                       className={cn('press num flex h-11 items-center justify-center gap-1.5 rounded-xl border text-[15px] font-semibold transition-colors', on ? 'border-transparent' : 'bg-card hover:bg-accent')}
-                      style={on ? { background: t.color, color: t.ink } : undefined}
+                      style={on ? { background: c.bg, color: c.ink } : undefined}
                     >
-                      {!on && <span className="size-2 rounded-full" style={{ background: t.color }} aria-hidden />}
+                      {!on && !c.side && <span className="size-2 rounded-full" style={{ background: c.bg }} aria-hidden />}
                       {fmtBrl(v)}
                     </button>
                   );

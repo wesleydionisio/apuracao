@@ -43,7 +43,7 @@ export function headerMini(path: string): 'none' | 'hero' | 'pinned' {
 }
 
 /** altura da faixa do mini-placar (px): reservada no topo das telas "pinned" */
-export const MINI_H = 48;
+export const MINI_H = 58;
 
 /** o mesmo vidro fosco da barra de abas: cabeçalho, faixa de patrocínio e mini-placar leem como uma peça só */
 const FROST = 'bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75';
@@ -92,7 +92,7 @@ export function Header() {
             if (el) el.inert = !show;
           }}
         >
-          <div className="mx-auto flex max-w-3xl flex-col justify-center px-4 pb-1 lg:max-w-6xl" style={{ height: MINI_H }}>
+          <div className="mx-auto flex max-w-3xl flex-col justify-center px-4 py-1.5 lg:max-w-6xl" style={{ height: MINI_H }}>
             {!board ? <MiniSkeleton /> : live ? <MiniScore board={board} /> : <MiniCountdown board={board} />}
           </div>
         </div>
