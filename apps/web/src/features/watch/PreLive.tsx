@@ -1,14 +1,10 @@
-// Antes das 17h: contagem regressiva, o confronto no 1º turno e o convite para o palpite.
+// Antes das 17h: contagem regressiva e o confronto no 1º turno (o convite para o palpite é o cartão logo abaixo).
 import type { Board } from '@apuracao/shared';
 import NumberFlow, { NumberFlowGroup } from '@number-flow/react';
-import { Target } from 'lucide-react';
-import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { SourceStamp } from '@/components/core/live';
 import { VersusGlow } from '@/components/core/versus';
-import { Button } from '@/components/ui/button';
 import { useNow } from '@/components/ui';
-import { read } from '@/features/chat/rooms';
 import { fmtInt } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
@@ -48,20 +44,14 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
   const hist = useHistRefs(board);
   const [ca, cb] = board.candidates;
   const left = Date.parse(board.releaseAt) - now;
-  const mine = read('my-guess');
   const t1 = hist.t1;
   return (
     <section aria-label="Antes da apuração" className={cn(size === 'lg' ? 'p-0' : 'px-4 pt-3 pb-3')}>
-      <div className="flex items-center justify-between gap-3">
-        <p className="min-w-0 text-[12.5px] text-muted-foreground">{left > 0 ? 'Placar ao vivo às 17h de domingo, em' : 'O placar abre em instantes'}</p>
-        <Button asChild size="sm" className="h-8 shrink-0 rounded-full px-3 text-[12.5px]">
-          <Link href={mine ? `/p/${mine}` : '/palpite'}>
-            <Target className="size-3.5" aria-hidden />
-            {mine ? 'Meu palpite' : 'Dar palpite'}
-          </Link>
-        </Button>
-      </div>
-      <div className="mt-1">{left > 0 ? <Countdown ms={left} size={size} /> : <span className="display text-[34px] font-semibold">17:00</span>}</div>
+      {/* o convite do palpite fica no cartão logo abaixo (GuessCta): aqui só a contagem, num alinhamento só */}
+      <p className="text-[11.5px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+        {left > 0 ? 'Placar ao vivo às 17h de domingo, em' : 'O placar abre em instantes'}
+      </p>
+      <div className="mt-1.5">{left > 0 ? <Countdown ms={left} size={size} /> : <span className="display text-[34px] font-semibold">17:00</span>}</div>
 
       <div className={cn('relative overflow-hidden rounded-xl border bg-card/60 px-3 pt-2.5 pb-3', size === 'lg' ? 'mt-6' : 'mt-3')}>
         <VersusGlow a={ca.color} b={cb.color} />

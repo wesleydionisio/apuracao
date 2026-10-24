@@ -117,7 +117,7 @@ function Frame() {
   }, [path]);
   return (
     <>
-      <div ref={headerRef} className="fixed inset-x-0 top-0 z-30 [view-transition-name:app-header]">
+      <div ref={headerRef} className="fixed inset-x-0 top-0 z-30">
         <Header />
       </div>
       <main

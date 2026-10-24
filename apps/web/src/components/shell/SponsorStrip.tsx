@@ -4,7 +4,7 @@ import { waLink } from '@apuracao/shared';
 import { ArrowUpRight, Megaphone } from 'lucide-react';
 import { useSite } from '@/lib/site';
 
-export const STRIP_H = 36;
+export const STRIP_H = 44;
 
 export function SponsorStrip() {
   const { sponsor, ad } = useSite((s) => s.site);

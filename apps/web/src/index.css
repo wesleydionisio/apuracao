@@ -317,6 +317,7 @@ html.kb nav[aria-label="Navegação"] {
   animation: 200ms var(--ease-out) both vt-in;
 }
 ::view-transition-group(app-header),
+::view-transition-group(app-mini),
 ::view-transition-group(app-tabbar),
 ::view-transition-old(app-header),
 ::view-transition-new(app-header),

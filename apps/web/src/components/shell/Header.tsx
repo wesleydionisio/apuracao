@@ -58,30 +58,34 @@ export function Header() {
   // Painel antes das 17h: a contagem já é o topo da página; o mini (só a contagem de novo) ficaria por cima dela
   const show = mini === 'pinned' || (mini === 'hero' && live && !hero);
   return (
-    <header className="safe-t relative border-b">
-      {/* o vidro fica numa camada irmã, não no <header>: backdrop-filter no pai viraria "backdrop root" e o mini-placar
-          (filho, posicionado abaixo) deixaria de borrar a página por trás */}
-      <div className={cn('absolute inset-0 -z-10', FROST)} aria-hidden />
-      <SponsorStrip />
-      <div className="mx-auto max-w-3xl px-4 lg:max-w-6xl">
-        <div className="flex h-13 items-center gap-2">
-          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2" aria-label="Urna.digi, início">
-            <Logo />
-            <span className="truncate text-[16px] font-semibold tracking-[-0.02em]">
-              Urna<span className="text-muted-foreground">.digi</span>
-            </span>
-            <span className="hidden h-5 shrink-0 items-center rounded-full border bg-muted/60 px-2 text-[11px] leading-none font-medium text-muted-foreground min-[350px]:inline-flex">
-              2º Turno
-            </span>
-          </Link>
-          <LivePill link={link} className="shrink-0" />
-          <ThemeToggle />
+    <>
+      {/*
+        O vidro precisa estar no próprio elemento que tem o view-transition-name: um ancestral com esse nome vira
+        "backdrop root" e o desfoque dos filhos só enxerga o próprio cabeçalho, não a página por trás (por isso o
+        contêiner fixo do App não tem nome). Cabeçalho e mini-placar são irmãos, cada um com o seu vidro e o seu nome.
+      */}
+      <header className={cn('safe-t relative border-b [view-transition-name:app-header]', FROST)}>
+        <SponsorStrip />
+        <div className="mx-auto max-w-3xl px-4 lg:max-w-6xl">
+          <div className="flex h-13 items-center gap-2">
+            <Link href="/" className="flex min-w-0 flex-1 items-center gap-2" aria-label="Urna.digi, início">
+              <Logo />
+              <span className="truncate text-[16px] font-semibold tracking-[-0.02em]">
+                Urna<span className="text-muted-foreground">.digi</span>
+              </span>
+              <span className="hidden h-5 shrink-0 items-center rounded-full border bg-muted/60 px-2 text-[11px] leading-none font-medium text-muted-foreground min-[350px]:inline-flex">
+                2º Turno
+              </span>
+            </Link>
+            <LivePill link={link} className="shrink-0" />
+            <ThemeToggle />
+          </div>
         </div>
-      </div>
+      </header>
       {mini !== 'none' && (
         <div
           className={cn(
-            'absolute inset-x-0 top-full border-b transition-[opacity,translate] duration-200 ease-out',
+            'absolute inset-x-0 top-full border-b transition-[opacity,translate] duration-200 ease-out [view-transition-name:app-mini]',
             FROST,
             show ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0',
           )}
@@ -95,7 +99,7 @@ export function Header() {
           </div>
         </div>
       )}
-    </header>
+    </>
   );
 }
 
