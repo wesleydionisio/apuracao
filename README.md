@@ -113,6 +113,21 @@ chamada. Se o modelo falhar ou estourar a cota, um disjuntor deixa o chat só co
   as seguintes não chegam ao chat de ninguém.
 - Métricas em `/metrics` do WS (`ws_mod_ai_*`, `ws_chat_punished_total`, `ws_chat_muted_total`).
 
+### Super Chat, patrocínio e painel admin
+
+- **Super Chat** (ícone de cifrão na caixa do chat): valor + mensagem → Pix. A mensagem passa pelo filtro local e pelo
+  modelo de moderação **antes** do Pix ser gerado; pago, vira um cartão colorido para a sala inteira (todas as subsalas, sem
+  teto nem modo lento) e, a partir de R$ 10, fica fixado no topo por 2 min a 2 h conforme a faixa (`packages/shared/src/superchat.ts`).
+  Recebimento: `MP_ACCESS_TOKEN` (Mercado Pago; webhook em `/api/pix/webhook`, confirma sozinho) ou só `PIX_KEY` (QR estático
+  com valor; aprove em `/admin` ao ver no extrato). Em dev, sem nada configurado, a tela do Pix tem "Simular pagamento".
+- **Faixa do topo:** patrocinador (nome, texto, link, logo) ou "anuncie aqui" com link para o WhatsApp (`AD_WHATSAPP`).
+  Editada em `/admin`, publicada em `/data/site.json` (a CDN serve como o placar).
+- **`/admin`**: carga da máquina e de cada worker WS, online, contas e palpites, Super Chats (aprovar/ocultar) e patrocínio.
+  Token = `ADMIN_TOKEN` (em dev sem ele: `admin`). A API limita tentativas erradas.
+- **Palpite:** cartão com contagem ao vivo, "fulano palpitou agora" e para que lado o Brasil está palpitando na tela Ao vivo;
+  faixa "E o seu?" no topo do chat. Fecham às 17h.
+- **LGPD:** aviso curto de cookies (só cookies necessários) com link para a política; some no "Entendi".
+
 ### Kill switches
 
 ```bash

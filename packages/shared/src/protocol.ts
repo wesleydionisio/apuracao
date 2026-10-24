@@ -47,6 +47,8 @@ export interface ChatMsg {
   mod?: ModCategory;
   /** linha só deste aparelho (aviso de mensagem não enviada); nunca vem do servidor */
   local?: true;
+  /** Super Chat: valor pago em centavos (a faixa decide cor e tempo fixado) */
+  sc?: number;
 }
 
 export type ClientMsg =
@@ -64,6 +66,8 @@ export type ServerMsg =
   | { t: 'snap'; s: string; d: Snap }
   | { t: 'history'; r: Room; m: ChatMsg[] }
   | { t: 'chat'; r: Room; m: ChatMsg }
+  /** Super Chats recentes da sala (ao entrar): o cliente fixa no topo os que ainda estão no tempo */
+  | { t: 'pins'; r: Room; m: ChatMsg[] }
   | { t: 'del'; r: Room; id: string }
   | { t: 'react'; r: Room; agg: Partial<Record<Reaction, number>> }
   | { t: 'moment'; m: Moment }
@@ -115,6 +119,7 @@ export const CH = {
   chat: 'ch:chat', // payload: { r, m }
   del: 'ch:del', // payload: { r, id }
   flags: 'ch:flags',
+  superchat: 'ch:sc', // payload: { r, m } (Super Chat pago, para a sala inteira)
 } as const;
 
 export const KEY = {
@@ -131,4 +136,10 @@ export const KEY = {
   flag: (f: string) => `flag:${f}`,
   roomClosed: 'flag:rooms_closed', // SET de salas desligadas
   guesses: 'count:guesses',
+  /** últimos Super Chats pagos da sala (JSON de ChatMsg), para fixar no topo de quem entra */
+  superchats: (r: Room) => `sc:${r}`,
+  strike: (k: string) => `strike:${k}`,
 } as const;
+
+/** Super Chats guardados por sala */
+export const PINS_KEEP = 30;

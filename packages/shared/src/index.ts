@@ -7,3 +7,4 @@ export * from './protocol';
 export * from './moderation';
 export * from './nick';
 export * from './time';
+export * from './superchat';

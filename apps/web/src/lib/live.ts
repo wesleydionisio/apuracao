@@ -1,7 +1,7 @@
 // Conexão WebSocket única: snaps, chat, reações e momentos.
 // Se cair, o placar segue pelo polling do JSON estático e o chat entra em modo degradado.
 import type { ClientMsg, Reaction, Room, ServerMsg, Side } from '@apuracao/shared';
-import { cheerOf, hueOf, randomNick } from '@apuracao/shared';
+import { cheerOf, hueOf, randomNick, SC_PRESETS } from '@apuracao/shared';
 import { useBoard } from '../store/board';
 import { useChat } from '../store/chat';
 import { MOCK } from './env';
@@ -205,6 +205,9 @@ function handle(m: ServerMsg) {
     case 'chat':
       chat.push(m.r, m.m);
       break;
+    case 'pins':
+      chat.setPins(m.r, m.m);
+      break;
     case 'del':
       chat.del(m.r, m.id);
       break;
@@ -266,13 +269,16 @@ function startMockChat() {
     const mine = b.side && cands?.find((c) => c.key === b.side);
     let body = BOT_LINES[Math.floor(Math.random() * BOT_LINES.length)];
     if (mine && Math.random() < 0.35) body = Math.random() < 0.5 ? `:${mine.n}: :${mine.n}: :${mine.n}:` : `${body} :${mine.n}:`;
+    // de vez em quando um Super Chat, para ver o cartão e a fita do topo
+    const sc = Math.random() < 0.08 ? SC_PRESETS[Math.floor(Math.random() * SC_PRESETS.length)] : undefined;
     useChat.getState().push(r, {
-      id: Math.random().toString(36).slice(2),
+      id: `${sc ? 'sc-' : ''}${Math.random().toString(36).slice(2)}`,
       nick: b.nick,
       hue: b.hue,
       body,
       at: Date.now(),
       ...(b.side ? { side: b.side } : {}),
+      ...(sc ? { sc } : {}),
     });
     const cur = useChat.getState().reacts[r] ?? {};
     const e = Math.random() < 0.6 ? (Math.random() < 0.5 ? 'cheer:a' : 'cheer:b') : '🔥';

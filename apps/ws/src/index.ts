@@ -14,6 +14,7 @@ import {
   Moderator,
   normalize,
   nickForId,
+  PINS_KEEP,
   REACTIONS,
   roomScope,
   type ChatMsg,
@@ -108,11 +109,13 @@ const reactDelta = new Map<Room, Map<Reaction, number>>();
 const reactAgg = new Map<Room, Partial<Record<Reaction, number>>>();
 const reactSig = new Map<Room, string>();
 const deleted = new Set<string>();
-const m = { in: 0, out: 0, chatIn: 0, blocked: 0, punished: 0, muted: 0, rateLimited: 0, busy: 0, rejectedConns: 0, inRate: 0, outRate: 0 };
+/** Super Chats recentes por sala (modo memória; com Redis a lista fica em KEY.superchats) */
+const pinsMem = new Map<Room, ChatMsg[]>();
+const m = { superchats: 0, in: 0, out: 0, chatIn: 0, blocked: 0, punished: 0, muted: 0, rateLimited: 0, busy: 0, rejectedConns: 0, inRate: 0, outRate: 0 };
 let lastIn = 0;
 let lastOut = 0;
 
-const bus = connectRedis(onBus, [CH.snap, CH.moment, CH.chat, CH.del, CH.flags]);
+const bus = connectRedis(onBus, [CH.snap, CH.moment, CH.chat, CH.del, CH.flags, CH.superchat]);
 const store = new ChatStore(bus);
 const strikes = new Strikes(bus);
 const ai = new AiModerator(config.mod);
@@ -178,6 +181,7 @@ function onBus(channel: string, payload: string) {
     else if (channel === CH.moment) board.moment(d as Moment);
     else if (channel === CH.chat) deliver(d.r, typeof d.k === 'number' ? d.k : 0, d.m, d.a);
     else if (channel === CH.del) applyDelete(d.r, d.id);
+    else if (channel === CH.superchat) deliverSuper(d.r, d.m);
     else if (channel === CH.flags) void reloadFlags();
   } catch (e) {
     console.warn('[bus]', channel, (e as Error).message);
@@ -197,6 +201,34 @@ function deliver(room: Room, k: number | null, msg: ChatMsg, author?: string) {
   const id = shardId(room, k);
   if (!msg.sys) rateOf(id).hit();
   queue(chatTopic(id), out);
+}
+
+/**
+ * Super Chat pago (a API grava no Redis e publica): vai para a sala inteira, todas as subsalas,
+ * sem passar pelo teto nem pelo modo lento. Já foi moderado antes do Pix ser gerado.
+ */
+function deliverSuper(room: Room, msg: ChatMsg) {
+  if (!isValidRoom(room) || !msg?.id || typeof msg.sc !== 'number' || deleted.has(msg.id)) return;
+  store.mirror(room, msg, JSON.stringify(msg));
+  const list = pinsMem.get(room) ?? [];
+  if (list.some((x) => x.id === msg.id)) return;
+  list.push(msg);
+  if (list.length > PINS_KEEP) list.splice(0, list.length - PINS_KEEP);
+  pinsMem.set(room, list);
+  m.superchats++;
+  publish(roomTopic(room), { t: 'chat', r: room, m: msg });
+}
+
+async function pinsOf(room: Room): Promise<ChatMsg[]> {
+  if (bus?.ready()) {
+    try {
+      const rows = await bus.cmd.lrange(KEY.superchats(room), 0, PINS_KEEP - 1);
+      return rows.reverse().map((r) => JSON.parse(r) as ChatMsg);
+    } catch {
+      /* memória */
+    }
+  }
+  return pinsMem.get(room) ?? [];
 }
 
 function rateOf(shard: string) {
@@ -232,6 +264,8 @@ function applyDelete(room: Room, id: string) {
   deleted.add(id);
   if (deleted.size > 10_000) deleted.delete(deleted.values().next().value!);
   void store.remove(room, id);
+  const pins = pinsMem.get(room);
+  if (pins) pinsMem.set(room, pins.filter((x) => x.id !== id));
   publish(roomTopic(room), { t: 'del', r: room, id });
 }
 
@@ -364,7 +398,8 @@ async function report(ws: WS, room: Room, id: unknown) {
   const ud = ws.getUserData();
   if (typeof id !== 'string' || id.length > 40 || !ud.rooms.has(room) || deleted.has(id)) return;
   const author = store.authorOf(id);
-  if (author === ud.pub || id.startsWith('sys-')) return;
+  // Super Chat passou pela moderação antes do Pix; quem tira do ar é o painel admin
+  if (author === ud.pub || id.startsWith('sys-') || id.startsWith('sc-')) return;
   const n = await store.report(id, ud.pub);
   if (n < config.reportsToDelete) return;
   if (bus?.ready()) {
@@ -605,8 +640,11 @@ async function join(ws: WS, rooms: unknown) {
     if (agg) send(ws, { t: 'react', r, agg });
     const sl = slow.get(shardId(r, k));
     if (sl?.seconds) send(ws, { t: 'slow', r, seconds: sl.seconds });
-    const hist = await store.history(r, HISTORY_ON_JOIN);
-    if (ud.open && ud.rooms.has(r)) send(ws, { t: 'history', r, m: hist.filter((x) => !deleted.has(x.id)) });
+    const [hist, pins] = await Promise.all([store.history(r, HISTORY_ON_JOIN), pinsOf(r)]);
+    if (!ud.open || !ud.rooms.has(r)) continue;
+    send(ws, { t: 'history', r, m: hist.filter((x) => !deleted.has(x.id)) });
+    const live = pins.filter((x) => !deleted.has(x.id));
+    if (live.length) send(ws, { t: 'pins', r, m: live });
   }
 }
 
@@ -772,6 +810,30 @@ app.get('/health', (res) => {
   );
 });
 
+/**
+ * Sem Redis (dev): a API entrega Super Chats e exclusões por aqui. Com Redis vai tudo pelo pub/sub.
+ * Fora do Caddy (só /ws é exposto) e com o segredo compartilhado no cabeçalho.
+ */
+app.post('/internal', (res, req) => {
+  const ok = req.getHeader('x-internal') === config.secret;
+  let aborted = false;
+  res.onAborted(() => (aborted = true));
+  let buf = Buffer.alloc(0);
+  res.onData((chunk, last) => {
+    buf = Buffer.concat([buf, Buffer.from(chunk)]);
+    if (!last || aborted) return;
+    if (!ok || buf.length > 8192) return void res.cork(() => res.writeStatus('403 Forbidden').end());
+    try {
+      const d = JSON.parse(buf.toString());
+      if (d.t === 'sc') deliverSuper(d.r, d.m);
+      else if (d.t === 'del') applyDelete(d.r, d.id);
+      res.cork(() => res.end('ok'));
+    } catch {
+      res.cork(() => res.writeStatus('400 Bad Request').end());
+    }
+  });
+});
+
 app.get('/metrics', (res) => {
   const lines = [
     `ws_connections ${conns}`,
@@ -788,6 +850,7 @@ app.get('/metrics', (res) => {
     `ws_chat_rate_limited_total ${m.rateLimited}`,
     `ws_chat_punished_total ${m.punished}`,
     `ws_chat_muted_total ${m.muted}`,
+    `ws_superchats_total ${m.superchats}`,
     `ws_mod_ai_enabled ${ai.enabled ? 1 : 0}`,
     `ws_mod_ai_circuit_open ${ai.circuitOpen ? 1 : 0}`,
     `ws_mod_ai_calls_total ${ai.stats.calls}`,

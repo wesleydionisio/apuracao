@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { useBoard } from '@/store/board';
 import { useNow } from '../ui';
 import { fmtCountdown, Logo, SplitBar } from './bits';
+import { SponsorStrip } from './SponsorStrip';
 import { setTheme, useIsDark } from './theme';
 
 const PCT = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
@@ -38,6 +39,7 @@ export function Header() {
   const liveScreen = path === '/' || path.startsWith('/sala');
   return (
     <header className="safe-t border-b bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
+      <SponsorStrip />
       <div className="mx-auto max-w-3xl px-4 lg:max-w-6xl">
         <div className="flex h-13 items-center gap-2">
           <Link href="/" className="flex min-w-0 flex-1 items-center gap-2" aria-label="Apuração ao vivo, início">

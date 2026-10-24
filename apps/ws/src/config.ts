@@ -1,6 +1,7 @@
 import { hostname } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { releaseAt } from '@apuracao/shared';
+import { aiModConfig } from '@apuracao/shared/moderation-ai';
 
 const env = process.env;
 const int = (v: string | undefined, d: number) => (v && Number.isFinite(Number(v)) ? Number(v) : d);
@@ -45,16 +46,5 @@ export const config = {
   blockedFile: env.BLOCKED_FILE || '',
   filePollMs: int(env.FILE_POLL_MS, 2000),
   /** moderação por modelo de decisão (OpenRouter). Sem chave: só o filtro local. */
-  mod: {
-    apiKey: env.OPENROUTER_API_KEY || '',
-    model: env.MOD_MODEL || 'inception/mercury-decide:free',
-    endpoint: env.MOD_ENDPOINT || 'https://openrouter.ai/api/alpha/decisions',
-    /** junta mensagens desta janela numa única chamada */
-    batchMs: int(env.MOD_BATCH_MS, 200),
-    maxBatch: int(env.MOD_MAX_BATCH, 16),
-    concurrency: int(env.MOD_CONCURRENCY, 4),
-    timeoutMs: int(env.MOD_TIMEOUT_MS, 3000),
-    /** bloqueia quando P(aceitável) < limiar */
-    threshold: Number(env.MOD_THRESHOLD || 0.5),
-  },
+  mod: aiModConfig(env),
 };

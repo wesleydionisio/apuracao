@@ -16,6 +16,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./server": "./src/server/aid.ts"
+    "./server": "./src/server/aid.ts",
+    "./moderation-ai": "./src/server/moderation-ai.ts"
   }
 }

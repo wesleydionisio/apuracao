@@ -43,6 +43,8 @@ export class GuessIndex {
   mun = new Map<string, Hist>();
   /** palpites por município (qualquer palpite que informou a cidade) — ranking de engajamento */
   munCount = new Map<string, number>();
+  /** os últimos palpites feitos ou refeitos (o "fulano palpitou agora" da home) */
+  recent: { nick: string; pa: number; at: string }[] = [];
 
   upsert(g: StoredGuess) {
     const old = this.byId.get(g.id);
@@ -50,6 +52,8 @@ export class GuessIndex {
     this.byId.set(g.id, g);
     this.byAnon.set(g.anonId, g.id);
     this.apply(g, 1);
+    this.recent.push({ nick: g.nick, pa: g.pa, at: g.updatedAt });
+    if (this.recent.length > 20) this.recent.shift();
   }
 
   private apply(g: StoredGuess, d: 1 | -1) {

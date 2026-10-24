@@ -3,10 +3,12 @@ import { Redirect, Route, Switch, useLocation } from 'wouter';
 import { useCandidateCssVars } from '@/components/core/candidate';
 import { LegalFooter } from '@/components/shell/bits';
 import { Header } from '@/components/shell/Header';
+import { CookieBanner } from '@/components/shell/CookieBanner';
 import { TabBar } from '@/components/shell/TabBar';
 import { Skeleton, Toaster } from './components/ui';
 import { api, fetchBoard } from './lib/api';
 import { live, savedSide } from './lib/live';
+import { startSite } from './lib/site';
 import Home from './pages/Home';
 import { useBoard } from './store/board';
 
@@ -21,6 +23,7 @@ const TermsPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.T
 const MomentPage = lazy(() => import('./pages/Standalone').then((m) => ({ default: m.MomentPage })));
 const TvPage = lazy(() => import('./pages/Standalone').then((m) => ({ default: m.TvPage })));
 const EmbedPage = lazy(() => import('./pages/Standalone').then((m) => ({ default: m.EmbedPage })));
+const AdminPage = lazy(() => import('./pages/Admin'));
 
 /** placar: polling do JSON estático (10s sem WS, 30s com WS) */
 function useBoardPolling() {
@@ -146,6 +149,7 @@ function Frame() {
         {!liveScreen && <LegalFooter />}
       </main>
       <TabBar />
+      <CookieBanner />
       <Suspense fallback={null}>
         <Toaster
           position="bottom-center"
@@ -175,12 +179,14 @@ export default function App() {
   useBoardPolling();
   useIdentityAndStats();
   useCandidateCssVars();
-  const standalone = path === '/tv' || path.startsWith('/embed');
+  const admin = path.startsWith('/admin');
+  const standalone = path === '/tv' || path.startsWith('/embed') || admin;
   useEffect(() => {
-    // TV e embed não precisam de chat; o placar vem pelo polling
-    if (!path.startsWith('/embed')) live.start();
-  }, [path]);
-  const dev = DevBar && !path.startsWith('/embed') && (
+    // TV e embed não precisam de chat; o placar vem pelo polling. O admin não conta como gente online
+    if (!path.startsWith('/embed') && !admin) live.start();
+    if (!path.startsWith('/embed')) startSite();
+  }, [path, admin]);
+  const dev = DevBar && !path.startsWith('/embed') && !admin && (
     <Suspense fallback={null}>
       <DevBar />
     </Suspense>
@@ -192,6 +198,7 @@ export default function App() {
         <Switch>
           <Route path="/tv" component={TvPage} />
           <Route path="/embed/placar" component={EmbedPage} />
+          <Route path="/admin" component={AdminPage} />
         </Switch>
       </Suspense>
     );

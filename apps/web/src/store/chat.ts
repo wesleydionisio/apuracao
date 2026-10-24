@@ -20,6 +20,9 @@ interface ChatState {
   err: Record<Room, ChatErr | undefined>;
   closed: Room[];
   enabled: boolean;
+  /** Super Chats recentes por sala (a fita do topo escolhe os que ainda estão no tempo) */
+  pins: Record<Room, ChatMsg[]>;
+  setPins: (r: Room, m: ChatMsg[]) => void;
   /** última reação recebida por sala, para a animação */
   burst: Record<Room, { e: Reaction; n: number; k: number } | undefined>;
   history: (r: Room, m: ChatMsg[]) => void;
@@ -38,14 +41,29 @@ export const useChat = create<ChatState>((set, get) => ({
   closed: [],
   enabled: true,
   burst: {},
-  history: (r, m) => set({ msgs: { ...get().msgs, [r]: m.slice(-MAX) } }),
+  pins: {},
+  setPins: (r, m) => {
+    const cur = get().pins[r] ?? [];
+    const ids = new Set(cur.map((x) => x.id));
+    const add = m.filter((x) => x.sc && !ids.has(x.id));
+    if (add.length) set({ pins: { ...get().pins, [r]: [...cur, ...add].slice(-30) } });
+  },
+  history: (r, m) => {
+    set({ msgs: { ...get().msgs, [r]: m.slice(-MAX) } });
+    get().setPins(r, m);
+  },
   push: (r, m) => {
     const cur = get().msgs[r] ?? [];
     if (cur.some((x) => x.id === m.id)) return;
     const next = cur.length >= MAX ? [...cur.slice(cur.length - MAX + 1), m] : [...cur, m];
     set({ msgs: { ...get().msgs, [r]: next } });
+    if (m.sc) get().setPins(r, [m]);
   },
-  del: (r, id) => set({ msgs: { ...get().msgs, [r]: (get().msgs[r] ?? []).filter((m) => m.id !== id) } }),
+  del: (r, id) =>
+    set({
+      msgs: { ...get().msgs, [r]: (get().msgs[r] ?? []).filter((m) => m.id !== id) },
+      pins: { ...get().pins, [r]: (get().pins[r] ?? []).filter((m) => m.id !== id) },
+    }),
   react: (r, agg) => {
     const prev = get().reacts[r] ?? {};
     let top: Reaction | null = null;

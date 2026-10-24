@@ -1,4 +1,4 @@
-import type { Board, Guess, HistoryFile, HistRow, MunBoard, Municipality, Snap } from '@apuracao/shared';
+import type { Board, Guess, HistoryFile, HistRow, MunBoard, Municipality, ScCharge, Snap } from '@apuracao/shared';
 import { DEFAULT_RELEASE_AT, hueOf, randomNick, slugify } from '@apuracao/shared';
 import { MOCK, MOCK_PRE } from './env';
 
@@ -15,6 +15,12 @@ export interface Me {
 export interface Stats {
   online: number;
   guesses: number;
+  /** palpites novos na última hora */
+  guessesLastHour?: number;
+  /** % dos palpites que dão a vitória ao candidato A */
+  guessAWins?: number | null;
+  /** últimos palpites (o "fulano palpitou agora") */
+  recentGuesses?: { nick: string; pa: number; at: string }[];
   topCities: { ibge: string; name: string; uf: string; n: number }[];
 }
 
@@ -138,6 +144,13 @@ const real = {
     getJSON<CityView>(`/api/city/by-slug/${encodeURIComponent(uf)}/${encodeURIComponent(slug)}`),
 };
 
+/** Super Chat: gerar o Pix, acompanhar o pagamento e (só em dev) simular */
+export const superchatApi = {
+  create: (b: { room: string; body: string; amount: number; side: 'a' | 'b' | null }) => post<ScCharge>('/api/superchat', b),
+  get: (id: string) => getJSON<ScCharge>(`/api/superchat/${encodeURIComponent(id)}`, { cache: 'no-store' }),
+  devPay: (id: string) => post<ScCharge>(`/api/superchat/${encodeURIComponent(id)}/dev-pay`, {}),
+};
+
 // ---------------------------------------------------------------- mock (dev)
 
 const LS_GUESSES = 'mock:guesses';
@@ -162,7 +175,14 @@ const mock: typeof real = {
     const m = (await staticData.municipalities()) ?? [];
     return {
       online: 48211 + Math.floor(Math.random() * 300),
-      guesses: 131977,
+      guesses: 131977 + Math.floor((Date.now() / 1000) % 600),
+      guessesLastHour: 8412,
+      guessAWins: 53.4,
+      recentGuesses: ['ana_sp', 'Joca', 'mari.bh', 'pedrinho', 'Tia Lu', 'zeca22'].map((nick, i) => ({
+        nick,
+        pa: Math.round((46 + Math.random() * 8) * 10) / 10,
+        at: new Date(Date.now() - i * 9000).toISOString(),
+      })),
       topCities: [...m].sort((x, y) => y.el - x.el).slice(0, 5).map((x, i) => ({ ibge: x.ibge, name: x.name, uf: x.uf, n: 9000 - i * 1300 })),
     };
   },

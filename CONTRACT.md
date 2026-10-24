@@ -22,6 +22,7 @@ Gerados pelo poller a cada ciclo (Cache-Control `s-maxage=5, stale-while-revalid
 |---|---|---|
 | `/data/br.json` | `Board` | placar completo. Antes das 17h: `released=false`, `br=null`, `ufs={}` |
 | `/data/mun/<UF>.json` | `MunBoard` | só municípios já coletados (top ~300 por eleitorado) |
+| `/data/site.json` | `SiteConfig` | gravado pela API (boot e painel admin): patrocínio, "anuncie aqui", Super Chat ligado |
 
 Gerados pelo ETL antes de domingo (cache longo):
 
@@ -60,7 +61,15 @@ Coordenadas arredondadas (3 casas), malha IBGE "qualidade mínima".
 | `GET /api/og/guess/:id.png?f=story\|og` | PNG 1080×1350 (story) ou 1200×630 (og) |
 | `GET /api/og/city/:ibge.png`, `/api/og/moment/:id.png`, `/api/og/board.png` | PNG 1200×630 |
 | `GET /p/:id`, `/cidade/:uf/:slug`, `/m/:id`, `/sala/:slug`, `/` | `index.html` do web com `<meta og:*>` injetadas |
+| `GET /api/stats` (extra) | também `guessesLastHour`, `guessAWins` (% dos palpites com A vencendo), `recentGuesses: { nick, pa, at }[]` |
+| `POST /api/superchat` | sessão `sid`; body `{ room, body, amount (centavos), side }` → `ScCharge` (QR Pix). Moderado antes: 422 `blocked` + `cat`; 400 `long`/`amount`/`invalid`; 403 `muted`; 404 `off` |
+| `GET /api/superchat/:id` | só o dono; `ScCharge` (`status`: `pending`/`paid`/`expired`/`hidden`). Consulta o Mercado Pago no máximo a cada 5s |
+| `POST /api/superchat/:id/dev-pay` | só com o provedor `dev` (fora de produção, sem Pix configurado) |
+| `POST /api/pix/webhook` | Mercado Pago (`?data.id=&type=payment`); assinatura `x-signature` se `MP_WEBHOOK_SECRET` |
 | `POST /api/admin/flags` | header `x-admin-token`; body `{ chat?, projection?, map_mun?, closeRoom?, openRoom? }` |
+| `GET /api/admin/overview` | carga da máquina, workers WS (`WS_URLS`), placar, usuários, totais de Super Chat |
+| `GET /api/admin/superchats`, `POST /api/admin/superchats/:id` | lista; body `{ action: 'approve' \| 'hide' }` |
+| `GET/POST /api/admin/site` | patrocínio do topo e WhatsApp do "anuncie aqui"; publica `DATA_DIR/site.json` |
 | `GET /api/health`, `GET /metrics` | |
 
 ## WebSocket (`apps/ws`, uWebSockets.js, porta 3002, caminho `/ws`)
@@ -73,6 +82,8 @@ Protocolo em `packages/shared/src/protocol.ts`. Regras:
 - `join` → manda `snap` completo dos escopos das salas (`br` sempre; sala `sp` → `uf:SP`), `history` (últimas 50), `react` agregado.
 - Depois só manda `snap` dos escopos que mudaram. Reações agregadas, no máximo 1×/s por sala.
 - Antes de `released`: não manda `snap` nenhum.
+- Super Chat: a API grava em `KEY.chat(r)` e `KEY.superchats(r)` e publica `CH.superchat`; o WS manda `chat` (com `m.sc` em centavos)
+  para a sala inteira e, no `join`, `pins` com os recentes. Sem Redis a API faz `POST /internal` no WS (cabeçalho `x-internal: SECRET`).
 - Fonte dos snapshots: Redis (`CH.snap`, `CH.moment`) se `REDIS_URL`; senão **modo arquivo**: lê `DATA_DIR/br.json` a cada 2s e faz o diff sozinho (também serve de fallback se o Redis cair).
 - Sem `REDIS_URL`: chat/reações em memória (processo único) — usado em dev.
 
@@ -96,3 +107,7 @@ Online: cada worker WS grava `online:<worker>` = conexões, `EX 15`, a cada 5s.
 | `SOURCE` | poller | `tse` \| `replay` (simulação acelerada) |
 | `PUBLIC_URL` | api | `http://localhost:5173` |
 | `GOOGLE_CLIENT_ID` | api | vazio = sem login com Google (em dev, login de teste por e-mail) |
+| `MP_ACCESS_TOKEN` / `MP_WEBHOOK_SECRET` | api | Super Chat pelo Mercado Pago (confirma sozinho) |
+| `PIX_KEY` / `PIX_NAME` / `PIX_CITY` | api | sem Mercado Pago: QR estático, pagamento aprovado no `/admin` |
+| `AD_WHATSAPP` | api | WhatsApp do "anuncie aqui" (o `/admin` também troca) |
+| `WS_URLS` / `WS_INTERNAL_URL` | api | workers para o painel / entrega ao WS sem Redis (`http://127.0.0.1:3002`) |

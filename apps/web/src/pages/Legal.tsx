@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'wouter';
 
 const CONTACT = 'wesley.r.dionisio@gmail.com';
-const UPDATED = '23 de outubro de 2026';
+const UPDATED = '24 de outubro de 2026';
 
 function Doc({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -48,11 +48,17 @@ export function PrivacyPage() {
         <li>
           <strong>No palpite:</strong> o apelido e os números que você informar.
         </li>
+        <li>
+          <strong>No Super Chat:</strong> a mensagem, o valor e a situação do pagamento. O Pix é processado pelo seu banco e,
+          quando usado, pelo Mercado Pago; não recebemos dados do seu cartão nem da sua conta bancária. O e-mail da conta é
+          informado ao Mercado Pago como identificação de quem paga.
+        </li>
       </ul>
       <h2>Para que usamos</h2>
       <ul>
         <li>Identificar quem escreve no chat e manter a conversa segura (moderação, limite de mensagens, bloqueio de abuso).</li>
         <li>Entrar em contato sobre a sua conta ou sobre uma denúncia, se necessário.</li>
+        <li>Confirmar pagamentos de Super Chat e manter os registros exigidos por lei.</li>
         <li>Cumprir obrigações legais e atender pedidos de autoridades competentes.</li>
       </ul>
       <p>
@@ -81,7 +87,14 @@ export function PrivacyPage() {
       </p>
       <h2>Cookies</h2>
       <p>
-        Usamos só cookies necessários: o identificador anônimo e a sessão de quem entrou. Não usamos cookies de publicidade.
+        Usamos só cookies necessários: o identificador anônimo (palpite e chat) e a sessão de quem entrou. No aparelho também
+        ficam preferências como o tema, o lado da torcida e o aviso de cookies já lido. Não usamos cookies de publicidade nem de
+        rastreamento. O login com o Google pode gravar cookies do próprio Google, regidos pela política dele.
+      </p>
+      <h2>Publicidade</h2>
+      <p>
+        A faixa de patrocínio no topo é um link simples: não compartilhamos dados com anunciantes. Ao tocar nela você vai para o
+        site do patrocinador ou para o nosso WhatsApp, que têm as próprias políticas.
       </p>
     </Doc>
   );
@@ -110,6 +123,12 @@ export function TermsPage() {
       <p>
         Mensagens que violam as regras podem ser bloqueadas automaticamente ou removidas após denúncias, e a conta pode ser
         silenciada ou suspensa. Você responde pelo que escreve.
+      </p>
+      <h2>Super Chat</h2>
+      <p>
+        O Super Chat é uma mensagem destacada no chat, paga com Pix. Ela passa pela mesma moderação do chat antes do Pix ser
+        gerado e segue as mesmas regras. Um Super Chat que viole as regras pode ser removido. O pagamento é um apoio ao projeto,
+        não compra de voto, de posição política ou de espaço editorial.
       </p>
       <h2>Disponibilidade</h2>
       <p>

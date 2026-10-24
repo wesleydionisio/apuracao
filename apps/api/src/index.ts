@@ -1,5 +1,7 @@
 // API: palpites, cidade, estatísticas, cards PNG e HTML com metas OG. Stateless (escala em cluster).
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import cookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
@@ -9,14 +11,26 @@ import {
   CH,
   cleanNick,
   fmtPct,
+  hasLink,
   hueOf,
   isReleased,
+  isValidRoom,
   KEY,
   Moderator,
   nickForId,
+  PINS_KEEP,
+  SC_MAX,
+  SC_MIN,
+  SC_PIX_TTL_MS,
+  scTier,
+  fmtBrl,
   type CandidateDef,
+  type ChatMsg,
+  type ModCategory,
   type Municipality,
+  type ScCharge,
 } from '@apuracao/shared';
+import { AiModerator, aiModConfig } from '@apuracao/shared/moderation-ai';
 import { AID_COOKIE, clientIp, newAid, SESSION_COOKIE, signToken, verifyAid, verifySession, verifyToken } from '@apuracao/shared/server';
 import { OAuth2Client } from 'google-auth-library';
 import pg from 'pg';
@@ -25,10 +39,25 @@ import { config } from './config';
 import { board, cityPayload, munBoard, municipalities } from './data';
 import { renderHtml, type Meta } from './html';
 import { cached, guessCard, scoreCard, stripEmoji, type Format } from './og';
+import { createCharge, fetchPayment, providerOf, qrPng, webhookSignatureOk } from './pix';
+import { cleanSite, Site } from './site';
 import { FileStore, newId, PgStore, type GuessStore, type StoredGuess } from './store';
+import { SuperChats, type SuperChat } from './superchats';
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' }, trustProxy: true, bodyLimit: 4096 });
 const mod = new Moderator();
+mod.add(config.blockedTerms);
+if (config.blockedFile) {
+  try {
+    mod.add(readFileSync(config.blockedFile, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#')));
+  } catch (e) {
+    console.warn('[moderação] não consegui ler BLOCKED_FILE:', (e as Error).message);
+  }
+}
+const ai = new AiModerator(aiModConfig());
+const superchats = new SuperChats(config.varDir, config.databaseUrl);
+const pixProvider = providerOf(config.pix);
+const site = new Site(config.varDir, config.dataDir, config.adWhatsapp);
 const store: GuessStore = config.databaseUrl
   ? new PgStore(config.databaseUrl, path.join(config.repo, 'infra/schema.sql'))
   : new FileStore(config.varDir);
@@ -310,12 +339,35 @@ async function scanOnline(): Promise<number | null> {
   }
 }
 
+// "hype" do palpite: quantos entraram na última hora e quanto do Brasil acha que A leva (recalculado a cada 30s)
+let pulseMemo: { at: number; lastHour: number; aWins: number | null } | null = null;
+function guessPulse() {
+  if (pulseMemo && Date.now() - pulseMemo.at < 30_000) return pulseMemo;
+  const since = new Date(Date.now() - 3_600_000).toISOString();
+  let lastHour = 0;
+  for (const g of store.index.byId.values()) if (g.createdAt >= since) lastHour++;
+  const c = store.index.national.counts;
+  let above = 0;
+  let below = 0;
+  for (let k = 0; k < c.length; k++) {
+    if (k > 5000) above += c[k];
+    else if (k < 5000) below += c[k];
+  }
+  pulseMemo = { at: Date.now(), lastHour, aWins: above + below ? Math.round((above / (above + below)) * 1000) / 10 : null };
+  return pulseMemo;
+}
+
 app.get('/api/stats', async (_req, reply) => {
   reply.header('cache-control', 'public, s-maxage=10, stale-while-revalidate=30');
   const byIbge = municipalities().byIbge;
+  const pulse = guessPulse();
   return {
     online: await onlineCount(),
     guesses: store.index.byId.size,
+    guessesLastHour: pulse.lastHour,
+    /** % dos palpites que dão a vitória ao candidato A */
+    guessAWins: pulse.aWins,
+    recentGuesses: store.index.recent.slice(-10).map((g) => ({ nick: g.nick, pa: g.pa, at: g.at })),
     topCities: store.index.topCities(10).map(([ibge, n]) => {
       const m = byIbge.get(ibge);
       return { ibge, name: m?.name ?? ibge, uf: m?.uf ?? '', n };
@@ -360,7 +412,7 @@ app.get<{ Querystring: { me?: string } }>('/api/guesses/hist', async (req, reply
 });
 
 app.post<{ Body: Record<string, unknown> }>('/api/admin/flags', async (req, reply) => {
-  if (!config.adminToken || req.headers['x-admin-token'] !== config.adminToken) return reply.code(401).send({ error: 'auth' });
+  if (!adminOk(req)) return reply.code(401).send({ error: 'auth' });
   if (!redis) return reply.code(501).send({ error: 'sem redis' });
   const b = req.body ?? {};
   const m = redis.multi();
@@ -370,6 +422,278 @@ app.post<{ Body: Record<string, unknown> }>('/api/admin/flags', async (req, repl
   m.publish(CH.flags, '1');
   await m.exec();
   return { ok: true };
+});
+
+// ---------- Super Chat (Pix) ----------
+// A mensagem passa pela mesma moderação do chat ANTES do Pix ser gerado: ninguém paga por algo que seria barrado.
+// Pago (webhook do Mercado Pago, consulta de status ou conferência manual no painel), vai para o chat da sala.
+const scView = async (s: SuperChat): Promise<ScCharge> => ({
+  id: s.id,
+  status: superchats.statusOf(s),
+  amount: s.amount,
+  qr: s.qr,
+  qrPng: await qrPng(s.qr),
+  expiresAt: s.expiresAt,
+  provider: s.provider,
+});
+
+/** o mesmo id público que o WS usa para a conta (as punições do chat ficam guardadas por ele) */
+const pubOf = (uid: string) => createHash('sha256').update(`u-${uid}`).digest().toString('base64url').slice(0, 10);
+
+async function mutedNow(uid: string): Promise<boolean> {
+  if (!redis) return false;
+  try {
+    const raw = await redis.get(KEY.strike(`u:${pubOf(uid)}`));
+    return !!raw && (JSON.parse(raw) as { muteUntil?: number }).muteUntil! > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+/** entrega ao WS: Redis (todos os workers) ou HTTP direto no worker único do dev */
+async function toWs(payload: { t: 'sc'; r: string; m: ChatMsg } | { t: 'del'; r: string; id: string }, json?: string) {
+  if (redis) {
+    const m = redis.multi();
+    if (payload.t === 'sc') {
+      m.lpush(KEY.chat(payload.r), json!).ltrim(KEY.chat(payload.r), 0, 199);
+      m.lpush(KEY.superchats(payload.r), json!).ltrim(KEY.superchats(payload.r), 0, PINS_KEEP - 1);
+      m.publish(CH.superchat, JSON.stringify({ r: payload.r, m: payload.m }));
+    } else {
+      if (json) m.lrem(KEY.chat(payload.r), 1, json).lrem(KEY.superchats(payload.r), 1, json);
+      m.publish(CH.del, JSON.stringify({ r: payload.r, id: payload.id }));
+    }
+    await m.exec();
+    return;
+  }
+  await fetch(`${config.wsInternal}/internal`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-internal': config.secret },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(3000),
+  });
+}
+
+async function markPaid(s: SuperChat, via: string) {
+  if (s.status === 'paid' || s.status === 'hidden') return;
+  s.status = 'paid';
+  s.paidAt = new Date().toISOString();
+  const msg: ChatMsg = { id: `sc-${s.id}`, nick: s.username, hue: s.hue, body: s.body, at: Date.parse(s.paidAt), sc: s.amount, ...(s.side ? { side: s.side } : {}) };
+  s.json = JSON.stringify(msg);
+  await superchats.save(s);
+  app.log.info({ id: s.id, amount: s.amount, via }, 'superchat pago');
+  await toWs({ t: 'sc', r: s.room, m: msg }, s.json).catch((e) => app.log.error({ err: (e as Error).message, id: s.id }, 'superchat não entregue ao WS'));
+}
+
+/** pendente no Mercado Pago: consulta no máximo a cada 5s por cobrança (o webhook pode atrasar ou nem vir) */
+const lastCheck = new Map<string, number>();
+async function refresh(s: SuperChat) {
+  if (s.provider !== 'mp' || !s.pid || superchats.statusOf(s) !== 'pending') return;
+  if (Date.now() - (lastCheck.get(s.id) ?? 0) < 5000) return;
+  lastCheck.set(s.id, Date.now());
+  const p = await fetchPayment(config.pix, s.pid).catch(() => null);
+  if (p?.approved && p.cents >= s.amount) await markPaid(s, 'consulta');
+}
+
+app.post<{ Body: Record<string, unknown> }>('/api/superchat', async (req, reply) => {
+  reply.header('cache-control', 'private, no-store');
+  if (!pixProvider) return reply.code(404).send({ error: 'off' });
+  const sess = verifySession(req.cookies[SESSION_COOKIE], config.secret);
+  if (!sess) return reply.code(401).send({ error: 'auth' });
+  if (!allow(`sc:${sess.uid}`, 6, 1 / 30) || !allow(`sc-ip:${ipOf(req)}`, 20, 0.2)) return reply.code(429).send({ error: 'rate' });
+  const b = req.body ?? {};
+  const room = b.room;
+  if (!isValidRoom(room)) return reply.code(400).send({ error: 'room' });
+  const amount = Math.round(Number(b.amount));
+  if (!Number.isFinite(amount) || amount < SC_MIN || amount > SC_MAX) return reply.code(400).send({ error: 'amount' });
+  const tier = scTier(amount);
+  let body = '';
+  if (typeof b.body === 'string' && b.body.trim()) {
+    const chk = mod.check(b.body);
+    if (!chk.ok) {
+      if (chk.reason === 'invalid') return reply.code(400).send({ error: 'invalid' });
+      // como no chat: o filtro local barra, o modelo diz a gravidade
+      const v = await ai.classify(String(b.body));
+      const cat: ModCategory = hasLink(String(b.body)) ? 'link' : ai.isFlagged(v) && v.cat !== 'spam' ? v.cat : 'palavrao';
+      return reply.code(422).send({ error: 'blocked', cat });
+    }
+    if ([...chk.body].length > tier.chars) return reply.code(400).send({ error: 'long', max: tier.chars });
+    const v = await ai.classify(chk.body);
+    if (ai.isFlagged(v)) return reply.code(422).send({ error: 'blocked', cat: v.cat });
+    body = chk.body;
+  }
+  if (await mutedNow(sess.uid)) return reply.code(403).send({ error: 'muted' });
+  const acc = await accounts.byId(sess.uid);
+  if (!acc) return reply.code(401).send({ error: 'auth' });
+  const id = randomBytes(8).toString('hex');
+  const expiresAt = new Date(Date.now() + SC_PIX_TTL_MS);
+  let charge;
+  try {
+    charge = await createCharge(config.pix, pixProvider, { id, cents: amount, email: acc.email, description: `Super Chat ${fmtBrl(amount)}`, expiresAt });
+  } catch (e) {
+    app.log.error({ err: (e as Error).message }, 'pix');
+    return reply.code(502).send({ error: 'pix' });
+  }
+  const s: SuperChat = {
+    id,
+    room,
+    uid: acc.id,
+    username: acc.username,
+    hue: hueOf(acc.id),
+    side: b.side === 'a' || b.side === 'b' ? b.side : null,
+    body,
+    amount,
+    status: 'pending',
+    provider: pixProvider,
+    pid: charge.pid,
+    qr: charge.qr,
+    createdAt: new Date().toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    paidAt: null,
+    json: null,
+  };
+  await superchats.save(s);
+  return scView(s);
+});
+
+/** quem pagou acompanha o status (a tela consulta a cada 3s enquanto o QR está aberto) */
+app.get<{ Params: { id: string } }>('/api/superchat/:id', async (req, reply) => {
+  reply.header('cache-control', 'private, no-store');
+  const sess = verifySession(req.cookies[SESSION_COOKIE], config.secret);
+  const s = superchats.byId.get(req.params.id);
+  if (!sess || !s || s.uid !== sess.uid) return reply.code(404).send({ error: 'not_found' });
+  await refresh(s);
+  return scView(s);
+});
+
+app.post<{ Params: { id: string } }>('/api/superchat/:id/dev-pay', async (req, reply) => {
+  const sess = verifySession(req.cookies[SESSION_COOKIE], config.secret);
+  const s = superchats.byId.get(req.params.id);
+  if (!sess || !s || s.uid !== sess.uid || s.provider !== 'dev') return reply.code(404).send({ error: 'not_found' });
+  if (superchats.statusOf(s) === 'expired') return reply.code(410).send({ error: 'expired' });
+  await markPaid(s, 'dev');
+  return scView(s);
+});
+
+// Mercado Pago avisa aqui (?data.id=<pagamento>&type=payment). O aviso só dispara a consulta: o que vale é a API deles.
+app.post<{ Querystring: Record<string, string>; Body: Record<string, any> }>('/api/pix/webhook', async (req, reply) => {
+  if (pixProvider !== 'mp') return { ok: true };
+  const pid = String(req.query['data.id'] ?? req.body?.data?.id ?? '');
+  const type = String(req.query.type ?? req.body?.type ?? '');
+  if (!pid || (type && type !== 'payment')) return { ok: true };
+  if (!webhookSignatureOk(config.pix, req.headers, pid)) return reply.code(401).send({ error: 'signature' });
+  const p = await fetchPayment(config.pix, pid).catch(() => null);
+  const s = p?.ref ? superchats.byId.get(p.ref) : undefined;
+  if (p?.approved && s && p.cents >= s.amount) await markPaid(s, 'webhook');
+  return { ok: true };
+});
+
+// ---------- painel admin (header x-admin-token) ----------
+// Em dev sem ADMIN_TOKEN o token é "admin"; em produção sem ADMIN_TOKEN o painel fica desligado.
+const adminToken = config.adminToken || (config.production ? '' : 'admin');
+function adminOk(req: FastifyRequest): boolean {
+  const t = String(req.headers['x-admin-token'] ?? '');
+  if (!adminToken) return false;
+  const ok = t.length === adminToken.length && timingSafeEqual(Buffer.from(t), Buffer.from(adminToken));
+  // tentativa errada gasta ficha: sem força bruta no token
+  if (!ok) allow(`admin:${ipOf(req)}`, 10, 0.05);
+  return ok;
+}
+app.addHook('onRequest', async (req, reply) => {
+  if (!req.url.startsWith('/api/admin/')) return;
+  reply.header('cache-control', 'private, no-store');
+  const ip = ipOf(req);
+  const b = buckets.get(`admin:${ip}`);
+  if (b && b.tokens < 1) return reply.code(429).send({ error: 'rate' });
+  if (!adminOk(req)) return reply.code(401).send({ error: 'auth' });
+});
+
+const num = (text: string, name: string) => {
+  const m = new RegExp(`^${name} (\\S+)`, 'm').exec(text);
+  return m ? Number(m[1]) : null;
+};
+
+async function wsWorker(url: string) {
+  try {
+    const [h, m] = await Promise.all([
+      fetch(`${url}/health`, { signal: AbortSignal.timeout(1500) }).then((r) => r.json() as Promise<Record<string, unknown>>),
+      fetch(`${url}/metrics`, { signal: AbortSignal.timeout(1500) }).then((r) => r.text()),
+    ]);
+    return {
+      url,
+      ok: true,
+      worker: String(h.worker ?? url),
+      conns: Number(h.conns ?? 0),
+      inRate: num(m, 'ws_msgs_in_per_s'),
+      outRate: num(m, 'ws_msgs_out_per_s'),
+      heapMb: num(m, 'ws_heap_mb'),
+      blocked: num(m, 'ws_chat_blocked_total'),
+      chat: num(m, 'ws_chat_in_total'),
+      slowRooms: num(m, 'ws_slow_rooms'),
+      aiOn: num(m, 'ws_mod_ai_enabled') === 1,
+      aiCircuitOpen: num(m, 'ws_mod_ai_circuit_open') === 1,
+    };
+  } catch {
+    return { url, ok: false };
+  }
+}
+
+/** meia-noite de Brasília (UTC-3), para o total de hoje */
+const brtMidnight = () => {
+  const d = new Date(Date.now() - 3 * 3_600_000);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) + 3 * 3_600_000;
+};
+
+app.get('/api/admin/overview', async () => {
+  const b = board();
+  const [ws, online, acc] = await Promise.all([Promise.all(config.wsUrls.map(wsWorker)), onlineCount(), accounts.summary(12)]);
+  const mem = process.memoryUsage();
+  return {
+    at: new Date().toISOString(),
+    host: { load: os.loadavg(), cpus: os.cpus().length, memTotal: os.totalmem(), memFree: os.freemem(), uptime: os.uptime() },
+    api: { rss: mem.rss, heap: mem.heapUsed, uptime: process.uptime() },
+    redis: redis ? redis.status === 'ready' : null,
+    ws,
+    board: b
+      ? { released: b.released, pst: b.br?.pst ?? null, ageS: Math.round((Date.now() - Date.parse(b.generatedAt)) / 1000), status: b.br?.status ?? null }
+      : null,
+    users: {
+      online: online ?? ws.reduce((n, w) => n + ('conns' in w ? (w.conns ?? 0) : 0), 0),
+      accounts: acc.total,
+      accountsDay: acc.day,
+      guesses: store.index.byId.size,
+      guessesLastHour: guessPulse().lastHour,
+      recent: acc.recent.map((a) => ({ username: a.username, name: a.name, email: a.email, createdAt: a.createdAt })),
+    },
+    superchat: { provider: pixProvider, today: superchats.totals(brtMidnight()), all: superchats.totals(0) },
+  };
+});
+
+app.get('/api/admin/superchats', async () =>
+  superchats.list(100).map(({ qr: _q, json: _j, ...s }) => ({ ...s, status: superchats.statusOf(s as SuperChat) })),
+);
+
+app.post<{ Params: { id: string }; Body: Record<string, unknown> }>('/api/admin/superchats/:id', async (req, reply) => {
+  const s = superchats.byId.get(req.params.id);
+  if (!s) return reply.code(404).send({ error: 'not_found' });
+  const action = req.body?.action;
+  if (action === 'approve') {
+    // conferência manual do Pix (chave estática): o valor e o identificador batem no extrato
+    if (superchats.statusOf(s) === 'expired') s.expiresAt = new Date(Date.now() + 60_000).toISOString();
+    await markPaid(s, 'admin');
+  } else if (action === 'hide') {
+    if (s.status !== 'paid') return reply.code(409).send({ error: 'status' });
+    s.status = 'hidden';
+    await superchats.save(s);
+    await toWs({ t: 'del', r: s.room, id: `sc-${s.id}` }, s.json ?? undefined).catch(() => {});
+  } else return reply.code(400).send({ error: 'action' });
+  return { ok: true, status: superchats.statusOf(s) };
+});
+
+app.get('/api/admin/site', async () => ({ ...site.cfg, superchat: !!pixProvider, provider: pixProvider }));
+
+app.post<{ Body: Record<string, unknown> }>('/api/admin/site', async (req) => {
+  site.save(cleanSite(req.body ?? {}, site.cfg), !!pixProvider);
+  return { ...site.cfg, superchat: !!pixProvider, provider: pixProvider };
 });
 
 // ---------- cards PNG ----------
@@ -515,6 +839,9 @@ app.get('/metrics', async (_req, reply) => {
 
 await store.init();
 await accounts.init();
+await superchats.init();
+site.publish(!!pixProvider);
+app.log.info(pixProvider ? `super chat: Pix via ${pixProvider}` : 'super chat desligado (sem MP_ACCESS_TOKEN nem PIX_KEY)');
 app.log.info(`palpites carregados: ${store.index.byId.size}`);
 await app.listen({ port: config.port, host: config.host });
 

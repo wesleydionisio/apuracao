@@ -87,3 +87,10 @@ create table if not exists accounts (
   created_at timestamptz not null default now()
 );
 create unique index if not exists accounts_username_idx on accounts (lower(username));
+
+-- Super Chats (Pix). O registro inteiro em jsonb: volume baixo, lido todo na memória ao subir a API.
+create table if not exists superchats (
+  id text primary key,
+  data jsonb not null,
+  created_at timestamptz not null default now()
+);

@@ -19,19 +19,9 @@ import { CityPicker } from './CityPicker';
 import { GuessHistogram, useGuessHist } from './Histogram';
 import { PctSlider } from './PctSlider';
 
-export const MY_GUESS = 'my-guess';
+import { guessesOpen, MY_GUESS, myGuessId } from './mine';
 
-export function myGuessId(): string | null {
-  try {
-    return localStorage.getItem(MY_GUESS);
-  } catch {
-    return null;
-  }
-}
-
-export function guessesOpen(board: Board | null, now = Date.now()) {
-  return !!board && now < Date.parse(board.releaseAt);
-}
+export { guessesOpen, MY_GUESS, myGuessId } from './mine';
 
 const UF_LIST = Object.entries(UFS).filter(([k]) => k !== 'ZZ');
 const two = (n: number) => String(n).padStart(2, '0');

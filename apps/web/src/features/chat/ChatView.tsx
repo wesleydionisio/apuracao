@@ -3,7 +3,7 @@
 // layout "panel": coluna lateral no desktop.
 import type { ChatMsg, Room } from '@apuracao/shared';
 import { MAX_BODY } from '@apuracao/shared';
-import { ArrowDown, Heart, SendHorizontal, Smile, UserRound, WifiOff, X } from 'lucide-react';
+import { ArrowDown, BadgeDollarSign, Heart, SendHorizontal, Smile, UserRound, WifiOff, X } from 'lucide-react';
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useCandidates } from '@/components/core/candidate';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,9 @@ import { EmojiPanel } from './emoji';
 import { FloatLayer, spawnFloat } from './floats';
 import { LoginGate, SideGate } from './gates';
 import { useKeyboardOpen } from '@/features/watch/hooks';
+import { GuessStrip } from '@/features/guess/GuessCta';
+import { useSite } from '@/lib/site';
+import { PinnedBar, SuperLine } from './superchat';
 import { useMountOnce } from './lazy';
 import { ChatLine, ModLine, NICK_CLS, NickAvatar, nickColor, PartyBadge, renderBody, SystemLine } from './parts';
 import { BumpButton, ownRecent, TorcidaBar } from './torcida';
@@ -22,6 +25,7 @@ import { BumpButton, ownRecent, TorcidaBar } from './torcida';
 // gavetas (vaul) fora do bundle inicial
 const MessageActions = lazy(() => import('./drawers').then((m) => ({ default: m.MessageActions })));
 const ProfileDrawer = lazy(() => import('./drawers').then((m) => ({ default: m.ProfileDrawer })));
+const SuperchatSheet = lazy(() => import('./SuperchatSheet'));
 
 const EMPTY: ChatMsg[] = [];
 
@@ -68,6 +72,8 @@ export default function ChatView({
   const closed = useChat((s) => s.closed.includes(room));
   const link = useBoard((s) => s.link);
   const me = useBoard((s) => s.me);
+  const board = useBoard((s) => s.board);
+  const scOn = useSite((s) => s.site.superchat);
   const cands = useCandidates();
   // digitando no celular: a torcida sai do caminho para sobrar espaço às mensagens
   const kb = useKeyboardOpen();
@@ -83,6 +89,10 @@ export default function ChatView({
   // a escolha de lado pode ser fechada (tocar fora): volta ao torcer, comentar ou entrar
   const [sideClosed, setSideClosed] = useState(false);
   const sendAfterLogin = useRef(false);
+  // Super Chat: pede lado e login antes, como a mensagem comum; depois de entrar a gaveta abre sozinha
+  const [scOpen, setScOpen] = useState(false);
+  const scAfterLogin = useRef(false);
+  const scMounted = useMountOnce(scOpen);
   const [stuck, setStuck] = useState(true);
   const actionsMounted = useMountOnce(!!picked);
   const profileMounted = useMountOnce(profileOpen);
@@ -185,11 +195,25 @@ export default function ChatView({
   // entrou (o WS reconectou com a conta): manda o que estava esperando
   const authed = !!me?.auth;
   useEffect(() => {
+    if (authed && scAfterLogin.current) {
+      scAfterLogin.current = false;
+      setScOpen(true);
+    }
     if (!authed || !sendAfterLogin.current) return;
     sendAfterLogin.current = false;
     doSend();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
+
+  function openSuperchat() {
+    if (!mySide) return setSideClosed(false);
+    if (!useBoard.getState().me?.auth) {
+      scAfterLogin.current = true;
+      setLogin(true);
+      return;
+    }
+    setScOpen(true);
+  }
 
   function insert(t: string) {
     const el = inputRef.current;
@@ -233,6 +257,7 @@ export default function ChatView({
         <div className={cn('border-b', layout === 'panel' && 'bg-card')}>
           {roomBar}
           {cands && !(kb && layout === 'shell') && <TorcidaBar cands={cands} counts={counts} />}
+          {!(kb && layout === 'shell') && <PinnedBar room={room} cands={cands} />}
         </div>
         {disabled && (
           <div className="flex items-center gap-2 border-b bg-muted px-4 py-1.5 text-[12px] text-muted-foreground" role="status">
@@ -251,6 +276,12 @@ export default function ChatView({
         )}
 
         <div className="relative min-h-0 flex-1">
+          {/* convite do palpite: flutua sobre o topo da lista, sem empurrar as mensagens */}
+          {!disabled && (
+            <div className="absolute inset-x-0 top-0 z-10">
+              <GuessStrip board={board} />
+            </div>
+          )}
           <div
             ref={listRef}
             onScroll={(e) => {
@@ -266,7 +297,9 @@ export default function ChatView({
           >
             {!msgs.length && <EmptyChat disabled={disabled} cands={cands} />}
             {msgs.map((m) =>
-              m.sys ? (
+              m.sc ? (
+                <SuperLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
+              ) : m.sys ? (
                 <SystemLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
               ) : m.mod ? (
                 <ModLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
@@ -326,10 +359,22 @@ export default function ChatView({
                 enterKeyHint="send"
                 placeholder={placeholder}
                 disabled={disabled || mutedNow}
-                className={cn('h-10 w-full rounded-full border border-input bg-muted/50 pl-4 outline-none transition-[box-shadow,border-color,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/30 disabled:opacity-60', mutedNow ? 'pr-4 placeholder:text-[13px]' : 'pr-11')}
+                className={cn('h-10 w-full rounded-full border border-input bg-muted/50 pl-4 outline-none transition-[box-shadow,border-color,background-color] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/30 disabled:opacity-60', mutedNow ? 'pr-4 placeholder:text-[13px]' : scOn ? 'pr-[4.5rem]' : 'pr-11')}
                 aria-label="Mensagem"
                 aria-describedby="chat-status"
               />
+              {!mutedNow && scOn && (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={openSuperchat}
+                  disabled={disabled}
+                  className="absolute top-1/2 right-9 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                  aria-label="Mandar um Super Chat (Pix)"
+                >
+                  <BadgeDollarSign className="size-[18px]" />
+                </button>
+              )}
               {!mutedNow && <button
                 type="button"
                 onPointerDown={(e) => e.preventDefault()}
@@ -409,6 +454,7 @@ export default function ChatView({
         <LoginGate
           onClose={() => {
             sendAfterLogin.current = false;
+            scAfterLogin.current = false;
             setLogin(false);
           }}
           onDone={() => {
@@ -421,6 +467,19 @@ export default function ChatView({
       <Suspense fallback={null}>
         {actionsMounted && <MessageActions m={picked} room={room} cands={cands} onClose={() => setPicked(null)} />}
         {profileMounted && <ProfileDrawer open={profileOpen} onOpenChange={setProfileOpen} cands={cands} />}
+        {scMounted && (
+          <SuperchatSheet
+            open={scOpen}
+            onOpenChange={setScOpen}
+            room={room}
+            cands={cands}
+            onAuth={() => {
+              setScOpen(false);
+              scAfterLogin.current = true;
+              setLogin(true);
+            }}
+          />
+        )}
       </Suspense>
     </div>
   );

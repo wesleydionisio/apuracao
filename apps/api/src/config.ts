@@ -26,4 +26,23 @@ export const config = {
   /** login com o Google no chat (Client ID web do Google Cloud). Vazio = só o login de teste em dev */
   googleClientId: env.GOOGLE_CLIENT_ID ?? '',
   siteName: env.SITE_NAME ?? 'Apuração ao vivo',
+  production: env.NODE_ENV === 'production',
+  /** Super Chat: Mercado Pago (automático) ou só uma chave Pix (conferência manual no painel) */
+  pix: {
+    mpAccessToken: env.MP_ACCESS_TOKEN ?? '',
+    mpWebhookSecret: env.MP_WEBHOOK_SECRET ?? '',
+    pixKey: env.PIX_KEY ?? '',
+    pixName: env.PIX_NAME ?? 'Urna Digital',
+    pixCity: env.PIX_CITY ?? 'Sao Paulo',
+    publicUrl: (env.PUBLIC_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
+    production: env.NODE_ENV === 'production',
+  },
+  /** sem Redis (dev), a API entrega Super Chats ao WS por HTTP */
+  wsInternal: (env.WS_INTERNAL_URL ?? 'http://127.0.0.1:3002').replace(/\/$/, ''),
+  /** workers WS para o painel admin (saúde e métricas) */
+  wsUrls: (env.WS_URLS ?? 'http://127.0.0.1:3002').split(',').map((s) => s.trim().replace(/\/$/, '')).filter(Boolean),
+  /** WhatsApp do "anuncie aqui" (o painel admin pode trocar) */
+  adWhatsapp: env.AD_WHATSAPP ?? '',
+  blockedTerms: (env.BLOCKED_TERMS || '').split(',').map((s) => s.trim()).filter(Boolean),
+  blockedFile: env.BLOCKED_FILE || '',
 };

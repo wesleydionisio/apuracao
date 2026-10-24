@@ -10,9 +10,12 @@
 {$SITE_HOST} {
 	encode zstd gzip
 
-	# métricas só pela rede interna
-	@internal path /metrics /api/admin/*
+	# métricas só pela rede interna. /api/admin/* passa: a API exige o ADMIN_TOKEN e limita tentativas
+	@internal path /metrics
 	respond @internal 404
+
+	# painel admin: fora dos buscadores
+	header /admin* X-Robots-Tag "noindex, nofollow"
 
 	# WebSocket → workers (stateless, Redis faz o fan-out entre eles)
 	@ws path /ws

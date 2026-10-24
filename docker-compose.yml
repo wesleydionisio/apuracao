@@ -50,6 +50,8 @@ services:
     environment:
       <<: *env
       SERVE_DATA: '0'
+      # painel admin: saúde e métricas de cada worker
+      WS_URLS: http://ws1:3002,http://ws2:3002,http://ws3:3002,http://ws4:3002
 
   # um worker WS por vCPU; o Caddy balanceia (least_conn)
   ws1: { <<: *ws, environment: { <<: *env, WORKER_ID: ws1 } }

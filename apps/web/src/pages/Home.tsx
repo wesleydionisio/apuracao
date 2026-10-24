@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui';
 import { LegalFooter } from '@/components/shell/bits';
 import ChatView from '@/features/chat/ChatView';
 import { useMountOnce } from '@/features/chat/lazy';
+import { GuessCta } from '@/features/guess/GuessCta';
 import { RoomBar } from '@/features/chat/rooms';
 import { useKeyboardOpen, useMedia } from '@/features/watch/hooks';
 import { LiveScore, LiveScoreCompact } from '@/features/watch/LiveScore';
@@ -76,6 +77,7 @@ export function LiveScreen({ room, roomBar }: { room: Room; roomBar: ReactNode }
             <div className="p-6">{board ? <ScoreBlock board={board} size="lg" onInfo={() => setInfo(true)} /> : loading}</div>
             {board && <MomentTicker board={board} />}
           </div>
+          {board && <GuessCta board={board} />}
           {board?.released && (
             <Suspense fallback={<Skeleton h={300} />}>
               <MapCard />
