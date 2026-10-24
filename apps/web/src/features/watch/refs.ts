@@ -13,7 +13,8 @@ export interface Refs {
 
 const KEY = 'refs';
 const EVT = 'refs-change';
-const DEFAULTS: Refs = { t1: false, y22: false, chart: false };
+// 2022 ligado de saída: a curva e a virada de 2022 são a referência principal da noite
+const DEFAULTS: Refs = { t1: false, y22: true, chart: false };
 
 function load(): Record<string, unknown> {
   try {

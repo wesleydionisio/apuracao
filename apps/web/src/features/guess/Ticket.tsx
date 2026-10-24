@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { api, HttpError } from '@/lib/api';
+import { api, HttpError, staticData } from '@/lib/api';
 import { fmtInt } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
@@ -19,7 +19,7 @@ import { CityPicker } from './CityPicker';
 import { GuessHistogram, useGuessHist } from './Histogram';
 import { PctSlider } from './PctSlider';
 
-import { guessesOpen, MY_GUESS, myGuessId } from './mine';
+import { guessesOpen, MY_GUESS, myGuessId, useMyGuess } from './mine';
 
 export { guessesOpen, MY_GUESS, myGuessId } from './mine';
 
@@ -40,8 +40,25 @@ export function GuessTicket({ board }: { board: Board }) {
   const [cityOpen, setCityOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const hist = useGuessHist();
+  // já palpitou: o formulário abre com o palpite atual (ajustar, não começar outro)
+  const current = useMyGuess();
+  const [filled, setFilled] = useState(false);
   useEffect(() => {
-    if (me && !nick) setNick(me.nick);
+    if (!current || filled) return;
+    setFilled(true);
+    setPa(current.pa);
+    setNick(current.nick);
+    if (current.uf) setUf(current.uf);
+    if (current.ufPa != null) setUfPa(current.ufPa);
+    if (current.munPa != null) setMunPa(current.munPa);
+    if (current.mun)
+      void staticData.municipalities().then((list) => {
+        const m = list?.find((x) => x.ibge === current.mun);
+        if (m) setMun(m);
+      });
+  }, [current, filled]);
+  useEffect(() => {
+    if (me && !nick && !myGuessId()) setNick(me.nick);
   }, [me, nick]);
 
   const ca = candOf(board, 'a');
@@ -104,7 +121,7 @@ export function GuessTicket({ board }: { board: Board }) {
     <form onSubmit={submit} className="overflow-hidden rounded-2xl border bg-card">
       <header className="px-5 pt-5">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-[17px] font-semibold leading-tight">{mine ? 'Atualize seu palpite' : 'Seu palpite para o 2º turno'}</h2>
+          <h2 className="text-[17px] font-semibold leading-tight">{mine ? 'Ajustar seu palpite' : 'Seu palpite para o 2º turno'}</h2>
         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground" title="Palpites fecham às 17h de domingo">
           <Clock className="size-3" aria-hidden />
           <span className="num">
@@ -113,7 +130,11 @@ export function GuessTicket({ board }: { board: Board }) {
           </span>
         </span>
         </div>
-        <p className="mt-1 text-[13px] text-muted-foreground">Resultado final no Brasil, em % dos votos válidos</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          {mine
+            ? 'Mexa no que quiser: o ajuste substitui o seu palpite (o link e o card continuam os mesmos).'
+            : 'Resultado final no Brasil, em % dos votos válidos'}
+        </p>
       </header>
 
       <div className="px-5 pt-5 pb-4">
@@ -208,10 +229,10 @@ export function GuessTicket({ board }: { board: Board }) {
 
       <div className="space-y-2 px-5 pt-4 pb-5">
         <Button type="submit" size="lg" disabled={busy} className={cn('h-12 w-full rounded-xl text-[15px] font-semibold', busy && 'opacity-70')}>
-          {busy ? 'Salvando…' : mine ? 'Atualizar palpite' : 'Palpitar e gerar meu card'}
+          {busy ? 'Salvando…' : mine ? 'Salvar ajuste' : 'Palpitar e gerar meu card'}
         </Button>
         <p className="text-center text-[12px] text-muted-foreground">
-          Um palpite por aparelho. Dá para mudar até as 17h de domingo.
+          {mine ? 'Você tem um palpite só; dá para ajustar até as 17h de domingo.' : 'Um palpite por aparelho. Dá para ajustar até as 17h de domingo.'}
           {stats?.guesses ? (
             <span className="block">
               <span className="num">{fmtInt(stats.guesses)}</span> palpites feitos

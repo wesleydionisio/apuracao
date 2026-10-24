@@ -317,7 +317,7 @@ export function NightSpark({
         </div>
       )}
       {/* sem linha ainda e sem referências desenhadas: o aviso no meio (com 2022/1º turno ele cobriria os rótulos) */}
-      {!pts.length && !g22 && t1 == null && (
+      {!pts.length && !g22 && t1 == null && !fullAxis && (
         <div className="absolute inset-0 flex items-center justify-center text-[12px] text-muted-foreground">
           A linha começa a se formar com as primeiras urnas.
         </div>

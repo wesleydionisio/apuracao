@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { fmtCountdown } from '@/components/shell/bits';
 import { cn } from '@/lib/utils';
 import { shortLabel, useBoard } from '@/store/board';
-import { guessesOpen, myGuessId } from './mine';
+import { guessesOpen, myGuessId, useMyGuess } from './mine';
 
 function ago(iso: string, now: number) {
   const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
@@ -45,6 +45,7 @@ export function GuessCta({ board, className }: { board: Board; className?: strin
   const stats = useBoard((s) => s.stats);
   const now = useNow(1000);
   const mine = myGuessId();
+  const myGuess = useMyGuess();
   const recent = [...(stats?.recentGuesses ?? [])].reverse();
   const shown = useRotating(recent);
   const [ca, cb] = board.candidates;
@@ -126,10 +127,25 @@ export function GuessCta({ board, className }: { board: Board; className?: strin
           )}
         </div>
 
+        {mine && (
+          // já palpitou: o próprio palpite à vista (um por aparelho; o que dá é ajustar)
+          <div className="mt-3 flex min-h-11 items-center justify-between gap-3 rounded-xl bg-[var(--live)]/[0.08] px-3.5 text-[13px]">
+            <span className="font-semibold text-[var(--live)]">Seu palpite</span>
+            {myGuess ? (
+              <span className="num text-[15px] font-bold">
+                <span style={{ color: ca.color }}>{fmtPct(myGuess.pa, 1)}%</span>
+                <span className="mx-1.5 text-muted-foreground">×</span>
+                <span style={{ color: cb.color }}>{fmtPct(100 - myGuess.pa, 1)}%</span>
+              </span>
+            ) : (
+              <span className="h-4 w-28 animate-pulse rounded bg-muted" />
+            )}
+          </div>
+        )}
         <Button asChild size="lg" className="mt-3 h-12 w-full rounded-xl text-[15px] font-semibold">
           <Link href={mine ? `/p/${mine}` : '/palpite'}>
             <Target className="size-4" aria-hidden />
-            {mine ? 'Ver meu palpite' : 'Dar meu palpite'}
+            {mine ? 'Ver ou ajustar meu palpite' : 'Dar meu palpite'}
           </Link>
         </Button>
       </div>

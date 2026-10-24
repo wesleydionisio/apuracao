@@ -160,10 +160,17 @@ function GuessDetail({ board, v, mine }: { board: Board; v: View; mine: boolean 
         </section>
       )}
 
-      {!mine && (
+      {!mine ? (
         <Button asChild variant="secondary" size="lg" className="h-12 w-full rounded-xl text-[15px]">
           <Link href="/palpite">Fazer o meu palpite</Link>
         </Button>
+      ) : (
+        !board.released && (
+          // um palpite por aparelho: o que dá para fazer é ajustar este
+          <Button asChild variant="secondary" size="lg" className="h-12 w-full rounded-xl text-[15px]">
+            <Link href="/palpite">Ajustar meu palpite</Link>
+          </Button>
+        )
       )}
       {state === 'wait' && board.released && <p className="text-center text-[13px] text-muted-foreground">O ranking aparece assim que os primeiros votos forem apurados.</p>}
     </div>

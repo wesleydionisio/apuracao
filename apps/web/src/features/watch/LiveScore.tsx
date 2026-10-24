@@ -157,7 +157,7 @@ export function VersusBar({
   );
 }
 
-function RefChips({ refs, set, hist, showChart }: { refs: Refs; set: (p: Partial<Refs>) => void; hist: HistRefs; showChart: boolean }) {
+export function RefChips({ refs, set, hist, showChart }: { refs: Refs; set: (p: Partial<Refs>) => void; hist: HistRefs; showChart: boolean }) {
   const value = [refs.t1 && 't1', refs.y22 && 'y22', showChart && refs.chart && 'chart'].filter(Boolean) as string[];
   const item =
     // 32px visíveis + alvo de toque de 44px (pseudo-elemento), sem engordar o placar

@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 import { flipOf, useCurve22, useHistRefs } from './data';
 import { NightSpark } from './NightSpark';
-import { VersusBar } from './LiveScore';
+import { RefChips, VersusBar } from './LiveScore';
+import { useRefs } from './refs';
 
 const TWO = { minimumIntegerDigits: 2 } as const;
 const PCT1 = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
@@ -47,6 +48,7 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
   const left = Date.parse(board.releaseAt) - now;
   const t1 = hist.t1;
   const curve22 = useCurve22(board, true);
+  const [refs, setRefs] = useRefs();
   const flip22 = flipOf(curve22);
   return (
     <section aria-label="Antes da apuração" className={cn(size === 'lg' ? 'p-0' : 'px-4 pt-3 pb-3')}>
@@ -84,10 +86,21 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
           <span className="font-medium text-foreground">O que observar na apuração</span>
           {flip22 && <span className="num">virada de 2022 aos {fmtPct(flip22.pst, 1)}%</span>}
         </div>
-        <NightSpark board={board} curve22={curve22} flip22={flip22} fullAxis height={size === 'lg' ? 180 : 104} />
+        {/* o gráfico fica sempre; os botões só ligam/desligam as referências desenhadas nele */}
+        <div className="mb-2">
+          <RefChips refs={refs} set={setRefs} hist={hist} showChart={false} />
+        </div>
+        <NightSpark
+          board={board}
+          curve22={refs.y22 ? curve22 : null}
+          t1={refs.t1 ? t1 : null}
+          flip22={flip22}
+          fullAxis
+          height={size === 'lg' ? 180 : 104}
+        />
         <p className="mt-1 text-[11.5px] leading-snug text-muted-foreground">
-          Tracejado: o 2º turno de 2022 ao longo da apuração (reconstrução). A linha vertical marca onde a liderança trocou de
-          lado. A linha de hoje começa às 17h.
+          {refs.y22 ? 'Tracejado: o 2º turno de 2022 ao longo da apuração (reconstrução). ' : ''}A linha vertical marca onde a
+          liderança trocou de lado em 2022. A linha de hoje começa às 17h.
         </p>
       </div>
 
