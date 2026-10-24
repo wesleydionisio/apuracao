@@ -27,6 +27,7 @@ import { staticData } from '../lib/api';
 import { fmtCompact, fmtInt, fmtPct } from '../lib/format';
 import { useBoard } from '../store/board';
 import { Fill } from '@/components/core/bars';
+import { PainelSkeleton } from '@/components/skeletons';
 
 const MapCard = lazy(() => import('@/features/map/MapCard'));
 
@@ -46,15 +47,7 @@ export function Loading({ error }: { error?: boolean }) {
         <p className="mt-1 text-[13px] text-muted-foreground">Tentando de novo a cada 10 s.</p>
       </Card>
     );
-  return (
-    <div className="space-y-3 pt-2" aria-busy="true" aria-label="Carregando painel">
-      <div className="h-4 w-48 animate-pulse rounded-md bg-muted" />
-      <div className="h-[236px] animate-pulse rounded-xl bg-muted/60" />
-      <div className="h-16 animate-pulse rounded-xl bg-muted/60" />
-      <div className="h-16 animate-pulse rounded-xl bg-muted/60" />
-      <div className="h-[132px] animate-pulse rounded-xl bg-muted/60" />
-    </div>
-  );
+  return <PainelSkeleton />;
 }
 
 function useIsDesktop() {

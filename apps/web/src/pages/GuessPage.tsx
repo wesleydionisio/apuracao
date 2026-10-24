@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'wouter';
-import { Skeleton } from '@/components/ui';
+import { GuessSkeleton } from '@/components/skeletons';
+import { lastReleased } from '@/lib/ghost';
 import GuessPageView from '@/features/guess/GuessView';
 import { GuessTicket, guessesOpen, myGuessId } from '@/features/guess/Ticket';
 import { useBoard } from '@/store/board';
@@ -8,7 +9,7 @@ import { useBoard } from '@/store/board';
 /** /palpite — antes das 17h o ticket; depois, "encerrados" com atalho para o ranking de quem palpitou */
 export function PalpitePage() {
   const board = useBoard((s) => s.board);
-  if (!board) return <Skeleton h={520} />;
+  if (!board) return <GuessSkeleton released={lastReleased()} />;
   const mine = myGuessId();
   return (
     <div className="space-y-3 pt-1">

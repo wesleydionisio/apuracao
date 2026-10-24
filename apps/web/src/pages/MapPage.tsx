@@ -18,6 +18,7 @@ import { UfTip } from '@/features/map/UfTip';
 import type { HexHit } from '@/features/map/HexMap';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
+import { MapSkeleton } from '@/components/skeletons';
 
 type View = 'hex' | 'map' | 'list';
 const VIEW_KEY = 'map:view';
@@ -283,12 +284,3 @@ function MapView({ board }: { board: Board }) {
   );
 }
 
-function MapSkeleton() {
-  return (
-    <div className="space-y-4 pt-1">
-      <Skeleton className="h-12 w-3/4" />
-      <Skeleton className="h-24 w-full rounded-2xl" />
-      <Skeleton className="aspect-square w-full rounded-2xl" />
-    </div>
-  );
-}

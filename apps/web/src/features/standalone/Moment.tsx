@@ -12,6 +12,7 @@ import { fmtHM, fmtPct } from '@/lib/format';
 import { prefetchImage, share } from '@/lib/share';
 import { useBoard } from '@/store/board';
 import { mentioned, momentParts, momentShare, SplitBar } from './bits';
+import { MomentSkeleton } from '@/components/skeletons';
 
 const scopeName = (s: string) => (s === 'br' ? 'Brasil' : s.startsWith('uf:') ? ufName(s.slice(3)) : 'Município');
 
@@ -19,7 +20,7 @@ export function MomentPage() {
   const board = useBoard((s) => s.board);
   const { id } = useParams<{ id: string }>();
   const [noImg, setNoImg] = useState(false);
-  if (!board) return <Skeleton h={320} />;
+  if (!board) return <MomentSkeleton />;
   const m = board.moments.find((x) => x.id === decodeURIComponent(id ?? ''));
   if (!m)
     return (

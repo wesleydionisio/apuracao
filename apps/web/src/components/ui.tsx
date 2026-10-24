@@ -56,6 +56,37 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
   );
 }
 
+/** Sobre um skeleton fantasma: "carregando" para leitores de tela, e o erro visível quando a busca falha. */
+export function LoadState({ error }: { error: boolean }) {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center p-6" role="status">
+      {error ? (
+        <p className="max-w-[30ch] rounded-xl border bg-card px-4 py-3 text-center text-[13px] text-muted-foreground shadow-sm">
+          Não conseguimos carregar o placar. Tentando de novo…
+        </p>
+      ) : (
+        <span className="sr-only">Carregando o placar</span>
+      )}
+    </div>
+  );
+}
+
+/** Forma do cartão do mapa (Home, Painel) enquanto o código do mapa carrega: cabeçalho, grade na proporção dela e rodapé. */
+export function MapCardSkeleton() {
+  return (
+    <div className="rounded-2xl border bg-card" aria-busy="true" aria-label="Carregando o mapa">
+      <div className="flex h-[53px] items-end justify-between px-4">
+        <Shimmer className="h-8 w-24 rounded-md" />
+        <Shimmer className="h-8 w-24 rounded-md" />
+      </div>
+      <div className="mx-auto max-w-[420px] px-3 pt-2">
+        <Shimmer className="aspect-[1000/1051] w-full rounded-xl" />
+      </div>
+      <div className="h-[57px] border-t" />
+    </div>
+  );
+}
+
 export function Skeleton({ h = 80, className }: { h?: number; className?: string }) {
   return <Shimmer className={cn('w-full rounded-xl', className)} style={{ height: h }} />;
 }

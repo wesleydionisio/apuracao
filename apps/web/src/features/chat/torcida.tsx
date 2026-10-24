@@ -104,6 +104,45 @@ export function TorcidaBar({ cands, counts }: { cands: [CandidateDef, CandidateD
   );
 }
 
+function MiniCount({ c, n, lead }: { c: CandidateDef; n: number; lead: boolean }) {
+  const pulse = usePulse(n);
+  return (
+    <span
+      key={pulse}
+      className={cn('num inline-block text-[13px] font-bold tabular-nums', pulse > 0 && 'animate-in zoom-in-110 duration-200', !lead && 'opacity-75')}
+      style={{ color: colorOf(c) }}
+    >
+      {fmtCount(n)}
+    </span>
+  );
+}
+
+/**
+ * Torcida numa linha, para o celular: cabe ao lado do nome da sala e deixa a altura para as mensagens.
+ * Mesma leitura do TorcidaBar (números de urna, contagem, cabo-de-guerra), sem a legenda grande.
+ */
+export function TorcidaMini({ cands, counts }: { cands: [CandidateDef, CandidateDef]; counts: { a: number; b: number } }) {
+  const [ca, cb] = cands;
+  const total = counts.a + counts.b;
+  const share = total ? (counts.a / total) * 100 : 50;
+  const lead = counts.a === counts.b ? null : counts.a > counts.b ? 'a' : 'b';
+  return (
+    <div
+      className="flex min-w-0 items-center gap-2"
+      role="group"
+      title="Torcida do chat: toques de quem está aqui, não é pesquisa"
+      aria-label={`Torcida do chat (não é pesquisa): ${ca.short} ${counts.a}, ${cb.short} ${counts.b}`}
+    >
+      <span className="text-[12px] text-muted-foreground">Torcida</span>
+      <MiniCount c={ca} n={counts.a} lead={lead !== 'b'} />
+      <div className="relative h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-muted min-[400px]:w-20" aria-hidden>
+        {total > 0 && <SplitFill pa={share} colorA={ca.color} colorB={cb.color} gap={2} />}
+      </div>
+      <MiniCount c={cb} n={counts.b} lead={lead !== 'a'} />
+    </div>
+  );
+}
+
 /** Botão ao lado do campo de texto: cada toque empurra o seu candidato na torcida. */
 export function BumpButton({ room, c, disabled }: { room: Room; c: CandidateDef; disabled: boolean }) {
   const [pop, setPop] = useState(0);

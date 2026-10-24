@@ -33,6 +33,7 @@ import { api, HttpError, ogUrl, type CityView } from '@/lib/api';
 import { fmtCompact, fmtInt } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
+import { CityDetailSkeleton } from '@/components/skeletons';
 
 export default function CityPage() {
   const board = useBoard((s) => s.board);
@@ -40,7 +41,7 @@ export default function CityPage() {
   const [, nav] = useLocation();
   const go = (m: RecentCity | Municipality) => nav(cityHref(m));
   if (!params.uf || !params.slug) return <CityHome onPick={go} />;
-  if (!board) return <DetailSkeleton />;
+  if (!board) return <CityDetailSkeleton />;
   return <CityDetail key={`${params.uf}/${params.slug}`} board={board} uf={params.uf} slug={params.slug} onPick={go} />;
 }
 
@@ -126,7 +127,7 @@ function CityDetail({ board, uf, slug, onPick }: { board: Board; uf: string; slu
   if (!view)
     return (
       <>
-        <DetailSkeleton />
+        <CityDetailSkeleton />
         {err && <p className="mt-3 text-center text-sm text-muted-foreground">Sem conexão. Tentando de novo…</p>}
       </>
     );
@@ -431,13 +432,3 @@ function SimilarCities({ board, mun }: { board: Board; mun: Municipality }) {
   );
 }
 
-function DetailSkeleton() {
-  return (
-    <div className="space-y-4 pt-1">
-      <Skeleton className="h-4 w-32" />
-      <Skeleton className="h-8 w-2/3" />
-      <Skeleton className="h-52 w-full rounded-2xl" />
-      <Skeleton className="h-64 w-full rounded-2xl" />
-    </div>
-  );
-}

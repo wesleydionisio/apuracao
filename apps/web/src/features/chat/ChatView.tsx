@@ -1,7 +1,7 @@
 // Chat de live: uma linha por mensagem, torcida no topo, selos de partido, emoji embutido.
 // layout "shell": tela cheia no celular, entre cabeçalho e abas (acompanha o teclado — html.kb/.chat-shell).
 // layout "panel": coluna lateral no desktop.
-import type { ChatMsg, Room } from '@apuracao/shared';
+import type { CandidateDef, ChatMsg, Room } from '@apuracao/shared';
 import { MAX_BODY } from '@apuracao/shared';
 import { ArrowDown, BadgeDollarSign, Heart, SendHorizontal, Smile, UserRound, WifiOff, X } from 'lucide-react';
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
@@ -9,6 +9,7 @@ import { useCandidates } from '@/components/core/candidate';
 import { Button } from '@/components/ui/button';
 import { live, savedSide } from '@/lib/live';
 import { cn } from '@/lib/utils';
+import { ghostBoard } from '@/lib/ghost';
 import { useBoard } from '@/store/board';
 import { useChat } from '@/store/chat';
 import { EmojiPanel } from './emoji';
@@ -20,7 +21,7 @@ import { useSite } from '@/lib/site';
 import { PinnedBar, SuperLine } from './superchat';
 import { useMountOnce } from './lazy';
 import { ChatLine, ModLine, NICK_CLS, NickAvatar, nickColor, PartyBadge, renderBody, SystemLine } from './parts';
-import { BumpButton, ownRecent, TorcidaBar } from './torcida';
+import { BumpButton, ownRecent, TorcidaBar, TorcidaMini } from './torcida';
 
 // gavetas (vaul) fora do bundle inicial
 const MessageActions = lazy(() => import('./drawers').then((m) => ({ default: m.MessageActions })));
@@ -254,34 +255,53 @@ export default function ChatView({
     >
       {top}
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <div className={cn('border-b', layout === 'panel' && 'bg-card')}>
-          {roomBar}
-          {cands && !(kb && layout === 'shell') && <TorcidaBar cands={cands} counts={counts} />}
-          {!(kb && layout === 'shell') && <PinnedBar room={room} cands={cands} />}
-        </div>
-        {disabled && (
-          <div className="flex items-center gap-2 border-b bg-muted px-4 py-1.5 text-[12px] text-muted-foreground" role="status">
-            <WifiOff className="size-3.5 shrink-0" aria-hidden />
-            {closed
-              ? 'Esta sala foi fechada pela moderação.'
-              : !enabled
-                ? 'Chat desligado no momento. O placar segue ao vivo.'
-                : 'Reconectando o chat… o placar continua atualizando.'}
+        {layout === 'panel' ? (
+          <div className="border-b bg-card">
+            {roomBar}
+            {/* sem candidatos ainda: a barra em fantasma, para a lista não descer quando eles chegam */}
+            {cands ? (
+              <TorcidaBar cands={cands} counts={counts} />
+            ) : (
+              <div className="ghost" aria-hidden>
+                <TorcidaBar cands={ghostBoard().candidates as [CandidateDef, CandidateDef]} counts={{ a: 0, b: 0 }} />
+              </div>
+            )}
+            <PinnedBar room={room} cands={cands} />
           </div>
+        ) : (
+          // celular: sala e torcida dividem uma linha; digitando, a linha sai para sobrar espaço às mensagens
+          !kb && (
+            <>
+              <div className="flex h-11 items-center justify-between gap-3 border-b px-4">
+                {roomBar}
+                {cands && <TorcidaMini cands={cands} counts={counts} />}
+              </div>
+              <div className="border-b empty:hidden">
+                <PinnedBar room={room} cands={cands} />
+              </div>
+            </>
+          )
         )}
-        {slow > 0 && !disabled && (
-          <div className="border-b bg-muted/60 px-4 py-1 text-[11.5px] text-muted-foreground" role="status">
-            Modo lento: 1 mensagem a cada <span className="num font-medium text-foreground">{slow}s</span>
-          </div>
-        )}
-
         <div className="relative min-h-0 flex-1">
-          {/* convite do palpite: flutua sobre o topo da lista, sem empurrar as mensagens */}
-          {!disabled && (
-            <div className="absolute inset-x-0 top-0 z-10">
-              <GuessStrip board={board} />
-            </div>
-          )}
+          {/* avisos flutuam sobre o topo da lista: aparecer ou sumir não empurra as mensagens */}
+          <div className="absolute inset-x-0 top-0 z-10">
+            {!disabled && <GuessStrip board={board} />}
+            {disabled && (
+              <div className="flex items-center gap-2 border-b bg-muted/95 px-4 py-1.5 text-[12px] text-muted-foreground backdrop-blur" role="status">
+                <WifiOff className="size-3.5 shrink-0" aria-hidden />
+                {closed
+                  ? 'Esta sala foi fechada pela moderação.'
+                  : !enabled
+                    ? 'Chat desligado no momento. O placar segue ao vivo.'
+                    : 'Reconectando o chat… o placar continua atualizando.'}
+              </div>
+            )}
+            {slow > 0 && !disabled && (
+              <div className="border-b bg-muted/90 px-4 py-1 text-[11.5px] text-muted-foreground backdrop-blur" role="status">
+                Modo lento: 1 mensagem a cada <span className="num font-medium text-foreground">{slow}s</span>
+              </div>
+            )}
+          </div>
           <div
             ref={listRef}
             onScroll={(e) => {

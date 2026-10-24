@@ -1,5 +1,5 @@
 # Uma imagem para api, ws e poller (mudam só o comando) + estágio de build do web para o Caddy.
-FROM node:22-bookworm-slim AS deps
+FROM node:22-trixie-slim AS deps
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH CI=1
 RUN corepack enable && apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
@@ -15,7 +15,7 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS app
 COPY . .
 ENV NODE_ENV=production
-# comando definido no docker-compose (tsx apps/<app>/src/index.ts)
+# comando definido no docker-compose (apps/<app>/node_modules/.bin/tsx apps/<app>/src/index.ts)
 
 FROM deps AS web-build
 COPY . .

@@ -19,7 +19,7 @@ x-app: &app
 
 x-ws: &ws
   <<: *app
-  command: ['node_modules/.bin/tsx', 'apps/ws/src/index.ts']
+  command: ['apps/ws/node_modules/.bin/tsx', 'apps/ws/src/index.ts']
   ulimits: { nofile: { soft: 1048576, hard: 1048576 } }
   depends_on: [redis]
 
@@ -41,12 +41,12 @@ services:
   # singleton: nunca suba mais de um poller
   poller:
     <<: *app
-    command: ['node_modules/.bin/tsx', 'apps/poller/src/index.ts']
+    command: ['apps/poller/node_modules/.bin/tsx', 'apps/poller/src/index.ts']
     ports: ['127.0.0.1:3003:3003'] # /health para o alerta (só local)
 
   api:
     <<: *app
-    command: ['node_modules/.bin/tsx', 'apps/api/src/index.ts']
+    command: ['apps/api/node_modules/.bin/tsx', 'apps/api/src/index.ts']
     environment:
       <<: *env
       SERVE_DATA: '0'

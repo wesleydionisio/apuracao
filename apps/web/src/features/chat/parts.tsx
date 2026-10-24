@@ -78,7 +78,7 @@ export function isEmojiOnly(body: string): boolean {
   return body.length <= 40 && EMOJI_ONLY.test(body) && /\S/.test(body);
 }
 
-/** Uma linha por mensagem, estilo live: [selo] Apelido: texto */
+/** Uma linha por mensagem, estilo live: Apelido: texto (sem o selo do lado: o apelido já basta) */
 export function ChatLine({
   m,
   cands,
@@ -92,7 +92,6 @@ export function ChatLine({
   mine: boolean;
   onPick: (m: ChatMsg) => void;
 }) {
-  const side = m.side ? cands?.find((c) => c.key === m.side) : null;
   const big = isEmojiOnly(m.body);
   return (
     <button
@@ -103,9 +102,8 @@ export function ChatLine({
         fresh && 'animate-in fade-in-0 slide-in-from-bottom-1 duration-200',
         mine && 'bg-accent/30',
       )}
-      aria-label={`${m.nick}${side ? `, torce ${side.n}` : ''}: ${m.body}. Toque para opções`}
+      aria-label={`${m.nick}: ${m.body}. Toque para opções`}
     >
-      {side && <PartyBadge c={side} className="mr-1.5" />}
       <span className={cn('font-semibold', NICK_CLS)} style={nickColor(m.hue)}>
         {m.nick}
       </span>
@@ -120,8 +118,7 @@ export function ChatLine({
  * - vinda do servidor: a primeira mensagem barrada de alguém, que todos veem (sem o texto);
  * - local: aviso só para o autor, quando as seguintes nem chegam ao chat.
  */
-export function ModLine({ m, cands, fresh }: { m: ChatMsg; cands: CandidateDef[] | null; fresh: boolean }) {
-  const side = m.side ? cands?.find((c) => c.key === m.side) : null;
+export function ModLine({ m, fresh }: { m: ChatMsg; cands: CandidateDef[] | null; fresh: boolean }) {
   const why = m.mod ? MOD_LABEL[m.mod] : undefined;
   // uma linha só: informa sem ocupar o chat
   return (
@@ -136,7 +133,6 @@ export function ModLine({ m, cands, fresh }: { m: ChatMsg; cands: CandidateDef[]
           'Sua mensagem foi censurada'
         ) : (
           <>
-            {side && <PartyBadge c={side} className="mr-1.5 opacity-60" />}
             <span className={cn('font-semibold opacity-80', NICK_CLS)} style={nickColor(m.hue)}>
               {m.nick}
             </span>

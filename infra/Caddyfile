@@ -18,11 +18,13 @@
 	header /admin* X-Robots-Tag "noindex, nofollow"
 
 	# WebSocket → workers (stateless, Redis faz o fan-out entre eles)
-	@ws path /ws
-	reverse_proxy @ws ws1:3002 ws2:3002 ws3:3002 ws4:3002 {
-		lb_policy least_conn
-		health_uri /health
-		health_interval 10s
+	# dentro de handle: solto, o reverse_proxy roda depois do handle final da SPA e /ws vira index.html
+	handle /ws {
+		reverse_proxy ws1:3002 ws2:3002 ws3:3002 ws4:3002 {
+			lb_policy least_conn
+			health_uri /health
+			health_interval 10s
+		}
 	}
 
 	# placar estático: a CDN segura o tráfego (Edge TTL 5s no Cloudflare)

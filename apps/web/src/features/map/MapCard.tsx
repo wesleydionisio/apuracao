@@ -6,7 +6,8 @@ import { ArrowRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ghostBoard } from '@/lib/ghost';
+import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 import HexMap, { type HexHit } from './HexMap';
 import { UfTip } from './UfTip';
@@ -27,8 +28,10 @@ export default function MapCard() {
     addEventListener('pointerdown', off);
     return () => removeEventListener('pointerdown', off);
   }, [tip]);
-  if (!board) return <Skeleton className="h-[420px] w-full rounded-2xl" />;
-  const cands = board.candidates;
+  // sem placar ainda: o próprio cartão em fantasma, com a altura certa (o rodapé e o resto da tela não pulam)
+  const ghost = !board;
+  const shown = board ?? ghostBoard();
+  const cands = shown.candidates;
   let a = 0;
   let b = 0;
   for (const [uf, v] of Object.entries(values)) {
@@ -36,15 +39,15 @@ export default function MapCard() {
     if (v.pa > 50) a++;
     else if (v.pa < 50) b++;
   }
-  const live = layer === 'live';
+  const live = ghost || layer === 'live';
 
   return (
-    <section className="rounded-2xl border bg-card">
+    <section className={cn('rounded-2xl border bg-card', ghost && 'ghost')} aria-busy={ghost || undefined} aria-hidden={ghost || undefined}>
       <div className="flex items-center justify-between gap-3 px-4 pt-4">
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold tracking-tight">Mapa</h2>
           <p className="text-xs text-muted-foreground">
-            {live ? (board.br ? `${fmtPct(board.br.pst, 1)}% apurado` : 'Parcial') : '1º turno'}
+            {live ? (shown.br ? `${fmtPct(shown.br.pst, 1)}% apurado` : 'Parcial') : '1º turno'}
           </p>
         </div>
         <Link href="/mapa" className="press inline-flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground">

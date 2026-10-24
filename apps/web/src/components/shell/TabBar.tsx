@@ -1,10 +1,13 @@
 // Abas no rodapé: alvos de 60px de altura, ícone + rótulo, indicador do ativo.
-import { ChartNoAxesColumn, Map, MapPin, Radio, Target, type LucideIcon } from 'lucide-react';
+// Chat é aba própria só no celular; no desktop ele fica ao lado do placar, na tela Ao vivo.
+import { ChartNoAxesColumn, Map, MapPin, MessagesSquare, Radio, Target, type LucideIcon } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
+import { prefetchPage } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 
-const TABS: { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean }[] = [
-  { href: '/', label: 'Ao vivo', icon: Radio, match: (p) => p === '/' || p.startsWith('/sala') || p.startsWith('/chat') },
+const TABS: { href: string; label: string; icon: LucideIcon; match: (p: string) => boolean; mobileOnly?: boolean }[] = [
+  { href: '/', label: 'Ao vivo', icon: Radio, match: (p) => p === '/' || p.startsWith('/sala') },
+  { href: '/chat', label: 'Chat', icon: MessagesSquare, match: (p) => p.startsWith('/chat'), mobileOnly: true },
   { href: '/painel', label: 'Painel', icon: ChartNoAxesColumn, match: (p) => p.startsWith('/painel') },
   { href: '/mapa', label: 'Mapa', icon: Map, match: (p) => p.startsWith('/mapa') },
   { href: '/cidade', label: 'Cidade', icon: MapPin, match: (p) => p.startsWith('/cidade') },
@@ -15,17 +18,20 @@ export function TabBar() {
   const [path] = useLocation();
   return (
     <nav
-      className="safe-b fixed inset-x-0 bottom-0 z-30 border-t bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75"
+      className="safe-b fixed inset-x-0 bottom-0 z-30 border-t [view-transition-name:app-tabbar] bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75"
       aria-label="Navegação"
     >
-      <ul className="mx-auto grid max-w-3xl grid-cols-5 lg:max-w-6xl" style={{ height: 'var(--tabbar-h)' }}>
+      <ul className="mx-auto grid max-w-3xl grid-cols-6 lg:max-w-6xl lg:grid-cols-5" style={{ height: 'var(--tabbar-h)' }}>
         {TABS.map((t) => {
           const on = t.match(path);
           const Icon = t.icon;
           return (
-            <li key={t.href}>
+            <li key={t.href} className={cn(t.mobileOnly && 'lg:hidden')}>
               <Link
                 href={t.href}
+                onPointerEnter={() => prefetchPage(t.href)}
+                onTouchStart={() => prefetchPage(t.href)}
+                onFocus={() => prefetchPage(t.href)}
                 aria-current={on ? 'page' : undefined}
                 className={cn(
                   'press relative flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors',

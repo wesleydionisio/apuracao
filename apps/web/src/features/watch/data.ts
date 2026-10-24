@@ -3,6 +3,7 @@ import type { Board } from '@apuracao/shared';
 import { twoWay } from '@apuracao/shared';
 import { useEffect, useState } from 'react';
 import { staticData } from '@/lib/api';
+import { isGhost } from '@/lib/ghost';
 
 export interface HistRefs {
   /** % de A no confronto A×B do 1º turno 2026 */
@@ -12,6 +13,7 @@ export interface HistRefs {
 }
 
 export function useHistRefs(board: Board | null): HistRefs {
+  if (isGhost(board)) board = null;
   const [r, setR] = useState<HistRefs>({ t1: null, y22: null });
   const cands = board?.candidates;
   const map = board?.y2022Map;
@@ -55,6 +57,7 @@ export function flipOf(pts: { pst: number; pa: number; src?: string }[] | null):
 
 /** curva de 2022 em % de A por % apurado (reconstrução) */
 export function useCurve22(board: Board | null, enabled: boolean) {
+  if (isGhost(board)) board = null;
   const [pts, setPts] = useState<{ pst: number; pa: number; src?: string }[] | null>(null);
   const map = board?.y2022Map;
   useEffect(() => {

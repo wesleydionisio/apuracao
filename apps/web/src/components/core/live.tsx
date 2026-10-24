@@ -26,7 +26,8 @@ export function LiveDot({ link, className }: { link: LinkStatus; className?: str
 export function LivePill({ link, className }: { link: LinkStatus; className?: string }) {
   return (
     <span
-      className={cn('inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground', className)}
+      // largura do rótulo mais longo ("Reconectando…"): trocar de estado não empurra o título do cabeçalho
+      className={cn('inline-flex min-w-[6.75rem] items-center justify-end gap-1.5 text-xs font-medium whitespace-nowrap text-muted-foreground', className)}
       role="status"
       aria-live="polite"
     >

@@ -1,6 +1,7 @@
 import type { Board, Flags, Moment, Snap } from '@apuracao/shared';
 import { create } from 'zustand';
 import type { Me, Stats } from '../lib/api';
+import { rememberReleased } from '../lib/ghost';
 
 export type LinkStatus = 'connecting' | 'live' | 'reconnecting' | 'offline' | 'demo';
 
@@ -45,6 +46,7 @@ export const useBoard = create<BoardState>((set, get) => ({
       const extra = cur.moments.filter((m) => !ids.has(m.id));
       b = { ...b, ufs, moments: [...extra, ...b.moments].sort((x, y) => Date.parse(y.at) - Date.parse(x.at)) };
     }
+    rememberReleased(b.released);
     set({ board: b, loadError: false, seenAt: Date.now() });
   },
   applySnap: (s) => {

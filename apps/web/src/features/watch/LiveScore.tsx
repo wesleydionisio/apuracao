@@ -194,11 +194,14 @@ export function LiveScore({
   size = 'md',
   chartAlways = false,
   onInfo,
+  essential = false,
 }: {
   board: Board;
   size?: 'md' | 'lg';
   chartAlways?: boolean;
   onInfo?: () => void;
+  /** só o que importa (candidatos, votos, % apurado e a barra): o topo fixo da aba Chat */
+  essential?: boolean;
 }) {
   const [refs, setRefs] = useRefs();
   const hist = useHistRefs(board);
@@ -214,7 +217,7 @@ export function LiveScore({
   if (refs.y22 && hist.y22 !== null) marks.push({ v: hist.y22, label: '2022' });
   const status = s ? STATUS[s.status] : null;
   return (
-    <section aria-label="Placar ao vivo" className={cn(size === 'lg' ? 'p-0' : 'px-4 pt-3 pb-2.5')}>
+    <section aria-label="Placar ao vivo" className={cn(size === 'lg' ? 'p-0' : essential ? 'px-4 pt-3 pb-4' : 'px-4 pt-3 pb-2.5')}>
       <div className="flex items-start justify-between gap-4">
         <Side c={ca} snap={s} pct={pa} lead={s?.lead === 'a'} align="l" size={size} />
         <Side c={cb} snap={s} pct={pa === null ? null : s!.pb} lead={s?.lead === 'b'} align="r" size={size} />
@@ -252,35 +255,39 @@ export function LiveScore({
         </div>
       </div>
       <VersusBar board={board} pa={pa} marks={marks} className={size === 'lg' ? 'mt-3' : 'mt-1.5'} />
-      <RefLine t1={refs.t1 ? hist.t1 : null} y22={refs.y22 ? hist.y22 : null} />
-      <div className={cn('relative flex items-center justify-between gap-2', size === 'lg' ? 'mt-4' : 'mt-2')}>
-        <RefChips refs={refs} set={setRefs} hist={hist} showChart={!chartAlways} />
-        <Link
-          href="/painel"
-          className="relative inline-flex h-8 shrink-0 items-center gap-0.5 rounded-full pr-1 pl-2 before:absolute before:-inset-y-1.5 before:inset-x-0 text-[12px] font-medium text-muted-foreground hover:text-foreground"
-        >
-          Painel
-          <ChevronRight className="size-3.5" aria-hidden />
-        </Link>
-        {/* celular: o gráfico abre flutuando sobre o topo do chat, sem empurrar nada */}
-        {showChart && !chartAlways && (
-          <div className="animate-in fade-in-0 slide-in-from-top-1 absolute inset-x-0 top-full z-30 mt-2 rounded-xl border bg-card p-2.5 shadow-lg duration-200">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <span className="text-[12px] font-semibold">A noite até aqui</span>
-              <button
-                type="button"
-                onClick={() => setRefs({ chart: false })}
-                className="relative -mr-1 flex size-8 items-center justify-center rounded-full before:absolute before:-inset-1.5 hover:bg-accent"
-                aria-label="Fechar gráfico"
-              >
-                <X className="size-4" aria-hidden />
-              </button>
-            </div>
-            <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={120} />
-            {refs.y22 && curve22 && <p className="mt-1 text-[12px] text-muted-foreground">Curva tracejada: 2022 no mesmo ponto da apuração, reconstrução aproximada</p>}
+      {essential ? null : (
+        <>
+          <RefLine t1={refs.t1 ? hist.t1 : null} y22={refs.y22 ? hist.y22 : null} />
+          <div className={cn('relative flex items-center justify-between gap-2', size === 'lg' ? 'mt-4' : 'mt-2')}>
+            <RefChips refs={refs} set={setRefs} hist={hist} showChart={!chartAlways} />
+            <Link
+              href="/painel"
+              className="relative inline-flex h-8 shrink-0 items-center gap-0.5 rounded-full pr-1 pl-2 before:absolute before:-inset-y-1.5 before:inset-x-0 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+            >
+              Painel
+              <ChevronRight className="size-3.5" aria-hidden />
+            </Link>
+            {/* celular: o gráfico abre flutuando sobre o topo do chat, sem empurrar nada */}
+            {showChart && !chartAlways && (
+              <div className="animate-in fade-in-0 slide-in-from-top-1 absolute inset-x-0 top-full z-30 mt-2 rounded-xl border bg-card p-2.5 shadow-lg duration-200">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-[12px] font-semibold">A noite até aqui</span>
+                  <button
+                    type="button"
+                    onClick={() => setRefs({ chart: false })}
+                    className="relative -mr-1 flex size-8 items-center justify-center rounded-full before:absolute before:-inset-1.5 hover:bg-accent"
+                    aria-label="Fechar gráfico"
+                  >
+                    <X className="size-4" aria-hidden />
+                  </button>
+                </div>
+                <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={120} />
+                {refs.y22 && curve22 && <p className="mt-1 text-[12px] text-muted-foreground">Curva tracejada: 2022 no mesmo ponto da apuração, reconstrução aproximada</p>}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
       {chartAlways && (
         <div className="mt-4">
           <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={size === 'lg' ? 220 : 104} />

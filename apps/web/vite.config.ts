@@ -37,8 +37,27 @@ function localData(): Plugin {
   };
 }
 
+/**
+ * Só em dev: rede lenta de mentira para ver skeletons e medir layout shift. Com o cookie `slow=<ms>`
+ * (ex.: `document.cookie = 'slow=1500'`), /data, /api e os módulos das páginas demoram esse tanto.
+ */
+function slowNet(): Plugin {
+  return {
+    name: 'slow-net',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const ms = Number(/(?:^|;\s*)slow=(\d+)/.exec(req.headers.cookie ?? '')?.[1] ?? 0);
+        const url = req.url ?? '';
+        const slow = url.startsWith('/data/') || url.startsWith('/api/') || /^\/src\/(pages|features)\//.test(url);
+        if (ms > 0 && slow) setTimeout(next, Math.min(ms, 10_000));
+        else next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), localData()],
+  plugins: [react(), tailwindcss(), slowNet(), localData()],
   resolve: { alias: { '@': resolve(__dirname, 'src') } },
   server: {
     port: 5173,

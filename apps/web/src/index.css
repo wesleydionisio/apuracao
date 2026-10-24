@@ -12,6 +12,18 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
+/*
+ * Enquanto a Inter não chega (font-display: swap), uma fonte do sistema com as métricas dela: mesma altura de linha
+ * e quase a mesma largura, então o texto não pula quando a Inter entra. Valores calculados sobre a Arial.
+ */
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Arial"), local("ArialMT"), local("Helvetica"), local("Roboto");
+  ascent-override: 90.49%;
+  descent-override: 22.56%;
+  line-gap-override: 0%;
+  size-adjust: 107.06%;
+}
 
 /* tema escuro por atributo (data-theme="dark" no <html>), definido antes do primeiro paint em index.html */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
@@ -86,7 +98,7 @@
 }
 
 @theme inline {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Inter Variable", "Inter Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -255,4 +267,78 @@ html.kb nav[aria-label="Navegação"] {
 .chat-shell {
   top: calc(var(--vvtop, 0px) + var(--header-total, 120px));
   height: calc(var(--vvh) - var(--header-total, 120px) - var(--tabbar-total));
+}
+
+/*
+ * Skeleton "fantasma" (lib/ghost.ts): o markup real desenhado com um placar de mentira, com texto, cores e fotos
+ * apagados. Mesma altura do conteúdo por construção; quando o dado chega a classe sai e nada se mexe.
+ */
+.ghost {
+  pointer-events: none;
+  user-select: none;
+}
+.ghost * {
+  color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  --tw-ring-color: transparent !important;
+  text-decoration-color: transparent !important;
+}
+.ghost img,
+.ghost svg,
+.ghost canvas {
+  visibility: hidden;
+}
+/* folhas com texto viram barras; fotos, barras de cor e preenchimentos viram o cinza do skeleton */
+.ghost :where(span, p, a, button, h1, h2, h3, div, number-flow-react):not(:has(*)):not(:empty),
+.ghost [style*="background"],
+.ghost [role="progressbar"],
+.ghost :has(> svg):not(:has(> :not(svg))) {
+  background: var(--muted) !important;
+  border-radius: 6px;
+}
+.ghost {
+  animation: ghost-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ghost-pulse {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/*
+ * Transição entre telas (lib/nav.ts): o conteúdo troca com um cross-fade curto e sobe 6px;
+ * cabeçalho e abas ficam parados (têm nome próprio e não animam).
+ */
+::view-transition-old(root) {
+  animation: 120ms var(--ease-out) both vt-out;
+}
+::view-transition-new(root) {
+  animation: 200ms var(--ease-out) both vt-in;
+}
+::view-transition-group(app-header),
+::view-transition-group(app-tabbar),
+::view-transition-old(app-header),
+::view-transition-new(app-header),
+::view-transition-old(app-tabbar),
+::view-transition-new(app-tabbar) {
+  animation: none;
+}
+@keyframes vt-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
 }
