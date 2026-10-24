@@ -1,8 +1,9 @@
 // Zoom e arrasto do mapa em canvas, sem biblioteca. Celular: pinça (e arrasto com dois dedos); com zoom, um
-// dedo arrasta. Sem zoom, um dedo continua rolando a página (touch-action: pan-y), para o mapa não prender
-// a rolagem. Computador: a rolagem do mouse dá zoom (e a pinça do trackpad), arrastar com o mouse move;
-// com o mapa todo afastado, rolar para baixo volta a rolar a página. Nos dois: duplo toque/clique aproxima,
-// botões +/−, teclado (+, −, 0, setas).
+// dedo arrasta. Sem zoom, um dedo arrasta só para os lados e na vertical continua rolando a página
+// (touch-action: pan-y), para o mapa não prender a rolagem. Computador: a rolagem do mouse dá zoom (e a pinça do
+// trackpad), arrastar com o mouse move; com o mapa todo afastado, rolar para baixo volta a rolar a página.
+// Nos dois: duplo toque/clique aproxima, botões +/−, teclado (+, −, 0, setas). O mapa pode passar das bordas
+// por uma margem (`slack`), com ou sem zoom: dá para puxar a região da borda para longe do dedo e dos botões.
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
 /** tela (px CSS) = posição no mapa sem zoom × k + (x, y) */
@@ -14,6 +15,9 @@ export interface View {
 
 /** no zoom máximo o hexágono mais fino (~7 km) tem ~14 px na tela do celular */
 export const MAX_ZOOM = 16;
+
+/** folga além das bordas do mapa (px), com ou sem zoom: ~12% da largura, entre 32 e 96 px */
+export const slack = (w: number) => Math.round(Math.min(96, Math.max(32, w * 0.12)));
 
 export const reduceMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -28,22 +32,26 @@ export function useViewport(
 ) {
   const v = useRef<View>({ k: 1, x: 0, y: 0 });
   const [zoomed, setZoomed] = useState(false);
+  // fora do enquadramento inicial (com zoom ou só arrastado na margem): o "ver o mapa inteiro" vale
+  const [away, setAway] = useState(false);
   const size = useRef({ w, h });
   const cb = useRef({ redraw, onTap });
   cb.current = { redraw, onTap };
   const anim = useRef(0);
 
-  /** zoom entre 1 e MAX_ZOOM, e o mapa sempre cobrindo a moldura (sem arrastar para o vazio) */
+  /** zoom entre 1 e MAX_ZOOM; o mapa cobre a moldura, com folga de `slack` px para cada lado */
   const clamp = useCallback((n: View): View => {
     const { w, h } = size.current;
+    const m = slack(w);
     const k = Math.min(MAX_ZOOM, Math.max(1, n.k));
-    return { k, x: Math.min(0, Math.max(w - w * k, n.x)), y: Math.min(0, Math.max(h - h * k, n.y)) };
+    return { k, x: Math.min(m, Math.max(w - w * k - m, n.x)), y: Math.min(m, Math.max(h - h * k - m, n.y)) };
   }, []);
 
   const set = useCallback(
     (n: View) => {
       v.current = clamp(n);
       setZoomed(v.current.k > 1.001);
+      setAway(v.current.k > 1.001 || Math.abs(v.current.x) > 0.5 || Math.abs(v.current.y) > 0.5);
       cb.current.redraw();
     },
     [clamp],
@@ -155,13 +163,23 @@ export function useViewport(
     if (pts.current.size >= 2 && s.pinch) {
       const [a, b] = [...pts.current.values()];
       const P = s.pinch;
-      const k = P.v.k * (Math.hypot(a.x - b.x, a.y - b.y) / P.d);
+      // o zoom é limitado ANTES de posicionar: com o zoom cru (acima do máximo) o ponto sob os dedos escorregava
+      const raw = P.v.k * (Math.hypot(a.x - b.x, a.y - b.y) / P.d);
+      const k = Math.min(MAX_ZOOM, Math.max(1, raw));
       const cx = (a.x + b.x) / 2;
       const cy = (a.y + b.y) / 2;
       // o ponto do mapa que estava sob o centro dos dedos acompanha o centro atual
-      set({ k, x: cx - ((P.cx - P.v.x) / P.v.k) * k, y: cy - ((P.cy - P.v.y) / P.v.k) * k });
-    } else if (s.moved && v.current.k > 1.001) {
-      set({ ...v.current, x: v.current.x + p.x - prev.x, y: v.current.y + p.y - prev.y });
+      const want = { k, x: cx - ((P.cx - P.v.x) / P.v.k) * k, y: cy - ((P.cy - P.v.y) / P.v.k) * k };
+      set(want);
+      // bateu num limite (zoom máximo/mínimo ou borda): o gesto recomeça dali, e voltar responde na hora
+      // em vez de esperar os dedos desfazerem o que passou do limite
+      const c = v.current;
+      if (k !== raw || Math.abs(c.x - want.x) > 0.5 || Math.abs(c.y - want.y) > 0.5) startPinch();
+    } else if (s.moved) {
+      const c = v.current;
+      // sem zoom, o toque só arrasta para os lados (a vertical é a rolagem da página)
+      const dy = c.k > 1.001 || e.pointerType === 'mouse' ? p.y - prev.y : 0;
+      set({ ...c, x: c.x + p.x - prev.x, y: c.y + dy });
     }
   };
 
@@ -198,8 +216,8 @@ export function useViewport(
     if (e.key === '+' || e.key === '=') zoomBy(2);
     else if (e.key === '-' || e.key === '_') zoomBy(0.5);
     else if (e.key === '0') reset();
-    else if (c.k > 1.001 && e.key === 'ArrowLeft') animateTo({ ...c, x: c.x + step });
-    else if (c.k > 1.001 && e.key === 'ArrowRight') animateTo({ ...c, x: c.x - step });
+    else if (e.key === 'ArrowLeft') animateTo({ ...c, x: c.x + step });
+    else if (e.key === 'ArrowRight') animateTo({ ...c, x: c.x - step });
     else if (c.k > 1.001 && e.key === 'ArrowUp') animateTo({ ...c, y: c.y + step });
     else if (c.k > 1.001 && e.key === 'ArrowDown') animateTo({ ...c, y: c.y - step });
     else return;
@@ -209,6 +227,7 @@ export function useViewport(
   return {
     v,
     zoomed,
+    away,
     zoomBy,
     reset,
     bind: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onKeyDown },

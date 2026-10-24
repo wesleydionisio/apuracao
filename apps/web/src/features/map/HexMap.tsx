@@ -430,15 +430,15 @@ export default function HexMap({
         }
         className={cn(
           'block w-full select-none focus-visible:outline-offset-[-2px]',
-          zoomable && vp.zoomed ? 'cursor-grab active:cursor-grabbing' : onPick && 'cursor-pointer',
+          zoomable ? 'cursor-grab active:cursor-grabbing' : onPick && 'cursor-pointer',
           !frame && 'hidden',
         )}
-        // sem zoom, um dedo rola a página; com zoom, arrasta o mapa
+        // sem zoom, um dedo rola a página na vertical (e arrasta o mapa para os lados); com zoom, arrasta o mapa
         style={{ height: cssH || undefined, touchAction: zoomable ? (vp.zoomed ? 'none' : 'pan-y') : undefined }}
         role="img"
         aria-label={label ?? 'Mapa do Brasil em hexágonos, na cor de quem lidera em cada região'}
       />
-      {zoomable && frame && <ZoomControls zoomed={vp.zoomed} onIn={() => vp.zoomBy(2)} onOut={() => vp.zoomBy(0.5)} onReset={vp.reset} />}
+      {zoomable && frame && <ZoomControls zoomed={vp.zoomed} away={vp.away} onIn={() => vp.zoomBy(2)} onOut={() => vp.zoomBy(0.5)} onReset={vp.reset} />}
     </div>
   );
 }
