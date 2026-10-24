@@ -2,6 +2,7 @@
 import type { Municipality } from '@apuracao/shared';
 import { MapPin } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { CityRowsSkeleton } from '@/components/skeletons';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { staticData } from '@/lib/api';
@@ -53,7 +54,8 @@ export function CityPicker({
           <CommandInput value={q} onValueChange={setQ} placeholder="Digite o nome da cidade" autoFocus className="h-11 text-base" />
           <CommandList className="max-h-none flex-1 pb-6">
             {!list ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">Carregando municípios…</div>
+              // mesmas 8 linhas e o mesmo cabeçalho da lista que vai chegar: nada pula quando os municípios carregam
+              <CityRowsSkeleton heading={q.trim().length < 2 ? 'Maiores cidades' : 'Resultados'} rows={8} />
             ) : (
               <>
                 <CommandEmpty>Nenhuma cidade com esse nome.</CommandEmpty>

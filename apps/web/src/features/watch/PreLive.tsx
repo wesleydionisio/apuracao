@@ -5,6 +5,7 @@ import { Target } from 'lucide-react';
 import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { SourceStamp } from '@/components/core/live';
+import { VersusGlow } from '@/components/core/versus';
 import { Button } from '@/components/ui/button';
 import { useNow } from '@/components/ui';
 import { read } from '@/features/chat/rooms';
@@ -62,12 +63,13 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
       </div>
       <div className="mt-1">{left > 0 ? <Countdown ms={left} size={size} /> : <span className="display text-[34px] font-semibold">17:00</span>}</div>
 
-      <div className={cn('rounded-xl border bg-card/60 px-3 pt-2.5 pb-3', size === 'lg' ? 'mt-6' : 'mt-3')}>
-        <div className="flex items-center justify-between text-[11.5px] text-muted-foreground">
+      <div className={cn('relative overflow-hidden rounded-xl border bg-card/60 px-3 pt-2.5 pb-3', size === 'lg' ? 'mt-6' : 'mt-3')}>
+        <VersusGlow a={ca.color} b={cb.color} />
+        <div className="relative flex items-center justify-between text-[11.5px] text-muted-foreground">
           <span className="font-medium text-foreground">1º turno 2026</span>
           <span>só os dois finalistas</span>
         </div>
-        <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="relative mt-2 flex items-center justify-between gap-2">
           {[ca, cb].map((c, i) => (
             <div key={c.key} className={cn('flex min-w-0 items-center gap-2', i === 1 && 'flex-row-reverse text-right')}>
               <CandidateAvatar c={c} size="md" ring={t1 !== null && (i === 0 ? t1 > 50 : t1 < 50)} priority />

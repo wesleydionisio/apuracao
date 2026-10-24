@@ -60,23 +60,20 @@ export function PainelSkeleton() {
   );
 }
 
-/** Mapa: título + camadas, a faixa "Agora / 1º turno / 2022", o resumo de estados e o mapa na proporção dele */
+/** Mapa: título, a faixa "Agora / 1º turno / 2022" com os modos de ver à direita, o resumo de estados e o mapa na proporção dele */
 export function MapSkeleton() {
   return (
     <Wrap label="Carregando mapa" className="space-y-4 pb-2">
-      {/* no celular o título quebra em duas linhas; as camadas ficam à direita, na linha de baixo */}
-      <div className="flex items-end justify-between gap-3 pt-1">
-        <div className="min-w-0">
-          <Bone className="h-3.5 w-40 rounded-md" />
-          <Bone className="mt-1.5 h-7 w-44 rounded-lg lg:w-72" />
-          <Bone className="mt-1.5 h-7 w-32 rounded-lg lg:hidden" />
-        </div>
-        <Bone className="h-8 w-[124px] shrink-0 rounded-full" />
+      {/* no celular o título quebra em duas linhas */}
+      <div className="pt-1">
+        <Bone className="h-3.5 w-40 rounded-md" />
+        <Bone className="mt-1.5 h-7 w-44 rounded-lg lg:w-72" />
+        <Bone className="mt-1.5 h-7 w-32 rounded-lg lg:hidden" />
       </div>
       <div className="space-y-2">
         <div className="flex h-9 items-center justify-between gap-2">
-          <Bone className="h-9 w-56 rounded-xl" />
-          <Bone className="h-4 w-24 rounded-md" />
+          <Bone className="h-9 w-[205px] rounded-lg" />
+          <Bone className="h-8 w-[124px] shrink-0 rounded-md" />
         </div>
         <div className="h-8" />
       </div>
@@ -142,5 +139,42 @@ export function TextSkeleton() {
         <Bone key={i} className={cn('h-4 rounded-md', i % 3 === 2 ? 'w-2/3' : 'w-full')} />
       ))}
     </Wrap>
+  );
+}
+
+/**
+ * Uma linha de texto fantasma. A altura vem da linha (fonte e entrelinha de quem usa, ex.: `text-sm`), não de um
+ * `h-*` chutado: quando o texto chega ocupa exatamente o mesmo espaço.
+ */
+export function LineBone({ className, w = 'w-24' }: { className?: string; w?: string }) {
+  return (
+    <span className={cn('block', className)} aria-hidden>
+      {/* span (não div): pode ir dentro de <p> e de botões */}
+      <span className={cn('inline-block h-[0.8em] max-w-full animate-pulse rounded-sm bg-accent align-middle', w)} />
+    </span>
+  );
+}
+
+const NAME_W = ['w-32', 'w-24', 'w-40', 'w-28', 'w-36', 'w-20'];
+
+/**
+ * Lista de cidades carregando dentro de um Command (cmdk): mesmo grupo, mesmo cabeçalho e linhas com a altura
+ * dos itens de verdade (`min-h-12`, uma ou duas linhas), para a gaveta não pular quando os municípios chegam.
+ */
+export function CityRowsSkeleton({ heading, rows = 8, twoLine = false }: { heading?: string; rows?: number; twoLine?: boolean }) {
+  return (
+    <div className="overflow-hidden p-1 text-foreground" aria-busy="true" aria-label="Carregando cidades">
+      {heading && <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">{heading}</div>}
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex min-h-12 items-center gap-3 px-2 py-1.5 text-sm">
+          <Shimmer className="size-4 shrink-0 rounded-full" />
+          <span className="min-w-0 flex-1">
+            <LineBone w={NAME_W[i % NAME_W.length]} />
+            {twoLine && <LineBone className="text-[11px]" w="w-32" />}
+          </span>
+          {!twoLine && <LineBone className="text-xs" w="w-5" />}
+        </div>
+      ))}
+    </div>
   );
 }

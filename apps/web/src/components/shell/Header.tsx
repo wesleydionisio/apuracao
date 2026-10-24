@@ -1,10 +1,11 @@
 // Cabeçalho compacto (estilo Polymarket): marca + ao vivo + tema; mini-placar quando o herói sai da tela.
+// Tudo no topo usa o mesmo vidro fosco da barra de abas.
 import type { Board } from '@apuracao/shared';
 import NumberFlow from '@number-flow/react';
 import { Moon, Sun } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
-import { LivePill, SourceStamp } from '@/components/core/live';
+import { LivePill } from '@/components/core/live';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
@@ -44,6 +45,9 @@ export function headerMini(path: string): 'none' | 'hero' | 'pinned' {
 /** altura da faixa do mini-placar (px): reservada no topo das telas "pinned" */
 export const MINI_H = 48;
 
+/** o mesmo vidro fosco da barra de abas: cabeçalho, faixa de patrocínio e mini-placar leem como uma peça só */
+const FROST = 'bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75';
+
 export function Header() {
   const board = useBoard((s) => s.board);
   const link = useBoard((s) => s.link);
@@ -51,16 +55,24 @@ export function Header() {
   const [path] = useLocation();
   const live = !!board?.released && !!board.br;
   const mini = headerMini(path);
-  const show = mini === 'pinned' || (mini === 'hero' && !!board && !hero);
+  // Painel antes das 17h: a contagem já é o topo da página; o mini (só a contagem de novo) ficaria por cima dela
+  const show = mini === 'pinned' || (mini === 'hero' && live && !hero);
   return (
-    <header className="safe-t relative border-b bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
+    <header className="safe-t relative border-b">
+      {/* o vidro fica numa camada irmã, não no <header>: backdrop-filter no pai viraria "backdrop root" e o mini-placar
+          (filho, posicionado abaixo) deixaria de borrar a página por trás */}
+      <div className={cn('absolute inset-0 -z-10', FROST)} aria-hidden />
       <SponsorStrip />
       <div className="mx-auto max-w-3xl px-4 lg:max-w-6xl">
         <div className="flex h-13 items-center gap-2">
-          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2" aria-label="Apuração ao vivo, início">
+          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2" aria-label="Urna.digi, início">
             <Logo />
-            <span className="truncate text-[16px] font-semibold tracking-[-0.02em]">Apuração</span>
-            <span className="hidden text-[13px] text-muted-foreground min-[380px]:inline">2º turno 2026</span>
+            <span className="truncate text-[16px] font-semibold tracking-[-0.02em]">
+              Urna<span className="text-muted-foreground">.digi</span>
+            </span>
+            <span className="hidden h-5 shrink-0 items-center rounded-full border bg-muted/60 px-2 text-[11px] leading-none font-medium text-muted-foreground min-[350px]:inline-flex">
+              2º Turno
+            </span>
           </Link>
           <LivePill link={link} className="shrink-0" />
           <ThemeToggle />
@@ -69,7 +81,8 @@ export function Header() {
       {mini !== 'none' && (
         <div
           className={cn(
-            'absolute inset-x-0 top-full border-b bg-background/85 backdrop-blur-xl transition-[opacity,translate] duration-200 ease-out supports-[backdrop-filter]:bg-background/70',
+            'absolute inset-x-0 top-full border-b transition-[opacity,translate] duration-200 ease-out',
+            FROST,
             show ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-1 opacity-0',
           )}
           aria-hidden={!show}
@@ -104,7 +117,7 @@ function MiniSkeleton() {
   );
 }
 
-/** Placar de bolso: avatares, %, barra com 50% e procedência */
+/** Placar de bolso: avatares, %, barra com 50% e o quanto já foi apurado */
 function MiniScore({ board }: { board: Board }) {
   const br = board.br!;
   const [ca, cb] = board.candidates;
@@ -121,11 +134,10 @@ function MiniScore({ board }: { board: Board }) {
         </span>
         <CandidateAvatar c={cb} size="xs" ring={br.lead === 'b'} />
       </div>
-      <div className="mt-1 flex h-4 items-center justify-between gap-2 text-[11px] text-muted-foreground">
+      <div className="mt-1 flex h-4 items-center justify-center text-[11px] text-muted-foreground">
         <span className="num">
           <span className="font-medium text-foreground">{br.pst.toLocaleString('pt-BR', PCT)}%</span> das urnas apuradas
         </span>
-        <SourceStamp at={board.source.at} className="text-[11px]" short />
       </div>
     </Link>
   );
@@ -135,11 +147,14 @@ export function MiniCountdown({ board }: { board: Board }) {
   const now = useNow(1000);
   const left = Date.parse(board.releaseAt) - now;
   return (
-    <Link href="/" className="flex h-[46px] items-center justify-between gap-2 text-[12px] text-muted-foreground">
+    <Link
+      href="/"
+      className="flex h-[46px] items-center justify-center text-[11.5px] font-medium tracking-[0.08em] text-foreground/75 uppercase"
+    >
       <span>
-        Placar abre em <span className="num font-semibold text-foreground">{left > 0 ? fmtCountdown(left) : 'instantes'}</span>
+        Placar abre em{' '}
+        <span className="num font-bold tracking-[0.04em] text-foreground">{left > 0 ? fmtCountdown(left) : 'instantes'}</span>
       </span>
-      <SourceStamp className="text-[11px]" short />
     </Link>
   );
 }

@@ -2,24 +2,28 @@
 import type { Board, HistRow } from '@apuracao/shared';
 import { flipped, fmtPct, twoWay, inUf, ufName } from '@apuracao/shared';
 import { ArrowRight, Hourglass, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { SourceStamp } from '@/components/core/live';
 import { DataTip } from '@/components/core/datatip';
+import { LineBone } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
-import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { staticData } from '@/lib/api';
 import { fmtCompact } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { dotGeo, useDots } from './citydata';
 import { leaderOf, marginPts } from './colors';
 import { cityHref, pa2022, useAsync, useMedia, useUfMunicipalities, type MapLayer, type MunRow } from './data';
 import { MapLegend } from './Legend';
 import HexMap, { type HexHit } from './HexMap';
-import { CandidateLines, CompareRow, CountedBar, FlipNote, Kpi, pair, RefLegend, SectionTitle, StatusBadge, TransferBlock, VersusBar } from './parts';
+import { CandidateLines, CompareRow, CountedBar, FlipNote, Kpi, pair, RefLegend, SectionTitle, StatusBadge, TransferBlock, TransferSkeleton, VersusBar } from './parts';
+
+/** um traço de texto fantasma no meio da linha (ex.: o eleitorado no subtítulo) */
+const inlineBone = 'inline-block h-[0.8em] animate-pulse rounded-sm bg-accent align-middle';
 
 export function UfPanel({ board, uf, onClose }: { board: Board; uf: string | null; onClose: () => void }) {
   const desktop = useMedia('(min-width: 1024px)');
@@ -48,8 +52,11 @@ function UfDetail({ board, uf, desktop }: { board: Board; uf: string; desktop: b
   const cands = board.candidates;
   const live = !!board.released && !!board.br;
   const snap = live ? board.ufs[`uf:${uf}`] : undefined;
-  const { data: t1file } = useAsync(() => staticData.hist('t1-2026'), []);
-  const { data: y22file } = useAsync(() => staticData.hist('y2022-t2'), []);
+  const { data: t1file, loading: t1Loading } = useAsync(() => staticData.hist('t1-2026'), []);
+  const { data: y22file, loading: y22Loading } = useAsync(() => staticData.hist('y2022-t2'), []);
+  // o histórico (1º turno, 2022) chega depois de abrir: enquanto isso, cada bloco que depende dele fica em fantasma no tamanho final
+  const t1Wait = !t1file && t1Loading;
+  const y22Wait = !y22file && y22Loading;
   const t1: HistRow | undefined = t1file?.uf[uf];
   const y22: HistRow | undefined = y22file?.uf[uf];
   const pa1 = twoWay(t1, cands);
@@ -64,7 +71,7 @@ function UfDetail({ board, uf, desktop }: { board: Board; uf: string; desktop: b
           <div className="min-w-0 text-left">
             <Title className="truncate text-left text-xl font-semibold tracking-tight">{ufName(uf)}</Title>
             <Desc className="num text-left text-xs text-muted-foreground">
-              {uf} · {fmtCompact(el)} eleitores
+              {uf} · {!el && t1Wait ? <span className={cn(inlineBone, 'w-10')} aria-hidden /> : fmtCompact(el)} eleitores
             </Desc>
           </div>
           {snap && <StatusBadge s={snap.status} className="shrink-0" />}
@@ -90,6 +97,13 @@ function UfDetail({ board, uf, desktop }: { board: Board; uf: string; desktop: b
           {snap?.valid ? (
             <>
               <CandidateLines cands={cands} snap={snap} />
+              {pa1 == null && p22 == null && (t1Wait || y22Wait) && (
+                // mesmo cartão (barra com as marcas + legenda de uma linha), em fantasma
+                <div className="mt-4 rounded-xl bg-muted/50 p-3" aria-hidden>
+                  <div className="h-2 animate-pulse rounded-full bg-accent" />
+                  <LineBone className="mt-2.5 text-[11px]" w="w-56" />
+                </div>
+              )}
               {(pa1 != null || p22 != null) && (
                 <div className="mt-4 rounded-xl bg-muted/50 p-3">
                   <VersusBar
@@ -133,16 +147,16 @@ function UfDetail({ board, uf, desktop }: { board: Board; uf: string; desktop: b
             {live && board.br?.valid ? (
               <CompareRow label="Brasil agora" hint={`${fmtPct(board.br.pst, 1)}% apurado`} pa={board.br.pa} cands={cands} delta={snap?.valid ? snap.pa - board.br.pa : undefined} />
             ) : null}
-            <CompareRow label="1º turno 2026" hint="só os votos dos dois finalistas" pa={pa1} cands={cands} delta={snap?.valid ? (pa1 == null ? null : snap.pa - pa1) : undefined} />
-            <CompareRow label="2º turno 2022" hint="mesmos partidos" pa={p22} cands={cands} delta={snap?.valid ? (p22 == null ? null : snap.pa - p22) : undefined} />
+            <CompareRow label="1º turno 2026" hint="só os votos dos dois finalistas" pa={pa1} cands={cands} loading={t1Wait} delta={snap?.valid ? (pa1 == null ? null : snap.pa - pa1) : undefined} />
+            <CompareRow label="2º turno 2022" hint="mesmos partidos" pa={p22} cands={cands} loading={y22Wait} delta={snap?.valid ? (p22 == null ? null : snap.pa - p22) : undefined} />
           </ul>
           {snap?.valid && <p className="mt-1 text-[12px] text-muted-foreground">À direita: quantos pontos o estado andou na direção de cada um, comparado a cada referência.</p>}
         </section>
 
-        {snap?.valid && t1 && (
+        {snap?.valid && (t1 || t1Wait) && (
           <section className="border-t py-4">
             <SectionTitle>De onde vieram os votos</SectionTitle>
-            <TransferBlock snap={snap} t1={t1} cands={cands} place={inUf(uf)} />
+            {t1 ? <TransferBlock snap={snap} t1={t1} cands={cands} place={inUf(uf)} /> : <TransferSkeleton />}
           </section>
         )}
 
@@ -168,11 +182,7 @@ function WhereLeft({ rows }: { rows: MunRow[] }) {
     .slice(0, 5);
   if (!left.length) return null;
   return (
-    <div className="mt-5">
-      <h3 className="mb-1 flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
-        <Hourglass className="size-3.5" aria-hidden />
-        Onde mais falta apurar
-      </h3>
+    <WhereLeftFrame>
       <ul className="divide-y">
         {left.map(({ r, rem }) => (
           <li key={r.m.ibge}>
@@ -193,9 +203,88 @@ function WhereLeft({ rows }: { rows: MunRow[] }) {
           </li>
         ))}
       </ul>
+    </WhereLeftFrame>
+  );
+}
+
+function WhereLeftFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="mt-5">
+      <h3 className="mb-1 flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
+        <Hourglass className="size-3.5" aria-hidden />
+        Onde mais falta apurar
+      </h3>
+      {children}
       <p className="text-[12px] text-muted-foreground">Eleitores ainda não apurados, entre as maiores cidades com parcial coletada.</p>
     </div>
   );
+}
+
+/** "Onde mais falta apurar" em fantasma: o mesmo título, 5 linhas da mesma altura e a mesma nota */
+function WhereLeftSkeleton() {
+  return (
+    <WhereLeftFrame>
+      <ul className="divide-y" aria-hidden>
+        {Array.from({ length: 5 }, (_, i) => (
+          <li key={i} className="flex min-h-12 items-center gap-3 py-2">
+            <span className="min-w-0 flex-1">
+              <LineBone className="text-sm" w={ROW_W[i % ROW_W.length]} />
+              <span className="mt-1.5 block h-1 max-w-40 animate-pulse rounded-full bg-accent" />
+            </span>
+            <span className="text-right">
+              <LineBone className="text-sm" w="w-10" />
+              <LineBone className="text-[11px]" w="w-16" />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </WhereLeftFrame>
+  );
+}
+
+const ROW_W = ['w-32', 'w-24', 'w-36', 'w-28', 'w-20'];
+
+/** "Maiores cidades" em fantasma: linhas com nome, eleitorado, barra e a margem à direita, como as de verdade */
+function CityListSkeleton({ rows, more }: { rows: number; more: boolean }) {
+  return (
+    <div aria-busy="true" aria-label="Carregando cidades">
+      <ul className="divide-y" aria-hidden>
+        {Array.from({ length: rows }, (_, i) => (
+          <li key={i} className="flex min-h-13 items-center gap-3 py-2">
+            <span className="min-w-0 flex-1">
+              <LineBone className="text-sm" w={ROW_W[i % ROW_W.length]} />
+              <LineBone className="text-[11px]" w="w-24" />
+              <span className="mt-1.5 block h-1 max-w-40 animate-pulse rounded-full bg-accent" />
+            </span>
+            <span className="flex shrink-0 items-center gap-2">
+              <span className="size-6 animate-pulse rounded-md bg-accent" />
+              <LineBone className="w-12 text-right text-sm" w="w-9" />
+            </span>
+          </li>
+        ))}
+      </ul>
+      {more && <div className="mt-2 h-11 w-full animate-pulse rounded-md bg-accent" />}
+    </div>
+  );
+}
+
+/**
+ * Altura/largura da caixa da UF no mapa de hexágonos (mesma conta do HexMap: caixa do contorno + 3% de folga),
+ * para reservar o espaço do mapa antes dele carregar. Sem o dots.json ainda, usa a tabela medida nele.
+ */
+const UF_RATIO: Record<string, number> = {
+  RO: 0.838, AC: 0.581, AM: 0.702, RR: 1.149, PA: 0.974, AP: 1.14, TO: 1.61, MA: 1.307, PI: 1.421, CE: 1.205, RN: 0.609, PB: 0.602, PE: 0.379, AL: 0.576,
+  SE: 1.127, BA: 1.088, MG: 0.828, ES: 1.584, RJ: 0.731, SP: 0.688, PR: 0.723, SC: 0.715, RS: 0.979, MS: 1.017, MT: 0.964, GO: 1.004, DF: 0.612,
+};
+
+function useUfRatio(uf: string) {
+  const { dots } = useDots();
+  return useMemo(() => {
+    const b = dots ? dotGeo(dots).ufBox[uf] : undefined;
+    if (!b) return UF_RATIO[uf] ?? 1;
+    const pad = Math.max(b[2] - b[0], b[3] - b[1]) * 0.03;
+    return (b[3] - b[1] + 2 * pad) / (b[2] - b[0] + 2 * pad);
+  }, [dots, uf]);
 }
 
 function Municipalities({ board, uf, live }: { board: Board; uf: string; live: boolean }) {
@@ -206,6 +295,11 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
   const [all, setAll] = useState(false);
   const { data, loading } = useUfMunicipalities(uf, canLive);
   const abroad = uf === 'ZZ';
+  const ratio = useUfRatio(uf);
+  const waiting = loading && !data;
+  // "onde mais falta apurar" só aparece com a UF ainda apurando: o fantasma também
+  const ufPst = board.ufs[`uf:${uf}`]?.pst;
+  const leftPending = ufPst != null && ufPst < 100;
 
   const valueOf = (r: MunRow): number | null => {
     if (layer === 'live') return r.s?.valid ? r.s.pa : null;
@@ -252,7 +346,10 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
 
       {!abroad && (
         <div className="relative">
-          <HexMap cands={cands} layer={layer} scope={uf} highlight={hit?.ibge} onPick={setHit} onHover={(h) => h && setHit(h)} maxHeight={380} label={`Mapa ${inUf(uf)} em hexágonos, na cor de quem lidera em cada região`} />
+          {/* caixa já no tamanho final do mapa (proporção da UF, até 380px): o fantasma do HexMap fica dentro dela */}
+          <div className="w-full overflow-hidden rounded-xl" style={{ aspectRatio: `1 / ${ratio}`, maxHeight: 380 }}>
+            <HexMap cands={cands} layer={layer} scope={uf} highlight={hit?.ibge} onPick={setHit} onHover={(h) => h && setHit(h)} maxHeight={380} label={`Mapa ${inUf(uf)} em hexágonos, na cor de quem lidera em cada região`} />
+          </div>
           {hit && hitRow && (
             <div
               className="absolute z-10 w-56 -translate-x-1/2 rounded-xl border bg-popover p-3 shadow-lg"
@@ -293,15 +390,12 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
         </div>
       )}
 
-      {layer === 'live' && !abroad && <WhereLeft rows={rows} />}
+      {layer === 'live' && !abroad && (waiting ? leftPending && <WhereLeftSkeleton /> : <WhereLeft rows={rows} />)}
 
       <h3 className="mb-1 mt-5 text-[13px] font-medium text-muted-foreground">Maiores cidades</h3>
-      {loading && !data ? (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }, (_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
-        </div>
+      {waiting ? (
+        // 10 linhas + "Ver mais" (o DF só tem Brasília)
+        <CityListSkeleton rows={uf === 'DF' ? 1 : 10} more={uf !== 'DF'} />
       ) : !rows.length ? (
         <p className="py-4 text-sm text-muted-foreground">Lista de cidades indisponível agora.</p>
       ) : (

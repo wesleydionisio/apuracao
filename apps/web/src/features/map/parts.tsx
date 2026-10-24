@@ -13,6 +13,10 @@ export { pair };
 import { fmtCompact } from '@/lib/format';
 import { Fill, SplitFill } from '@/components/core/bars';
 import { DataTip, SplitTip, splitLabel } from '@/components/core/datatip';
+import { LineBone } from '@/components/skeletons';
+
+/** traço fantasma dentro de uma linha de texto (mesma altura da linha) */
+const inlineBone = 'inline-block h-[0.8em] animate-pulse rounded-sm bg-accent align-middle';
 
 const PCT1 = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
 
@@ -217,12 +221,15 @@ export function CompareRow({
   cands,
   strong,
   delta,
+  loading = false,
 }: {
   label: ReactNode;
   hint?: ReactNode;
   pa: number | null;
   cands: CandidateDef[];
   strong?: boolean;
+  /** a referência ainda está carregando: números e barra em fantasma, no tamanho final */
+  loading?: boolean;
   /** quanto a linha principal se deslocou em relação a esta (pontos de A); coluna à direita */
   delta?: number | null;
 }) {
@@ -234,7 +241,11 @@ export function CompareRow({
           {hint && <div className="truncate text-[11px] text-muted-foreground">{hint}</div>}
         </div>
         <span className="flex shrink-0 items-baseline gap-3">
-          {pa === null ? (
+          {pa === null && loading ? (
+            <span className="text-sm" aria-hidden>
+              <span className={cn(inlineBone, 'w-16')} />
+            </span>
+          ) : pa === null ? (
             <span className="text-sm text-muted-foreground">sem dado</span>
           ) : (
             <span className="num text-sm font-semibold">
@@ -244,11 +255,13 @@ export function CompareRow({
             </span>
           )}
           {delta !== undefined && (
-            <span className="w-14 text-right text-[12px]">{strong ? <span className="text-muted-foreground">base</span> : <Swing v={delta} cands={cands} />}</span>
+            <span className="w-14 text-right text-[12px]">
+              {strong ? <span className="text-muted-foreground">base</span> : pa === null && loading ? <span className={cn(inlineBone, 'w-8')} aria-hidden /> : <Swing v={delta} cands={cands} />}
+            </span>
           )}
         </span>
       </div>
-      {pa !== null && <VersusBar pa={pa} cands={cands} className="mt-2" h="h-1" />}
+      {pa !== null ? <VersusBar pa={pa} cands={cands} className="mt-2" h="h-1" /> : loading && <div className="mt-2 h-1 animate-pulse rounded-full bg-accent" aria-hidden />}
     </li>
   );
 }
@@ -302,6 +315,31 @@ export function FlipNote({ place, from, to }: { place: string; from: CandidateDe
         <span className="font-medium" style={{ color: from.color }}>{from.short}</span>; agora{' '}
         <span className="font-medium" style={{ color: to.color }}>{to.short}</span> está à frente.
       </p>
+    </div>
+  );
+}
+
+/** "De onde vieram os votos" enquanto o 1º turno carrega: texto (3 linhas no celular, 2 no desktop), barra e os dois ganhos */
+export function TransferSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Carregando">
+      <div className="mb-3 text-[13px] leading-snug" aria-hidden>
+        <LineBone w="w-full" />
+        <LineBone w="w-full" />
+        <LineBone className="lg:hidden" w="w-2/3" />
+      </div>
+      <div className="h-2.5 w-full animate-pulse rounded-full bg-accent" aria-hidden />
+      <ul className="mt-3 grid grid-cols-2 gap-3" aria-hidden>
+        {[0, 1].map((i) => (
+          <li key={i} className="flex items-center gap-2">
+            <span className="size-8 shrink-0 animate-pulse rounded-lg bg-accent" />
+            <div className="min-w-0">
+              <LineBone className="text-sm" w="w-14" />
+              <LineBone className="text-[11px]" w="w-24" />
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

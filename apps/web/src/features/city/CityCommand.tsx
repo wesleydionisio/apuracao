@@ -2,7 +2,8 @@
 import type { Municipality } from '@apuracao/shared';
 import { ufName } from '@apuracao/shared';
 import { Clock, MapPin, Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { CityRowsSkeleton } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle, DrawerTrigger } from '@/components/ui/drawer';
@@ -26,9 +27,9 @@ export function CityCommand({
   listClassName?: string;
 }) {
   const [q, setQ] = useState('');
-  const [recents, setRecents] = useState<RecentCity[]>([]);
+  // lidas já no primeiro render (localStorage é síncrono): a lista não pula um quadro depois de abrir
+  const [recents] = useState<RecentCity[]>(readRecents);
   const { idx, results } = useCitySearch(q, showSuggestions);
-  useEffect(() => setRecents(readRecents()), []);
   const biggest = showSuggestions && idx ? idx.slice(0, 8).map((x) => x.m) : [];
   const searching = q.trim().length >= 2;
 
@@ -47,7 +48,7 @@ export function CityCommand({
         {searching && (
           <>
             {!idx ? (
-              <div className="px-3 py-6 text-center text-sm text-muted-foreground">Carregando cidades…</div>
+              <CityRowsSkeleton heading="Cidades" rows={8} twoLine />
             ) : (
               <CommandEmpty>Nenhuma cidade com esse nome.</CommandEmpty>
             )}
@@ -73,6 +74,8 @@ export function CityCommand({
                 ))}
               </CommandGroup>
             )}
+            {/* as maiores cidades vêm do índice: enquanto ele carrega, linhas fantasmas do mesmo tamanho */}
+            {!idx && <CityRowsSkeleton heading="Maiores cidades" rows={8} twoLine />}
             {!!biggest.length && (
               <CommandGroup heading="Maiores cidades">
                 {biggest.map((m) => (

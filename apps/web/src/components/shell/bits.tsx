@@ -34,49 +34,45 @@ export function SplitBar({ b, h = 8, className }: { b: Board; h?: number; classN
   );
 }
 
+/** Marca Urna.digi: urna com a cédula entrando, só traço em currentColor (branca no escuro, grafite no claro). */
 export function Logo({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={cn('size-6', className)} aria-hidden>
-      <rect width="24" height="24" rx="6" className="fill-foreground" />
-      <rect x="5" y="13" width="3.2" height="6" rx="1" className="fill-background" />
-      <rect x="10.4" y="8.5" width="3.2" height="10.5" rx="1" className="fill-background" opacity=".55" />
-      <rect x="15.8" y="5" width="3.2" height="14" rx="1" className="fill-background" />
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn('size-6 shrink-0', className)}
+      aria-hidden
+    >
+      <path d="M7.5 11V4.5C7.5 3.67 8.17 3 9 3h6c.83 0 1.5.67 1.5 1.5V11" />
+      <path d="m10 7.2 1.5 1.5 2.7-2.9" />
+      <rect x="3" y="11" width="18" height="10" rx="2.5" />
     </svg>
   );
 }
 
+/** Rodapé enxuto: marca, uma linha de aviso e os links legais. */
 export function LegalFooter() {
   return (
-    <footer className="mt-10 space-y-3 border-t pt-5 pb-2 text-[12px] leading-relaxed text-muted-foreground">
-      <div className="flex items-center gap-2 text-foreground">
-        <Logo className="size-5" />
-        <span className="text-[13px] font-semibold">Apuração ao vivo</span>
+    <footer className="mt-10 border-t pt-4 pb-2 text-[12px] leading-relaxed text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-x-4">
+        <div className="flex items-center gap-2 text-foreground">
+          <Logo className="size-5" />
+          <span className="text-[13px] font-semibold tracking-[-0.01em]">Urna.digi</span>
+        </div>
+        <nav className="flex gap-4 font-medium text-foreground/80" aria-label="Informações legais">
+          <Link href="/privacidade" className="inline-flex min-h-11 items-center hover:text-foreground">
+            Privacidade
+          </Link>
+          <Link href="/termos" className="inline-flex min-h-11 items-center hover:text-foreground">
+            Termos
+          </Link>
+        </nav>
       </div>
-      <p>
-        Projeto independente, sem vínculo com o TSE, partidos ou candidatos. Fonte única: TSE. Projeções são estimativas e
-        sempre aparecem com o percentual apurado; o resultado oficial é o da totalização do TSE.
-      </p>
-      <p>
-        Chat: seja gentil. Sem links, ofensas ou ameaças; mensagens de até 240 caracteres. Para escrever, entre com o Google.
-        No chat aparece só o seu nome de usuário. Mensagens podem ser removidas após denúncias.
-      </p>
-      <nav className="flex flex-wrap gap-x-4 gap-y-1 font-medium text-foreground/80" aria-label="Outros formatos">
-        <Link href="/tv" className="inline-flex min-h-11 items-center hover:text-foreground">
-          Modo TV
-        </Link>
-        <a href="/embed/placar" className="inline-flex min-h-11 items-center hover:text-foreground">
-          Embed para portais
-        </a>
-        <a href="https://resultados.tse.jus.br/" target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center hover:text-foreground">
-          Resultados no TSE
-        </a>
-        <Link href="/privacidade" className="inline-flex min-h-11 items-center hover:text-foreground">
-          Privacidade
-        </Link>
-        <Link href="/termos" className="inline-flex min-h-11 items-center hover:text-foreground">
-          Termos
-        </Link>
-      </nav>
+      <p>Projeto independente, sem vínculo com o TSE. Dados oficiais do TSE; projeções são estimativas.</p>
     </footer>
   );
 }

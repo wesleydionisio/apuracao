@@ -121,7 +121,7 @@ function candRow(c: CandidateDef, pct: number | null, o: { lead: boolean; dim: b
 function header(left: string, right: string, size: number): Node {
   return h(
     { justifyContent: 'space-between', alignItems: 'center', fontSize: size, color: MUTED },
-    h({ alignItems: 'center', gap: 14 }, h({ fontWeight: 800, color: FG }, 'Apuração ao vivo'), left),
+    h({ alignItems: 'center', gap: 14 }, h({ fontWeight: 800, color: FG }, 'Urna.digi'), left),
     h({}, right),
   );
 }

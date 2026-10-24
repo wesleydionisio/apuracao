@@ -4,8 +4,10 @@ import type { CandidateDef, ChatMsg, Room, ScCharge } from '@apuracao/shared';
 import { fmtBrl, SC_MAX, SC_MIN, SC_PRESETS, scTier } from '@apuracao/shared';
 import { Check, Copy, Loader2, Pin } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { LineBone } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast, useNow } from '@/components/ui';
 import { superchatApi, HttpError } from '@/lib/api';
 import { savedSide } from '@/lib/live';
@@ -64,17 +66,29 @@ export default function SuperchatSheet({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [charge, setCharge] = useState<ScCharge | null>(null);
+  /** Pix pendente já conferido (achado ou descartado) */
+  const [checked, setChecked] = useState<string | null>(null);
 
   // reabriu com um Pix ainda aberto: volta para ele
   useEffect(() => {
     if (!open || charge) return;
     const id = readPending();
     if (!id) return;
+    // rede travada: depois de 4s desiste e mostra o formulário (o Pix antigo segue valendo se for pago)
+    const t = setTimeout(() => setChecked(id), 4000);
     superchatApi
       .get(id)
       .then((c) => (c.status === 'pending' ? setCharge(c) : writePending(null)))
-      .catch(() => writePending(null));
+      .catch(() => writePending(null))
+      .finally(() => {
+        clearTimeout(t);
+        setChecked(id);
+      });
+    return () => clearTimeout(t);
   }, [open, charge]);
+  // enquanto confere o Pix guardado, a gaveta já abre no tamanho da tela do Pix (e não no formulário, que trocaria depois)
+  const pendingId = open && !charge ? readPending() : null;
+  const restoring = !!pendingId && checked !== pendingId;
 
   // pagando: confere a cada 3s
   const status = charge?.status;
@@ -133,7 +147,9 @@ export default function SuperchatSheet({
       }}
     >
       <DrawerContent className="mx-auto max-w-lg">
-        {!charge ? (
+        {restoring ? (
+          <PayStepSkeleton />
+        ) : !charge ? (
           <>
             <DrawerHeader className="pb-2 text-left">
               <DrawerTitle className="text-[18px]">Super Chat</DrawerTitle>
@@ -225,6 +241,29 @@ export default function SuperchatSheet({
         )}
       </DrawerContent>
     </Drawer>
+  );
+}
+
+/** a tela do Pix em fantasma, com as mesmas medidas (cabeçalho, QR, botão e aviso) */
+function PayStepSkeleton() {
+  return (
+    <div className="overflow-y-auto px-4 pb-6" aria-busy="true">
+      <DrawerHeader className="px-0 pb-3 text-center">
+        <DrawerTitle className="text-[18px]">
+          <span className="sr-only">Pix do Super Chat</span>
+          <LineBone w="w-52" />
+        </DrawerTitle>
+        <DrawerDescription asChild>
+          <div className="text-[13px]">
+            <LineBone w="w-72" />
+            <LineBone w="w-40" />
+          </div>
+        </DrawerDescription>
+      </DrawerHeader>
+      <Skeleton className="mx-auto size-52 rounded-xl" />
+      <Skeleton className="mt-3 h-12 w-full rounded-xl" />
+      <LineBone className="mt-3 text-center text-[13px]" w="w-44" />
+    </div>
   );
 }
 

@@ -7,6 +7,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'rea
 import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { SourceStamp } from '@/components/core/live';
+import { VersusGlow } from '@/components/core/versus';
 import { Button } from '@/components/ui/button';
 import { NightChart } from '@/features/curve';
 import { CandidateRows } from '@/features/score/CandidateRows';
@@ -318,28 +319,32 @@ function Matchup({ board }: { board: Board }) {
   const others = br ? br.valid - a.v - b.v : 0;
   return (
     <Section icon={CalendarClock} title="Como chegaram aqui" meta={<MetaPill>1º turno, 4 de outubro</MetaPill>}>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
-        {[a, null, b].map((s, i) =>
-          s === null ? (
-            <span key="x" className="mt-8 text-[13px] font-medium text-muted-foreground">
-              ×
-            </span>
-          ) : (
-            <div key={s.c.key} className={i === 0 ? 'text-left' : 'flex flex-col items-end text-right'}>
-              <CandidateAvatar c={s.c} size="xl" />
-              <div className="mt-2.5 text-[15px] leading-tight font-semibold tracking-[-0.01em]">{s.c.short}</div>
-              {s.c.party && <div className="text-[12px] text-muted-foreground">{s.c.party}</div>}
-              {s.pct !== null && (
-                <>
-                  <div className="display mt-2 text-[26px] leading-none font-semibold" style={{ color: s.c.color }}>
-                    {fmtPct(s.pct)}%
-                  </div>
-                  <div className="num mt-1 text-[11px] text-muted-foreground">{fmtInt(s.v)} votos</div>
-                </>
-              )}
-            </div>
-          ),
-        )}
+      <div className="relative">
+        {/* sem caixa em volta: manchas que somem antes das bordas, atrás das fotos */}
+        <VersusGlow a={ca.color} b={cb.color} variant="soft" className="-inset-y-3" />
+        <div className="relative grid grid-cols-[1fr_auto_1fr] items-start gap-2">
+          {[a, null, b].map((s, i) =>
+            s === null ? (
+              <span key="x" className="mt-8 text-[13px] font-medium text-muted-foreground">
+                ×
+              </span>
+            ) : (
+              <div key={s.c.key} className={i === 0 ? 'text-left' : 'flex flex-col items-end text-right'}>
+                <CandidateAvatar c={s.c} size="xl" />
+                <div className="mt-2.5 text-[15px] leading-tight font-semibold tracking-[-0.01em]">{s.c.short}</div>
+                {s.c.party && <div className="text-[12px] text-muted-foreground">{s.c.party}</div>}
+                {s.pct !== null && (
+                  <>
+                    <div className="display mt-2 text-[26px] leading-none font-semibold" style={{ color: s.c.color }}>
+                      {fmtPct(s.pct)}%
+                    </div>
+                    <div className="num mt-1 text-[11px] text-muted-foreground">{fmtInt(s.v)} votos</div>
+                  </>
+                )}
+              </div>
+            ),
+          )}
+        </div>
       </div>
       {br && (
         <div className="mt-4">

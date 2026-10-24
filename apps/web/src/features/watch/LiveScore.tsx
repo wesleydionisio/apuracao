@@ -6,6 +6,7 @@ import { ChartSpline, ChevronRight, Info, X } from 'lucide-react';
 import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { SourceStamp } from '@/components/core/live';
+import { VersusGlow } from '@/components/core/versus';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { fmtCompact } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -217,86 +218,90 @@ export function LiveScore({
   if (refs.y22 && hist.y22 !== null) marks.push({ v: hist.y22, label: '2022' });
   const status = s ? STATUS[s.status] : null;
   return (
-    <section aria-label="Placar ao vivo" className={cn(size === 'lg' ? 'p-0' : essential ? 'px-4 pt-3 pb-4' : 'px-4 pt-3 pb-2.5')}>
-      <div className="flex items-start justify-between gap-4">
-        <Side c={ca} snap={s} pct={pa} lead={s?.lead === 'a'} align="l" size={size} />
-        <Side c={cb} snap={s} pct={pa === null ? null : s!.pb} lead={s?.lead === 'b'} align="r" size={size} />
-      </div>
-      {/* apuração em cima da barra de votos: quanto do total aquele placar representa */}
-      <div className={size === 'lg' ? 'mt-5' : 'mt-3'}>
-        <div className="flex items-center justify-between gap-2 text-[12px] text-muted-foreground">
-          <span className="num min-w-0 truncate">
-            <span className="font-semibold text-foreground">{s ? s.pst.toLocaleString('pt-BR', PCT2) : '0,00'}%</span> das urnas apuradas
-            {status && (
-              <>
-                {' · '}
-                <span className={cn('font-semibold', s?.status === 'nao_iniciada' ? 'text-muted-foreground' : 'text-foreground')}>{status}</span>
-              </>
-            )}
-          </span>
-          <span className="flex shrink-0 items-center gap-1">
-            <SourceStamp at={board.source.at} short className="text-[12px]" />
-            {onInfo && (
-              <button type="button" onClick={onInfo} className="relative -mr-1.5 flex size-8 items-center justify-center rounded-full before:absolute before:-inset-1.5 hover:bg-accent" aria-label="Sobre os dados e o projeto">
-                <Info className="size-3.5" aria-hidden />
-              </button>
-            )}
-          </span>
+    <section aria-label="Placar ao vivo" className={cn('relative', size === 'lg' ? 'p-0' : essential ? 'px-4 pt-3 pb-4' : 'px-4 pt-3 pb-2.5')}>
+      {/* lg: vaza pelo p-6 do cartão da Home, que corta com overflow-hidden e os cantos arredondados */}
+      <VersusGlow a={ca.color} b={cb.color} fadeBottom={chartAlways} className={size === 'lg' ? '-inset-6' : undefined} />
+      <div className="relative">
+        <div className="flex items-start justify-between gap-4">
+          <Side c={ca} snap={s} pct={pa} lead={s?.lead === 'a'} align="l" size={size} />
+          <Side c={cb} snap={s} pct={pa === null ? null : s!.pb} lead={s?.lead === 'b'} align="r" size={size} />
         </div>
-        <div
-          className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"
-          role="progressbar"
-          aria-label="Urnas apuradas"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={s?.pst ?? 0}
-        >
-          <Fill pct={s?.pst ?? 0} className="rounded-full bg-foreground/80" />
-        </div>
-      </div>
-      <VersusBar board={board} pa={pa} marks={marks} className={size === 'lg' ? 'mt-3' : 'mt-1.5'} />
-      {essential ? null : (
-        <>
-          <RefLine t1={refs.t1 ? hist.t1 : null} y22={refs.y22 ? hist.y22 : null} />
-          <div className={cn('relative flex items-center justify-between gap-2', size === 'lg' ? 'mt-4' : 'mt-2')}>
-            <RefChips refs={refs} set={setRefs} hist={hist} showChart={!chartAlways} />
-            <Link
-              href="/painel"
-              className="relative inline-flex h-8 shrink-0 items-center gap-0.5 rounded-full pr-1 pl-2 before:absolute before:-inset-y-1.5 before:inset-x-0 text-[12px] font-medium text-muted-foreground hover:text-foreground"
-            >
-              Painel
-              <ChevronRight className="size-3.5" aria-hidden />
-            </Link>
-            {/* celular: o gráfico abre flutuando sobre o topo do chat, sem empurrar nada */}
-            {showChart && !chartAlways && (
-              <div className="animate-in fade-in-0 slide-in-from-top-1 absolute inset-x-0 top-full z-30 mt-2 rounded-xl border bg-card p-2.5 shadow-lg duration-200">
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="text-[12px] font-semibold">A noite até aqui</span>
-                  <button
-                    type="button"
-                    onClick={() => setRefs({ chart: false })}
-                    className="relative -mr-1 flex size-8 items-center justify-center rounded-full before:absolute before:-inset-1.5 hover:bg-accent"
-                    aria-label="Fechar gráfico"
-                  >
-                    <X className="size-4" aria-hidden />
-                  </button>
-                </div>
-                <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={120} />
-                {refs.y22 && curve22 && <p className="mt-1 text-[12px] text-muted-foreground">Curva tracejada: 2022 no mesmo ponto da apuração, reconstrução aproximada</p>}
-              </div>
-            )}
+        {/* apuração em cima da barra de votos: quanto do total aquele placar representa */}
+        <div className={size === 'lg' ? 'mt-5' : 'mt-3'}>
+          <div className="flex items-center justify-between gap-2 text-[12px] text-muted-foreground">
+            <span className="num min-w-0 truncate">
+              <span className="font-semibold text-foreground">{s ? s.pst.toLocaleString('pt-BR', PCT2) : '0,00'}%</span> das urnas apuradas
+              {status && (
+                <>
+                  {' · '}
+                  <span className={cn('font-semibold', s?.status === 'nao_iniciada' ? 'text-muted-foreground' : 'text-foreground')}>{status}</span>
+                </>
+              )}
+            </span>
+            <span className="flex shrink-0 items-center gap-1">
+              <SourceStamp at={board.source.at} short className="text-[12px]" />
+              {onInfo && (
+                <button type="button" onClick={onInfo} className="relative -mr-1.5 flex size-8 items-center justify-center rounded-full before:absolute before:-inset-1.5 hover:bg-accent" aria-label="Sobre os dados e o projeto">
+                  <Info className="size-3.5" aria-hidden />
+                </button>
+              )}
+            </span>
           </div>
-        </>
-      )}
-      {chartAlways && (
-        <div className="mt-4">
-          <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={size === 'lg' ? 220 : 104} />
-          {/* linha reservada: ligar 2022 não empurra o letreiro */}
-          <p className="mt-1 h-5 text-[12px] text-muted-foreground">
-            {refs.y22 && curve22 ? 'Curva tracejada: 2022 no mesmo ponto da apuração, reconstrução aproximada' : null}
-          </p>
+          <div
+            className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-label="Urnas apuradas"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={s?.pst ?? 0}
+          >
+            <Fill pct={s?.pst ?? 0} className="rounded-full bg-foreground/80" />
+          </div>
         </div>
-      )}
+        <VersusBar board={board} pa={pa} marks={marks} className={size === 'lg' ? 'mt-3' : 'mt-1.5'} />
+        {essential ? null : (
+          <>
+            <RefLine t1={refs.t1 ? hist.t1 : null} y22={refs.y22 ? hist.y22 : null} />
+            <div className={cn('relative flex items-center justify-between gap-2', size === 'lg' ? 'mt-4' : 'mt-2')}>
+              <RefChips refs={refs} set={setRefs} hist={hist} showChart={!chartAlways} />
+              <Link
+                href="/painel"
+                className="relative inline-flex h-8 shrink-0 items-center gap-0.5 rounded-full pr-1 pl-2 before:absolute before:-inset-y-1.5 before:inset-x-0 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                Painel
+                <ChevronRight className="size-3.5" aria-hidden />
+              </Link>
+              {/* celular: o gráfico abre flutuando sobre o topo do chat, sem empurrar nada */}
+              {showChart && !chartAlways && (
+                <div className="animate-in fade-in-0 slide-in-from-top-1 absolute inset-x-0 top-full z-30 mt-2 rounded-xl border bg-card p-2.5 shadow-lg duration-200">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-[12px] font-semibold">A noite até aqui</span>
+                    <button
+                      type="button"
+                      onClick={() => setRefs({ chart: false })}
+                      className="relative -mr-1 flex size-8 items-center justify-center rounded-full before:absolute before:-inset-1.5 hover:bg-accent"
+                      aria-label="Fechar gráfico"
+                    >
+                      <X className="size-4" aria-hidden />
+                    </button>
+                  </div>
+                  <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={120} />
+                  {refs.y22 && curve22 && <p className="mt-1 text-[12px] text-muted-foreground">Curva tracejada: 2022 no mesmo ponto da apuração, reconstrução aproximada</p>}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+        {chartAlways && (
+          <div className="mt-4">
+            <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={size === 'lg' ? 220 : 104} />
+            {/* linha reservada: ligar 2022 não empurra o letreiro */}
+            <p className="mt-1 h-5 text-[12px] text-muted-foreground">
+              {refs.y22 && curve22 ? 'Curva tracejada: 2022 no mesmo ponto da apuração, reconstrução aproximada' : null}
+            </p>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

@@ -139,33 +139,24 @@ function MapView({ board }: { board: Board }) {
 
   return (
     <div className="space-y-4 pb-2">
-      <header className="flex items-end justify-between gap-3 pt-1">
-        <div className="min-w-0">
+      <header className="pt-1">
+        <div className="flex items-baseline justify-between gap-3">
           <p className="text-xs text-muted-foreground">Presidente, 2º turno, por estado</p>
-          {/* todos os títulos possíveis empilhados, só o ativo visível: trocar a camada não muda a altura */}
-          <h1 className="grid text-[22px] font-semibold leading-tight tracking-tight text-balance [&>*]:col-start-1 [&>*]:row-start-1">
-            {[...new Set([title, ...TITLES])].map((t) => (
-              <span key={t} className={t === title ? undefined : 'invisible'} aria-hidden={t !== title}>
-                {t}
-              </span>
-            ))}
-          </h1>
+          {effective === 'live' && board.br && <span className="num shrink-0 text-xs text-muted-foreground">{fmtPct(board.br.pst, 1)}% apurado</span>}
         </div>
-        <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como">
-          <ToggleGroupItem value="hex" aria-label="Grade de hexágonos">
-            <Hexagon />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="map" aria-label="Estados">
-            <MapIcon />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="list" aria-label="Lista">
-            <Rows3 />
-          </ToggleGroupItem>
-        </ToggleGroup>
+        {/* todos os títulos possíveis empilhados, só o ativo visível: trocar a camada não muda a altura */}
+        <h1 className="grid text-[22px] font-semibold leading-tight tracking-tight text-balance [&>*]:col-start-1 [&>*]:row-start-1">
+          {[...new Set([title, ...TITLES])].map((t) => (
+            <span key={t} className={t === title ? undefined : 'invisible'} aria-hidden={t !== title}>
+              {t}
+            </span>
+          ))}
+        </h1>
       </header>
 
       <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
+        {/* camada à esquerda, modo de ver à direita, numa linha só (em telas muito estreitas quebra e o modo fica à direita) */}
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
           <ToggleGroup type="single" size="sm" value={effective} onValueChange={(v) => v && setLayer(v as MapLayer)} aria-label="Camada" className="rounded-lg bg-muted p-0.5">
             {live && (
               <ToggleGroupItem value="live" className={segItem}>
@@ -179,7 +170,17 @@ function MapView({ board }: { board: Board }) {
               2022
             </ToggleGroupItem>
           </ToggleGroup>
-          {effective === 'live' && board.br && <span className="num text-xs text-muted-foreground">{fmtPct(board.br.pst, 1)}% apurado</span>}
+          <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como" className="ml-auto">
+            <ToggleGroupItem value="hex" aria-label="Grade de hexágonos">
+              <Hexagon />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="map" aria-label="Estados">
+              <MapIcon />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="list" aria-label="Lista">
+              <Rows3 />
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
         {/* sempre no lugar; fora da camada "Agora" fica invisível (não empurra o resto) */}
         {(

@@ -4,6 +4,7 @@ import { Check, Copy, Flag, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { LegalFooter } from '@/components/shell/bits';
+import { LineBone } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import {
   Drawer,
@@ -13,6 +14,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/drawer';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui';
 import { auth } from '@/lib/auth';
 import { fmtHM } from '@/lib/format';
@@ -124,7 +126,7 @@ export function ProfileDrawer({
           }}
         >
           <DrawerHeader className="text-left">
-            {me && (
+            {me ? (
               <div className="flex items-center gap-2.5">
                 <NickAvatar m={me} className="size-10" />
                 <div className="min-w-0">
@@ -134,8 +136,29 @@ export function ProfileDrawer({
                   <DrawerDescription>É como você aparece no chat.</DrawerDescription>
                 </div>
               </div>
+            ) : (
+              // a conta ainda não chegou: o mesmo cabeçalho em fantasma, para a gaveta não crescer quando ela chegar
+              <div className="flex items-center gap-2.5" aria-busy="true">
+                <Skeleton className="size-10 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1">
+                  <DrawerTitle className="text-[17px]">
+                    <span className="sr-only">Seu perfil</span>
+                    <LineBone w="w-28" />
+                  </DrawerTitle>
+                  <DrawerDescription>É como você aparece no chat.</DrawerDescription>
+                </div>
+              </div>
             )}
           </DrawerHeader>
+          {!cands && (
+            <div className="px-4" aria-hidden>
+              <LineBone className="mb-1.5 text-[13px]" w="w-16" />
+              <div className="grid grid-cols-2 gap-2">
+                <Skeleton className="h-14 rounded-xl" />
+                <Skeleton className="h-14 rounded-xl" />
+              </div>
+            </div>
+          )}
           {cands && (
             <fieldset className="px-4">
               <legend className="mb-1.5 text-[13px] font-medium">Seu lado</legend>

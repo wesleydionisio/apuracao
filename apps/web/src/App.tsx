@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
 import { Route, Router, Switch, useLocation } from 'wouter';
 import { useCandidateCssVars } from '@/components/core/candidate';
-import { LegalFooter } from '@/components/shell/bits';
 import { Header, headerMini, MINI_H } from '@/components/shell/Header';
 import { CookieBanner } from '@/components/shell/CookieBanner';
 import { TabBar } from '@/components/shell/TabBar';
@@ -111,8 +110,6 @@ function Frame() {
   const headerRef = useRef<HTMLDivElement>(null);
   const [path] = useLocation();
   useViewportVars(headerRef);
-  // telas que cuidam do próprio rodapé legal (a aba Chat é fixa e não tem rodapé)
-  const liveScreen = path === '/' || path.startsWith('/sala') || path === '/chat';
   const mini = headerMini(path);
   // antes do quadro novo (a transição de tela fotografa a página já no topo)
   useLayoutEffect(() => {
@@ -127,7 +124,7 @@ function Frame() {
         className="pb-tabbar mx-auto max-w-3xl px-4 lg:max-w-6xl"
         style={{ paddingTop: `calc(var(--header-total, 64px) + ${mini === 'pinned' ? MINI_H : 0}px + 12px)` }}
       >
-        {/* a página ocupa ao menos a tela: o rodapé legal começa abaixo da dobra e não sobe/desce enquanto o conteúdo carrega */}
+        {/* a página ocupa ao menos a tela, mesmo enquanto o conteúdo carrega */}
         <div style={{ minHeight: `calc(100dvh - var(--header-total, 64px) - ${mini === 'pinned' ? MINI_H : 0}px - 12px)` }}>
           <Suspense fallback={<PageFallback path={path} />}>
             <Switch>
@@ -155,8 +152,6 @@ function Frame() {
             </Switch>
           </Suspense>
         </div>
-        {/* aviso legal em toda tela; a tela Ao vivo (placar + chat) mostra o seu dentro do layout */}
-        {!liveScreen && <LegalFooter />}
       </main>
       <TabBar />
       <CookieBanner />

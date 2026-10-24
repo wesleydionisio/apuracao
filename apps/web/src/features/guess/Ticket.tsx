@@ -208,7 +208,7 @@ export function GuessTicket({ board }: { board: Board }) {
 
       <div className="space-y-2 px-5 pt-4 pb-5">
         <Button type="submit" size="lg" disabled={busy} className={cn('h-12 w-full rounded-xl text-[15px] font-semibold', busy && 'opacity-70')}>
-          {busy ? 'Salvando…' : mine ? 'Atualizar palpite' : 'Cravar palpite e gerar meu card'}
+          {busy ? 'Salvando…' : mine ? 'Atualizar palpite' : 'Palpitar e gerar meu card'}
         </Button>
         <p className="text-center text-[12px] text-muted-foreground">
           Um palpite por aparelho. Dá para mudar até as 17h de domingo.

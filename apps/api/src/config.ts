@@ -25,7 +25,7 @@ export const config = {
   serveData: env.SERVE_DATA ? env.SERVE_DATA === '1' : env.NODE_ENV !== 'production',
   /** login com o Google no chat (Client ID web do Google Cloud). Vazio = só o login de teste em dev */
   googleClientId: env.GOOGLE_CLIENT_ID ?? '',
-  siteName: env.SITE_NAME ?? 'Apuração ao vivo',
+  siteName: env.SITE_NAME ?? 'Urna.digi',
   production: env.NODE_ENV === 'production',
   /** Super Chat: Mercado Pago (automático) ou só uma chave Pix (conferência manual no painel) */
   pix: {

@@ -81,12 +81,12 @@ export function GuessCta({ board, className }: { board: Board; className?: strin
         </div>
 
         <p className="mt-2 text-[20px] leading-tight font-bold tracking-tight text-balance">
-          {stats ? (
+          {stats && stats.guesses > 0 ? (
             <>
-              <NumberFlow value={stats.guesses} locales="pt-BR" className="num" /> pessoas já cravaram o resultado
+              <NumberFlow value={stats.guesses} locales="pt-BR" className="num" /> {stats.guesses === 1 ? 'pessoa já palpitou' : 'pessoas já palpitaram'}
             </>
           ) : (
-            'Crave o resultado antes da apuração'
+            'Dê seu palpite antes da apuração'
           )}
         </p>
         {!!stats?.guessesLastHour && (

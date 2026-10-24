@@ -1,17 +1,17 @@
 // Faixa fina no topo do cabeçalho: o patrocinador (quando há) ou o convite "anuncie aqui" com link para o WhatsApp.
-// Altura fixa: trocar o conteúdo nunca mexe no layout.
+// Altura fixa: trocar o conteúdo nunca mexe no layout. Sem fundo próprio: herda o vidro fosco do cabeçalho.
 import { waLink } from '@apuracao/shared';
 import { ArrowUpRight, Megaphone } from 'lucide-react';
 import { useSite } from '@/lib/site';
 
-export const STRIP_H = 30;
+export const STRIP_H = 36;
 
 export function SponsorStrip() {
   const { sponsor, ad } = useSite((s) => s.site);
   const paid = sponsor.on && !!(sponsor.name || sponsor.text) && !!sponsor.url;
   if (!paid && !ad.whatsapp) return null;
   return (
-    <div className="border-b bg-muted/70">
+    <div className="border-b">
       <div className="mx-auto flex max-w-3xl items-center px-4 lg:max-w-6xl" style={{ height: STRIP_H }}>
         {paid ? (
           <a
