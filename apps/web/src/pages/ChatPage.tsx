@@ -3,11 +3,11 @@
 // No desktop o chat já fica ao lado do placar na tela Ao vivo: /chat volta para lá. Links antigos de sala (/sala/:slug) também.
 import { useState } from 'react';
 import { Redirect } from 'wouter';
-import { MiniCountdown } from '@/components/shell/Header';
 import { LoadState } from '@/components/ui';
 import ChatView from '@/features/chat/ChatView';
 import { read, RoomBar, Watching } from '@/features/chat/rooms';
 import { useKeyboardOpen, useMedia } from '@/features/watch/hooks';
+import { zeroBoard } from '@/features/watch/data';
 import { LiveScore, LiveScoreCompact } from '@/features/watch/LiveScore';
 import { ghostBoard } from '@/lib/ghost';
 import { useBoard } from '@/store/board';
@@ -34,13 +34,10 @@ export default function ChatPage() {
       <LoadState error={loadError} />
     </div>
   ) : kb || emoji ? (
-    <LiveScoreCompact board={board} />
-  ) : board.released && board.br ? (
-    <LiveScore board={board} size="md" essential />
+    <LiveScoreCompact board={zeroBoard(board)} />
   ) : (
-    <div className="px-4">
-      <MiniCountdown board={board} />
-    </div>
+    // antes das 17h: o placar já com os candidatos, zerado (status "não iniciada")
+    <LiveScore board={zeroBoard(board)} size="md" essential />
   );
   return <ChatView room="br" layout="shell" top={<div className="border-b">{top}</div>} roomBar={<RoomBar compact right={<Watching />} />} onEmojiOpen={setEmoji} />;
 }

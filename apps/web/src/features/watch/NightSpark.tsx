@@ -1,6 +1,7 @@
 // Mini gráfico da noite para a tela Ao vivo: % dos válidos × % de urnas apuradas.
 // O eixo x dá zoom conforme a apuração: no começo mostra só o trecho inicial (a curva não fica espremida num canto)
-// e vai abrindo até 0–100% perto do fim. A curva de 2022 (tracejada) segue o mesmo eixo, só o pedaço visível.
+// e vai abrindo até 0–100% perto do fim. Com a curva de 2022 ligada (ou antes das 17h, `fullAxis`) é sempre a noite
+// inteira, para ver onde a liderança virou em 2022. Com zoom, a virada de 2022 fora da janela vira um aviso na borda.
 import type { Board } from '@apuracao/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -63,6 +64,7 @@ export function NightSpark({
   t1,
   flip22,
   height = 112,
+  fullAxis = false,
   className,
 }: {
   board: Board;
@@ -72,6 +74,8 @@ export function NightSpark({
   /** onde a liderança trocou em 2022 (% apurado) e quem passou à frente: marcador vertical */
   flip22?: { pst: number; lead: 'a' | 'b' } | null;
   height?: number;
+  /** eixo x sempre 0–100% (antes das 17h: a noite inteira, com a referência de 2022) */
+  fullAxis?: boolean;
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -97,7 +101,8 @@ export function NightSpark({
   const iw = Math.max(80, w - padL - padR);
   const ih = height - padT - padB;
 
-  const xMax = useTween(xWindow(last?.pst ?? 0));
+  // com 2022 na tela, a comparação precisa da noite inteira (a virada pode estar lá na frente)
+  const xMax = useTween(fullAxis || curve22?.length ? 100 : xWindow(last?.pst ?? 0));
   const full = xMax > 99.5;
   // o eixo y também só considera o trecho visível de 2022
   const vis22 = (curve22 ?? []).filter((p) => p.pst <= xMax);
@@ -191,6 +196,12 @@ export function NightSpark({
           {50 - span}
         </text>
         {/* virada de 2022: linha vertical no % apurado em que a liderança trocou — a zona de atenção da noite */}
+        {/* virada de 2022 ainda fora da janela do zoom: o ponto crítico não some, vira um aviso na borda */}
+        {flip22 && flip22.pst > xMax + 0.5 && (
+          <text x={xEnd - 2} y={padT + 8} textAnchor="end" className="fill-foreground/80 text-[11px] font-medium tabular-nums">
+            virada em 2022 · {fmt(flip22.pst)}% →
+          </text>
+        )}
         {flip22 && flip22.pst <= xMax && (
           <g aria-hidden>
             <line x1={x(flip22.pst)} x2={x(flip22.pst)} y1={padT} y2={padT + ih} className="stroke-foreground/50" strokeWidth={1.25} strokeDasharray="2 3" />
@@ -226,6 +237,16 @@ export function NightSpark({
         )}
         <path d={lineB} fill="none" stroke={cb.color} strokeWidth={2.25} strokeLinecap="round" />
         <path d={lineA} fill="none" stroke={ca.color} strokeWidth={2.25} strokeLinecap="round" />
+        {/* antes das 17h: o 2º turno de hoje zerado, os dois no ponto de partida */}
+        {!pts.length && fullAxis && (
+          <g aria-hidden>
+            <circle cx={x(0)} cy={y(50)} r={4} fill={cb.color} className="stroke-background" strokeWidth={1.5} />
+            <circle cx={x(0) + 3} cy={y(50)} r={4} fill={ca.color} className="stroke-background" strokeWidth={1.5} />
+            <text x={x(0) + 12} y={y(50) - 7} className="fill-foreground text-[11px] font-semibold tabular-nums">
+              hoje: 0% apurado
+            </text>
+          </g>
+        )}
         {last && (
           <>
             {[
@@ -295,7 +316,8 @@ export function NightSpark({
           ))}
         </div>
       )}
-      {!pts.length && (
+      {/* sem linha ainda e sem referências desenhadas: o aviso no meio (com 2022/1º turno ele cobriria os rótulos) */}
+      {!pts.length && !g22 && t1 == null && (
         <div className="absolute inset-0 flex items-center justify-center text-[12px] text-muted-foreground">
           A linha começa a se formar com as primeiras urnas.
         </div>

@@ -85,3 +85,15 @@ export function useCurve22(board: Board | null, enabled: boolean) {
   }, [enabled, map?.a, map?.b, pts]);
   return pts;
 }
+
+/** antes das 17h: o mesmo placar com tudo zerado (a aba Chat já mostra os candidatos frente a frente) */
+export function zeroBoard(b: Board): Board {
+  if (b.br) return b;
+  return {
+    ...b,
+    br: {
+      s: 'br', at: b.releaseAt, pst: 0, a: 0, b: 0, pa: 0, pb: 0, valid: 0, blank: 0, nulls: 0, el: 0, elc: 0,
+      turnout: 0, status: 'nao_iniciada', lead: null, need: null, rem: 0, rmax: 0,
+    },
+  };
+}

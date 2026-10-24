@@ -5,10 +5,11 @@ import { CandidateAvatar } from '@/components/core/candidate';
 import { SourceStamp } from '@/components/core/live';
 import { VersusGlow } from '@/components/core/versus';
 import { useNow } from '@/components/ui';
-import { fmtInt } from '@/lib/format';
+import { fmtInt, fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
-import { useHistRefs } from './data';
+import { flipOf, useCurve22, useHistRefs } from './data';
+import { NightSpark } from './NightSpark';
 import { VersusBar } from './LiveScore';
 
 const TWO = { minimumIntegerDigits: 2 } as const;
@@ -45,6 +46,8 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
   const [ca, cb] = board.candidates;
   const left = Date.parse(board.releaseAt) - now;
   const t1 = hist.t1;
+  const curve22 = useCurve22(board, true);
+  const flip22 = flipOf(curve22);
   return (
     <section aria-label="Antes da apuração" className={cn(size === 'lg' ? 'p-0' : 'px-4 pt-3 pb-3')}>
       {/* o convite do palpite fica no cartão logo abaixo (GuessCta): aqui só a contagem, num alinhamento só */}
@@ -73,6 +76,19 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
           ))}
         </div>
         <VersusBar board={board} pa={t1} marks={[]} className="mt-2.5" />
+      </div>
+
+      {/* o gráfico da noite já antes das 17h: a apuração de 2022 (tracejada), o 1º turno e onde a liderança virou */}
+      <div className={size === 'lg' ? 'mt-6' : 'mt-4'}>
+        <div className="mb-1 flex items-center justify-between gap-2 text-[11.5px] text-muted-foreground">
+          <span className="font-medium text-foreground">O que observar na apuração</span>
+          {flip22 && <span className="num">virada de 2022 aos {fmtPct(flip22.pst, 1)}%</span>}
+        </div>
+        <NightSpark board={board} curve22={curve22} flip22={flip22} fullAxis height={size === 'lg' ? 180 : 104} />
+        <p className="mt-1 text-[11.5px] leading-snug text-muted-foreground">
+          Tracejado: o 2º turno de 2022 ao longo da apuração (reconstrução). A linha vertical marca onde a liderança trocou de
+          lado. A linha de hoje começa às 17h.
+        </p>
       </div>
 
       <div className="mt-2.5 flex items-center justify-between gap-2 text-[11.5px] text-muted-foreground">

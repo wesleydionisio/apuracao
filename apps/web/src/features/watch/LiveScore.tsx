@@ -213,6 +213,8 @@ export function LiveScore({
   const s = board.br;
   const [ca, cb] = board.candidates;
   const pa = s && s.valid ? s.pa : null;
+  // antes das 17h (placar zerado da aba Chat): 0% para os dois, a barra fica neutra
+  const zero = s?.status === 'nao_iniciada' && !s.valid;
   const marks: { v: number; label: string }[] = [];
   if (refs.t1 && hist.t1 !== null) marks.push({ v: hist.t1, label: '1º t.' });
   if (refs.y22 && hist.y22 !== null) marks.push({ v: hist.y22, label: '2022' });
@@ -223,8 +225,8 @@ export function LiveScore({
       <VersusGlow a={ca.color} b={cb.color} fadeBottom={chartAlways} className={size === 'lg' ? '-inset-6' : undefined} />
       <div className="relative">
         <div className="flex items-start justify-between gap-4">
-          <Side c={ca} snap={s} pct={pa} lead={s?.lead === 'a'} align="l" size={size} />
-          <Side c={cb} snap={s} pct={pa === null ? null : s!.pb} lead={s?.lead === 'b'} align="r" size={size} />
+          <Side c={ca} snap={s} pct={zero ? 0 : pa} lead={s?.lead === 'a'} align="l" size={size} />
+          <Side c={cb} snap={s} pct={zero ? 0 : pa === null ? null : s!.pb} lead={s?.lead === 'b'} align="r" size={size} />
         </div>
         {/* apuração em cima da barra de votos: quanto do total aquele placar representa */}
         <div className={size === 'lg' ? 'mt-5' : 'mt-3'}>
@@ -311,10 +313,11 @@ export function LiveScoreCompact({ board }: { board: Board }) {
   const s = board.br;
   const [ca, cb] = board.candidates;
   const pa = s && s.valid ? s.pa : null;
+  const zero = s?.status === 'nao_iniciada' && !s.valid;
   return (
     <div className="flex items-center gap-2 px-3 py-2" aria-label="Placar">
       <CandidateAvatar c={ca} size="xs" ring={s?.lead === 'a'} />
-      <span className="display min-w-[3.4rem] text-[16px] font-semibold">{pa === null ? '—' : <NumberFlow value={pa} format={PCT1} locales="pt-BR" suffix="%" />}</span>
+      <span className="display min-w-[3.4rem] text-[16px] font-semibold">{pa === null ? (zero ? '0,0%' : '—') : <NumberFlow value={pa} format={PCT1} locales="pt-BR" suffix="%" />}</span>
       <div className="relative flex h-2 flex-1 gap-[2px] overflow-hidden rounded-full bg-muted">
         {pa !== null && (
           <>
@@ -323,7 +326,7 @@ export function LiveScoreCompact({ board }: { board: Board }) {
         )}
         <div className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-background" />
       </div>
-      <span className="display min-w-[3.4rem] text-right text-[16px] font-semibold">{pa === null ? '—' : <NumberFlow value={100 - pa} format={PCT1} locales="pt-BR" suffix="%" />}</span>
+      <span className="display min-w-[3.4rem] text-right text-[16px] font-semibold">{pa === null ? (zero ? '0,0%' : '—') : <NumberFlow value={100 - pa} format={PCT1} locales="pt-BR" suffix="%" />}</span>
       <CandidateAvatar c={cb} size="xs" ring={s?.lead === 'b'} />
       <span className="num ml-1 text-[11px] text-muted-foreground">{s ? `${fmt1(s.pst)}%` : ''}</span>
     </div>
