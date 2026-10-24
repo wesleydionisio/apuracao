@@ -2,7 +2,7 @@
 import type { Board, HistRow } from '@apuracao/shared';
 import { flipped, fmtPct, twoWay, inUf, ufName } from '@apuracao/shared';
 import { ArrowRight, Hourglass, X } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { SourceStamp } from '@/components/core/live';
@@ -19,8 +19,12 @@ import { dotGeo, useDots } from './citydata';
 import { leaderOf, marginPts } from './colors';
 import { cityHref, pa2022, useAsync, useMedia, useUfMunicipalities, type MapLayer, type MunRow } from './data';
 import { MapLegend } from './Legend';
-import HexMap, { type HexHit } from './HexMap';
-import { CandidateLines, CompareRow, CountedBar, FlipNote, Kpi, pair, RefLegend, SectionTitle, StatusBadge, TransferBlock, TransferSkeleton, VersusBar } from './parts';
+import HexMap from './HexMap';
+import { ABROAD } from './abroad-coords';
+import type { WorldCity, WorldHit } from './WorldMap';
+import { CandidateLines, CompareRow, CountedBar, FlipNote, Kpi, ofUf, pair, RefLegend, SectionTitle, StatusBadge, TransferBlock, TransferSkeleton, VersusBar } from './parts';
+
+const WorldMap = lazy(() => import('./WorldMap'));
 
 /** um traço de texto fantasma no meio da linha (ex.: o eleitorado no subtítulo) */
 const inlineBone = 'inline-block h-[0.8em] animate-pulse rounded-sm bg-accent align-middle';
@@ -71,7 +75,7 @@ function UfDetail({ board, uf, desktop }: { board: Board; uf: string; desktop: b
           <div className="min-w-0 text-left">
             <Title className="truncate text-left text-xl font-semibold tracking-tight">{ufName(uf)}</Title>
             <Desc className="num text-left text-xs text-muted-foreground">
-              {uf} · {!el && t1Wait ? <span className={cn(inlineBone, 'w-10')} aria-hidden /> : fmtCompact(el)} eleitores
+              {uf === 'ZZ' ? 'Todos os países' : uf} · {!el && t1Wait ? <span className={cn(inlineBone, 'w-10')} aria-hidden /> : fmtCompact(el)} eleitores
             </Desc>
           </div>
           {snap && <StatusBadge s={snap.status} className="shrink-0" />}
@@ -128,7 +132,7 @@ function UfDetail({ board, uf, desktop }: { board: Board; uf: string; desktop: b
             </>
           ) : (
             <p className="rounded-xl bg-muted/60 p-3 text-sm text-muted-foreground">
-              {live ? `Ainda sem urnas apuradas em ${ufName(uf)}.` : `A parcial de ${ufName(uf)} aparece aqui a partir das 17h de domingo.`}
+              {live ? `Ainda sem urnas apuradas ${inUf(uf)}.` : `A parcial ${ofUf(uf)} aparece aqui a partir das 17h de domingo.`}
             </p>
           )}
         </section>
@@ -291,7 +295,7 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
   const cands = board.candidates;
   const canLive = live && board.flags.map_mun;
   const [layer, setLayer] = useState<MapLayer>(canLive ? 'live' : 't1');
-  const [hit, setHit] = useState<HexHit | null>(null);
+  const [hit, setHit] = useState<WorldHit | null>(null);
   const [all, setAll] = useState(false);
   const { data, loading } = useUfMunicipalities(uf, canLive);
   const abroad = uf === 'ZZ';
@@ -312,6 +316,11 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, layer, board.y2022Map]);
+
+  const worldCities = useMemo<WorldCity[]>(
+    () => (abroad ? (data?.rows ?? []).map((r) => ({ ibge: r.m.ibge, tse: r.m.tse, name: r.m.name, el: r.m.el, pa: values[r.m.ibge] ?? null })) : []),
+    [abroad, data, values],
+  );
 
   const rows = data?.rows ?? [];
   const withLive = rows.filter((r) => r.s?.valid).length;
@@ -344,51 +353,68 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
         {abroad ? 'Cidades no exterior' : 'Municípios'}
       </SectionTitle>
 
-      {!abroad && (
-        <div className="relative">
-          {/* caixa já no tamanho final do mapa (proporção da UF, até 380px): o fantasma do HexMap fica dentro dela */}
+      <div className="relative">
+        {abroad ? (
+          // mundo: caixa na proporção do recorte do WorldMap (Natural Earth, 72°N a 50°S) enquanto ele carrega
+          <div className="w-full overflow-hidden rounded-xl" style={{ aspectRatio: '1 / 0.385', maxHeight: 320 }}>
+            <Suspense fallback={<div className="size-full animate-pulse rounded-xl bg-muted/60" />}>
+              <WorldMap cities={worldCities} cands={cands} highlight={hit?.ibge} onPick={setHit} maxHeight={320} />
+            </Suspense>
+          </div>
+        ) : (
+          // caixa já no tamanho final do mapa (proporção da UF, até 380px): o fantasma do HexMap fica dentro dela
           <div className="w-full overflow-hidden rounded-xl" style={{ aspectRatio: `1 / ${ratio}`, maxHeight: 380 }}>
             <HexMap cands={cands} layer={layer} scope={uf} highlight={hit?.ibge} onPick={setHit} onHover={(h) => h && setHit(h)} maxHeight={380} label={`Mapa ${inUf(uf)} em hexágonos, na cor de quem lidera em cada região`} />
           </div>
-          {hit && hitRow && (
-            <div
-              className="absolute z-10 w-56 -translate-x-1/2 rounded-xl border bg-popover p-3 shadow-lg"
-              style={{ left: `clamp(116px, ${hit.x}px, calc(100% - 116px))`, top: Math.max(0, hit.y - 150) }}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{hitRow.m.name}</div>
-                  <div className="num text-[11px] text-muted-foreground">{fmtCompact(hitRow.m.el)} eleitores</div>
+        )}
+        {hit && hitRow && (
+          // no mundo (mapa baixo) o cartão fica logo abaixo do mapa, sem cobrir as cidades; nas UFs, flutua sobre o toque
+          <div
+            className={cn('rounded-xl border bg-popover p-3 shadow-lg', abroad ? 'mt-2' : 'absolute z-10 w-56 -translate-x-1/2')}
+            style={abroad ? undefined : { left: `clamp(116px, ${hit.x}px, calc(100% - 116px))`, top: Math.max(0, hit.y - 150) }}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold">{hitRow.m.name}</div>
+                <div className="num truncate text-[11px] text-muted-foreground">
+                  {abroad && ABROAD[hitRow.m.tse] ? `${ABROAD[hitRow.m.tse][2]} · ` : ''}
+                  {fmtCompact(hitRow.m.el)} eleitores
                 </div>
-                <button type="button" onClick={() => setHit(null)} className="-mr-1 -mt-1 grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent" aria-label="Fechar">
-                  <X className="size-4" />
-                </button>
               </div>
-              {hitPa != null ? (
-                <div className="num mt-2 flex justify-between text-sm font-semibold">
-                  <span style={{ color: cands[0].color }}>{pair(hitPa)[0]}%</span>
-                  <span style={{ color: cands[1].color }}>{pair(hitPa)[1]}%</span>
-                </div>
-              ) : (
-                <div className="mt-2 text-xs text-muted-foreground">{layer === 'live' ? 'Parcial ainda não coletada' : 'Sem dado'}</div>
-              )}
-              <Button asChild size="sm" variant="secondary" className="mt-2 h-9 w-full">
-                <Link href={cityHref(hitRow.m)}>
-                  Ver a cidade <ArrowRight />
-                </Link>
-              </Button>
+              <button type="button" onClick={() => setHit(null)} className="-mr-1 -mt-1 grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent" aria-label="Fechar">
+                <X className="size-4" />
+              </button>
             </div>
-          )}
-          <MapLegend cands={cands} compact className="mt-3" />
-          <p className="mt-2 text-center text-[12px] text-muted-foreground">
-            {layer === 'live'
+            {hitPa != null ? (
+              <div className="num mt-2 flex justify-between text-sm font-semibold">
+                <span style={{ color: cands[0].color }}>{pair(hitPa)[0]}%</span>
+                <span style={{ color: cands[1].color }}>{pair(hitPa)[1]}%</span>
+              </div>
+            ) : (
+              <div className="mt-2 text-xs text-muted-foreground">{layer === 'live' ? 'Parcial ainda não coletada' : 'Sem dado'}</div>
+            )}
+            <Button asChild size="sm" variant="secondary" className="mt-2 h-9 w-full">
+              <Link href={cityHref(hitRow.m)}>
+                Ver a cidade <ArrowRight />
+              </Link>
+            </Button>
+          </div>
+        )}
+        <MapLegend cands={cands} compact className="mt-3" />
+        <p className="mt-2 text-center text-[12px] text-muted-foreground">
+          {abroad
+            ? layer === 'live'
+              ? `Todos os países somados no placar. Toque numa cidade para ver como votou (${withLive} de ${rows.length} com parcial).`
+              : layer === 't1'
+                ? 'Confronto direto entre os dois finalistas no 1º turno de 2026. Toque numa cidade.'
+                : '2º turno de 2022, pelos mesmos partidos. Toque numa cidade.'
+            : layer === 'live'
               ? `Toque numa cidade. O hexágono cresce conforme a região é apurada (${withLive} de ${rows.length} cidades com parcial).`
               : layer === 't1'
                 ? 'Confronto direto entre os dois finalistas no 1º turno de 2026. Toque numa cidade.'
                 : '2º turno de 2022, pelos mesmos partidos. Toque numa cidade.'}
-          </p>
-        </div>
-      )}
+        </p>
+      </div>
 
       {layer === 'live' && !abroad && (waiting ? leftPending && <WhereLeftSkeleton /> : <WhereLeft rows={rows} />)}
 
@@ -410,6 +436,7 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{r.m.name}</span>
                       <span className="num block text-[11px] text-muted-foreground">
+                        {abroad && ABROAD[r.m.tse] ? `${ABROAD[r.m.tse][2]} · ` : ''}
                         {fmtCompact(r.m.el)} eleitores
                         {layer === 'live' && r.s && ` · ${fmtPct(r.s.pst, 0)}% apurado`}
                       </span>

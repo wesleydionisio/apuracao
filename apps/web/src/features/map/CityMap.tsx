@@ -3,7 +3,7 @@
 import type { CandidateDef } from '@apuracao/shared';
 import { fmtPct } from '@apuracao/shared';
 import { ChevronRight } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'wouter';
 import { getJSON, type CityView } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -20,10 +20,13 @@ const coarse = () => typeof matchMedia !== 'undefined' && matchMedia('(pointer: 
 export default function CityMap({
   layer,
   cands,
+  below,
   className,
 }: {
   layer: DotLayer;
   cands: CandidateDef[];
+  /** logo abaixo do mapa, antes da legenda (a linha do exterior) */
+  below?: ReactNode;
   className?: string;
 }) {
   const board = useBoard((s) => s.board);
@@ -59,6 +62,7 @@ export default function CityMap({
             : undefined
         }
       />
+      {below}
       <Legend cands={cands} shades={shadesCss} layer={layer} stats={stats} />
       <PickedCity m={picked} dots={dots} values={values} cands={cands} onClose={() => setPicked(null)} />
     </div>

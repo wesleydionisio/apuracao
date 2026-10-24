@@ -1,4 +1,5 @@
 import { Maximize2, Minus, Plus } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 /**
  * +, − e "Brasil inteiro" no canto de baixo à esquerda: lá o enquadramento do Brasil é vazio (Paraguai/Argentina).
@@ -10,6 +11,7 @@ export function ZoomControls({
   onIn,
   onOut,
   onReset,
+  row = false,
 }: {
   zoomed: boolean;
   /** fora do enquadramento inicial (zoom ou arrastado na margem) */
@@ -17,12 +19,14 @@ export function ZoomControls({
   onIn: () => void;
   onOut: () => void;
   onReset: () => void;
+  /** em linha (mapas baixos, como o mundo, onde a coluna cobriria o mapa todo) */
+  row?: boolean;
 }) {
   const btn = 'group grid size-11 place-items-center disabled:pointer-events-none';
   const face =
     'grid size-8 place-items-center rounded-lg border bg-card/90 text-foreground shadow-sm backdrop-blur-sm transition-opacity group-active:scale-95 group-disabled:opacity-40';
   return (
-    <div className="absolute bottom-0 left-0 flex flex-col" role="group" aria-label="Zoom do mapa">
+    <div className={cn('absolute bottom-0 left-0 flex', row ? 'flex-row' : 'flex-col')} role="group" aria-label="Zoom do mapa">
       <button type="button" className={btn} onClick={onIn} aria-label="Aproximar">
         <span className={face}>
           <Plus className="size-4" aria-hidden />

@@ -8,6 +8,7 @@ import { useLocation, useParams } from 'wouter';
 import { SourceStamp } from '@/components/core/live';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { AbroadRow } from '@/features/map/Abroad';
 import { REF_LABEL, swingOf, swingValues, useStateValues, useUfRefs, type MapLayer, type RefLayer } from '@/features/map/data';
 import { MapLegend } from '@/features/map/Legend';
 import { MapRankings } from '@/features/map/Rankings';
@@ -223,7 +224,12 @@ function MapView({ board }: { board: Board }) {
       {byCity ? (
         <section className="rounded-2xl border bg-card p-3 sm:p-5">
           <Suspense fallback={<Skeleton className="aspect-[1000/1051] w-full rounded-xl" />}>
-            <CityMap layer={effective} cands={cands} className="mx-auto max-w-[620px]" />
+            <CityMap
+              layer={effective}
+              cands={cands}
+              below={<AbroadRow value={values.ZZ} cands={cands} onPick={() => pick('ZZ')} className="mt-3" />}
+              className="mx-auto max-w-[620px]"
+            />
           </Suspense>
         </section>
       ) : view === 'map' ? (
@@ -242,6 +248,7 @@ function MapView({ board }: { board: Board }) {
             </Suspense>
             {tip && <UfTip uf={tip.uf} x={tip.x} y={tip.y} value={values[tip.uf]} cands={cands} refs={tipRefs} />}
           </div>
+          <AbroadRow value={values.ZZ} cands={cands} onPick={() => pick('ZZ')} className="mx-auto mt-3 max-w-[620px]" />
           <MapLegend
             cands={cands}
             className="mt-3"
@@ -256,14 +263,6 @@ function MapView({ board }: { board: Board }) {
               </p>
             ))}
           </div>
-          {values.ZZ?.pa != null && (
-            <button type="button" onClick={() => pick('ZZ')} className="press mx-auto mt-3 flex min-h-10 items-center gap-2 rounded-full border px-3 text-xs">
-              Exterior
-              <span className="num font-semibold" style={{ color: values.ZZ.pa >= 50 ? cands[0].color : cands[1].color }}>
-                {fmtPct(Math.max(values.ZZ.pa, 100 - values.ZZ.pa), 1)}%
-              </span>
-            </button>
-          )}
         </section>
       ) : (
         <StateList

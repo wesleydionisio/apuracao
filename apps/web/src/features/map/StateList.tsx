@@ -1,7 +1,7 @@
 // Lista de estados: alternativa acessível ao mapa, ordenável. Densa, estilo mercado.
 import type { CandidateDef } from '@apuracao/shared';
 import { fmtPct, ufName } from '@apuracao/shared';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Globe } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -42,7 +42,8 @@ export function StateList({
       if (sort === 'swing') return swing?.[uf] == null ? -1 : Math.abs(swing[uf]!);
       return electorate[uf] ?? 0;
     };
-    return ufs.sort((x, y) => key(y) - key(x));
+    // o exterior não é estado: sempre por último, fora da ordenação
+    return ufs.sort((x, y) => (x === 'ZZ' ? 1 : 0) - (y === 'ZZ' ? 1 : 0) || key(y) - key(x));
   }, [values, electorate, sort]);
 
   return (
@@ -71,10 +72,10 @@ export function StateList({
                   className="grid h-8 w-9 shrink-0 place-items-center rounded-md text-[11px] font-semibold"
                   style={{ background: fillFor(v?.pa, cands), color: v?.pa != null && marginPts(v.pa) >= 5 ? 'var(--on-fill)' : 'var(--foreground)' }}
                 >
-                  {uf}
+                  {uf === 'ZZ' ? <Globe className="size-4" aria-hidden /> : uf}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{ufName(uf)}</span>
+                  <span className="block truncate text-sm font-medium">{uf === 'ZZ' ? 'Exterior, todos os países' : ufName(uf)}</span>
                   <span className="num flex items-center gap-2 text-[11px] text-muted-foreground">
                     <span>{fmtCompact(electorate[uf] ?? 0)} eleitores</span>
                     {showPst && v?.pst != null && (

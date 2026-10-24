@@ -1,6 +1,7 @@
 // Placar de estados: quantos estados cada um lidera e quanto eleitorado eles somam, num cabo de guerra.
 import type { CandidateDef } from '@apuracao/shared';
 import NumberFlow from '@number-flow/react';
+import { Globe } from 'lucide-react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { fmtCompact } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,7 @@ export function StateTally({
     }
   }
   const rest = Math.max(0, TOTAL - a - b);
+  const abroad = values.ZZ?.pa ?? null;
   const side = (c: CandidateDef, n: number, el: number, right = false) => (
     <div className={cn('flex min-w-0 items-center gap-2.5', right && 'flex-row-reverse text-right')}>
       <CandidateAvatar c={c} size="md" />
@@ -61,11 +63,22 @@ export function StateTally({
           const bg = i < a ? cands[0].color : i >= TOTAL - b ? cands[1].color : 'var(--muted)';
           return <span key={i} className="h-full flex-1 rounded-[2px] transition-colors duration-500" style={{ background: bg }} />;
         })}
+        {/* o exterior: fora da contagem de estados, um quadradinho menor e apagado depois dos 27 */}
+        <span
+          className="ml-1 h-full w-2 shrink-0 rounded-[2px] opacity-50 transition-colors duration-500"
+          style={{ background: abroad == null ? 'var(--muted)' : abroad > 50 ? cands[0].color : abroad < 50 ? cands[1].color : 'var(--muted)' }}
+        />
       </div>
       <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground">
         <span className="truncate">{caption ?? 'Estados em que cada um está à frente'}</span>
         {/* não existe colégio eleitoral: nada de "N para maioria" — o que vale é o voto popular */}
-        {rest > 0 && <span className="num shrink-0">{rest} sem dado</span>}
+        <span className="num flex shrink-0 items-center gap-2">
+          {rest > 0 && <span>{rest} sem dado</span>}
+          <span className="inline-flex items-center gap-0.5">
+            <Globe className="size-3" aria-hidden />
+            ext.
+          </span>
+        </span>
       </div>
     </section>
   );

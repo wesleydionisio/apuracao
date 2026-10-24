@@ -5,6 +5,7 @@ import { buildFonts } from './fonts';
 import { buildGeo } from './geo';
 import { buildPhotos } from './photos';
 import { buildT1 } from './t1-2026';
+import { buildWorld } from './world';
 import { buildY2022 } from './y2022';
 
 const t0 = Date.now();
@@ -18,6 +19,7 @@ const step = async (name: string, fn: () => unknown) => {
 await step('1º turno 2026 + municípios', buildT1);
 await step('2022', buildY2022);
 await step('geo', buildGeo);
+await step('mapa-múndi', buildWorld);
 await step('mapa de pontos', buildDots);
 await step('fontes', buildFonts);
 await step('fotos dos candidatos', buildPhotos);
