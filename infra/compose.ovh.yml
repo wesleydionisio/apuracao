@@ -9,7 +9,7 @@
 #   não a máquina inteira (o hub junto). Soma ≈ 2,5 GB, o que sobra além do hub
 services:
   redis:
-    command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '256mb', '--maxmemory-policy', 'allkeys-lru']
+    command: ['redis-server', '--save', '', '--appendonly', 'yes', '--appendfsync', 'everysec', '--maxmemory', '256mb', '--maxmemory-policy', 'allkeys-lru']
     mem_limit: 300m
   postgres:
     command: ['postgres', '-c', 'shared_buffers=128MB', '-c', 'max_connections=40']

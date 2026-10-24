@@ -27,7 +27,9 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '1gb', '--maxmemory-policy', 'allkeys-lru']
+    # AOF em disco: chat e torcida só existem aqui, e um container recriado (deploy, reinício do Docker) voltava vazio
+    command: ['redis-server', '--save', '', '--appendonly', 'yes', '--appendfsync', 'everysec', '--maxmemory', '1gb', '--maxmemory-policy', 'allkeys-lru']
+    volumes: [redis_data:/data]
 
   postgres:
     image: postgres:16-alpine
@@ -74,4 +76,5 @@ services:
 
 volumes:
   pg:
+  redis_data:
   caddy_data:
