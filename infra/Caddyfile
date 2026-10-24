@@ -20,7 +20,8 @@
 	# WebSocket → workers (stateless, Redis faz o fan-out entre eles)
 	# dentro de handle: solto, o reverse_proxy roda depois do handle final da SPA e /ws vira index.html
 	handle /ws {
-		reverse_proxy ws1:3002 ws2:3002 ws3:3002 ws4:3002 {
+		# WS_UPSTREAMS vem do docker-compose (padrão: os 4 workers; numa VPS menor, o override lista menos)
+		reverse_proxy {$WS_UPSTREAMS} {
 			lb_policy least_conn
 			health_uri /health
 			health_interval 10s

@@ -51,7 +51,7 @@ services:
       <<: *env
       SERVE_DATA: '0'
       # painel admin: saúde e métricas de cada worker
-      WS_URLS: http://ws1:3002,http://ws2:3002,http://ws3:3002,http://ws4:3002
+      WS_URLS: ${WS_URLS:-http://ws1:3002,http://ws2:3002,http://ws3:3002,http://ws4:3002}
 
   # um worker WS por vCPU; o Caddy balanceia (least_conn)
   ws1: { <<: *ws, environment: { <<: *env, WORKER_ID: ws1 } }
@@ -64,6 +64,8 @@ services:
     restart: unless-stopped
     ports: ['80:80', '443:443']
     env_file: .env
+    environment:
+      WS_UPSTREAMS: ${WS_UPSTREAMS:-ws1:3002 ws2:3002 ws3:3002 ws4:3002}
     volumes:
       - ./public/data:/srv/data:ro
       - caddy_data:/data

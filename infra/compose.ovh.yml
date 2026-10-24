@@ -1,0 +1,16 @@
+# VPS da OVH (2 vCPU, 4 GB), dividida com outro projeto (o "hub", fora do Docker). Ligado pelo .env da VPS:
+#   COMPOSE_FILE=docker-compose.yml:infra/compose.ovh.yml
+# - nenhuma porta pública: o nginx da máquina termina o HTTPS de urnadigital.online e repassa para o Caddy
+#   em 127.0.0.1:8090 (infra/nginx-urnadigital.conf); o Caddy atende em HTTP puro (SITE_HOST=":80" no .env)
+# - 2 workers WS, um por vCPU (WS_UPSTREAMS e WS_URLS no .env listam os dois)
+# - Redis e Postgres com memória contida, para sobrar para o hub
+services:
+  redis:
+    command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '256mb', '--maxmemory-policy', 'allkeys-lru']
+  postgres:
+    command: ['postgres', '-c', 'shared_buffers=128MB', '-c', 'max_connections=40']
+  ws3: { profiles: [off] }
+  ws4: { profiles: [off] }
+  caddy:
+    ports: !override ['127.0.0.1:8090:80']
+    depends_on: !override [api, ws1, ws2]
