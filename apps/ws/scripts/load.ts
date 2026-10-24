@@ -50,7 +50,10 @@ function open() {
   const i = ++seq;
   const headers: Record<string, string> = { 'x-forwarded-for': fakeIp() };
   if (SECRET) headers.cookie = `sid=${signToken({ uid: `carga-${i}`, user: `carga${i}` }, SECRET)}`;
-  const ws = new WebSocket(URL_, { headers });
+  // HOST=urnadigital.online com WS_URL=wss://<ip da VPS>/ws: testa a origem sem a Cloudflare (que limita conexões
+  // simultâneas por IP de quem testa); o certificado de origem não vale para o IP, daí o rejectUnauthorized
+  if (env.HOST) headers.host = env.HOST;
+  const ws = new WebSocket(URL_, env.HOST ? { headers, servername: env.HOST, rejectUnauthorized: false } : { headers });
   ws.on('open', () => {
     stats.opened++;
     ws.send(JSON.stringify({ t: 'join', rooms: ONLY ? [ONLY] : ['br', room] }));
@@ -61,7 +64,11 @@ function open() {
     stats.frames++;
     onMsg(JSON.parse(raw.toString()));
   });
-  ws.on('error', () => stats.failed++);
+  ws.on('error', (e) => {
+    stats.failed++;
+    const k = `conn: ${e.message.slice(0, 60)}`;
+    stats.errs[k] = (stats.errs[k] ?? 0) + 1;
+  });
   ws.on('close', () => stats.closed++);
 }
 

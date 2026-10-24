@@ -95,7 +95,14 @@ compose que não publica porta nenhuma para fora: o nginx da máquina termina o 
   faixas da Cloudflare (quem bate direto no IP com o cabeçalho inventado vira o próprio IP).
 - **Limites da máquina** (aplicados em 24/10): nginx com `worker_rlimit_nofile 262144` e `worker_connections 65536`
   (`/etc/nginx/nginx.conf`, backup `.bak-*` ao lado); `infra/sysctl-apuracao.conf` em `/etc/sysctl.d/99-apuracao.conf`
-  (portas de saída, conntrack de 1 M). Cada container tem teto de memória (`infra/compose.ovh.yml`).
+  (portas de saída, conntrack de 1 M). Docker com `"userland-proxy": false` (`/etc/docker/daemon.json`): as portas
+  em 127.0.0.1 passam por iptables, não por um processo `docker-proxy` com 2 sockets a mais por WebSocket. Cada
+  container tem teto de memória (`infra/compose.ovh.yml`).
+- **Teste de carga (24/10, do Mac direto na origem, 8 mil WebSockets):** zero falhas, load ~1, ~68 KB por conexão
+  somando nginx (TLS) e kernel; os workers quase não sobem (~70 MB cada). Teto estimado: ~25 mil conexões na
+  máquina. Pela Cloudflare, um IP só não passa de ~2.300 WebSockets simultâneos (503 da própria Cloudflare); para
+  medir a origem: `WS_URL=wss://51.222.220.40/ws HOST=urnadigital.online` no `pnpm --filter @apuracao/ws load`, com
+  `IP_CONN_LIMIT`/`IP_BURST`/`IP_REFILL` altos no `.env` só durante o teste.
 - **Na noite:** `tail -f var/metrics.log` (uma linha por minuto: conexões e heap de cada worker, memória livre, load,
   conntrack) e `sudo tail -f /var/log/nginx/error.log`. O alerta no Telegram cobre poller, API e os dois workers.
 - **Entrar na VPS:** `ssh -i ~/.ssh/urnadigital_ovh ubuntu@51.222.220.40` → `cd /opt/apuracao`, `docker compose ps`,

@@ -35,7 +35,7 @@ target=$(git rev-parse --verify -q "origin/$ref^{commit}" || git rev-parse --ver
 log "deploy $(git log -1 --format='%h %s' "$target") (no ar: ${cur:0:7})"
 
 # o que muda o WS (ou a forma de subir os containers): só aí os workers reiniciam
-WS_PATHS=(apps/ws packages pnpm-lock.yaml package.json Dockerfile docker-compose.yml infra/compose.ovh.yml)
+WS_PATHS=(apps/ws/src apps/ws/package.json packages pnpm-lock.yaml package.json Dockerfile docker-compose.yml infra/compose.ovh.yml)
 ws_changed() { [ -n "$full" ] || ! git diff --quiet "$1" "$2" -- "${WS_PATHS[@]}"; }
 
 up() {
