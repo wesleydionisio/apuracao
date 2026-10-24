@@ -74,6 +74,25 @@ Testes: `pnpm test`.
 
 ## Produção (VPS)
 
+### Onde está e como subir uma mudança
+
+`urnadigital.online` roda na VPS da OVH `vps-57eba115` (51.222.220.40, 2 vCPU / 4 GB), em `/opt/apuracao`, dividindo a
+máquina com o projeto "hub" (nginx, Next, PHP e MySQL fora do Docker). A apuração fica isolada num projeto do docker
+compose que não publica porta nenhuma para fora: o nginx da máquina termina o HTTPS (certificado de origem da Cloudflare em
+`/etc/ssl/urnadigital/`, válido até 2041) e repassa para o Caddy em `127.0.0.1:8090` (`infra/nginx-urnadigital.conf`,
+`infra/compose.ovh.yml`). O `.env` da VPS liga o override (`COMPOSE_FILE`) e lista os 2 workers WS.
+
+- **Push na `main` = deploy.** O GitHub Actions (`.github/workflows/deploy.yml`) roda typecheck e testes (~40 s) e chama
+  `infra/deploy.sh` na VPS (~50 s): builda com o site no ar, troca os containers, confere API e WS e, se algo não ficar
+  saudável, volta sozinho para a versão anterior. Um deploy por vez.
+- **Na pressa (noite da apuração):** GitHub → Actions → Deploy → Run workflow, com "Pular typecheck e testes".
+- **Voltar uma versão:** Run workflow com `rollback` (ou um commit), ou na VPS: `./infra/deploy.sh rollback`.
+- **Entrar na VPS:** `ssh -i ~/.ssh/urnadigital_ovh ubuntu@51.222.220.40` → `cd /opt/apuracao`, `docker compose ps`,
+  `docker compose logs -f api ws1 poller`, `tail var/deploy.log`.
+- Segredos do Actions: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`. A VPS lê o repositório com uma deploy key só de leitura.
+
+### Montar do zero numa VPS própria
+
 1. Kernel: `sudo cp infra/sysctl-apuracao.conf /etc/sysctl.d/99-apuracao.conf && sudo sysctl --system`
 2. `cp .env.example .env` e preencha (`SECRET`, `ADMIN_TOKEN`, `POSTGRES_PASSWORD`, `SITE_HOST`, `PUBLIC_URL`).
 3. `pnpm install && pnpm etl` (gera `public/data/static`, `apps/web/public/geo`, fontes dos cards).
