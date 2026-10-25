@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react';
 import { Route, Router, Switch, useLocation } from 'wouter';
 import { useCandidateCssVars } from '@/components/core/candidate';
-import { Header, headerMini, MINI_H } from '@/components/shell/Header';
+import { Header, headerMini, MINI_H, useMiniInHeader } from '@/components/shell/Header';
 import { CookieBanner } from '@/components/shell/CookieBanner';
 import { TabBar } from '@/components/shell/TabBar';
 import { Toaster } from './components/ui';
@@ -103,7 +103,8 @@ function Frame() {
   const headerRef = useRef<HTMLDivElement>(null);
   const [path] = useLocation();
   useViewportVars(headerRef);
-  const mini = headerMini(path);
+  const inHeader = useMiniInHeader(path);
+  const mini = inHeader ? 'none' : headerMini(path);
   // antes do quadro novo (a transição de tela fotografa a página já no topo)
   useLayoutEffect(() => {
     window.scrollTo(0, 0);

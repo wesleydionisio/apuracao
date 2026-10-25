@@ -370,7 +370,8 @@ export function NightSpark({
           {pa22 !== null && <div className="mt-1 border-t pt-1 text-[10.5px] text-muted-foreground">2022: {matchup2022(board)}</div>}
         </div>
       )}
-      {(pts.length > 1 || g22 || cone) && <ZoomButtons z={zoom} className="absolute top-0 left-1" />}
+      {/* botões só com a linha de hoje: antes das 17h eles cobririam os rótulos (a pinça segue valendo) */}
+      {pts.length > 1 && <ZoomButtons z={zoom} className="absolute top-0 left-1" />}
       {/* sem linha ainda e sem referências desenhadas: o aviso no meio (com 2022/1º turno ele cobriria os rótulos) */}
       {!pts.length && !g22 && t1 == null && !fullAxis && (
         <div className="absolute inset-0 flex items-center justify-center text-[12px] text-muted-foreground">

@@ -363,7 +363,7 @@ export function LiveScore({
         {chartAlways && (
           <div className="mt-2">
             <RefChips refs={refs} set={setRefs} hist={hist} showChart={false} board={board} className="mb-2" />
-            <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} proj={refs.proj} height={size === 'lg' ? 220 : 104} />
+            <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} proj={refs.proj} height={size === 'lg' ? 220 : 150} />
             {/* linha reservada: ligar camadas não empurra o letreiro */}
             <SparkLegend board={board} proj={refs.proj && !!board.projection} y22={refs.y22 && !!curve22} t1={refs.t1 && hist.t1 !== null} />
           </div>

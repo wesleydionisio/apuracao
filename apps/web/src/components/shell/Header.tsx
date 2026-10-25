@@ -8,6 +8,7 @@ import { CandidateAvatar } from '@/components/core/candidate';
 import { LivePill, StalePill } from '@/components/core/live';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useMedia } from '@/features/watch/hooks';
 import { useBoard } from '@/store/board';
 import { useNow } from '../ui';
 import { fmtCountdown, Logo, SplitBar } from './bits';
@@ -42,6 +43,16 @@ export function headerMini(path: string): 'none' | 'hero' | 'pinned' {
   return path.startsWith('/painel') ? 'hero' : 'pinned';
 }
 
+/**
+ * Antes das 17h, nas telas "pinned", a faixa só teria a contagem: de 640px para cima ela vai para o centro do
+ * cabeçalho (que fica vazio) e a faixa some; no celular não cabe, e a faixa fica. O App usa o mesmo para a folga do topo.
+ */
+export function useMiniInHeader(path: string): boolean {
+  const board = useBoard((s) => s.board);
+  const wide = useMedia('(min-width: 640px)');
+  return wide && headerMini(path) === 'pinned' && !!board && !board.released;
+}
+
 /** ao vivo, mas sem placar novo há mais de 90 s (poller/CDN/rede): mostra de quando é. O /painel tem o próprio "atualizado há" */
 function HeaderStatus() {
   const link = useBoard((s) => s.link);
@@ -64,7 +75,8 @@ export function Header() {
   const hero = useBoard((s) => s.heroVisible);
   const [path] = useLocation();
   const live = !!board?.released && !!board.br;
-  const mini = headerMini(path);
+  const inHeader = useMiniInHeader(path);
+  const mini = inHeader ? 'none' : headerMini(path);
   // Painel antes das 17h: a contagem já é o topo da página; o mini (só a contagem de novo) ficaria por cima dela
   const show = mini === 'pinned' || (mini === 'hero' && live && !hero);
   return (
@@ -85,8 +97,11 @@ export function Header() {
                 2º turno
               </span>
             </Link>
-            <HeaderStatus />
-            <ThemeToggle />
+            {inHeader && board && <MiniCountdown board={board} className="h-auto shrink-0" />}
+            <div className="flex flex-1 items-center justify-end gap-2">
+              <HeaderStatus />
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </header>
@@ -155,13 +170,13 @@ function MiniScore({ board }: { board: Board }) {
   );
 }
 
-export function MiniCountdown({ board }: { board: Board }) {
+export function MiniCountdown({ board, className }: { board: Board; className?: string }) {
   const now = useNow(1000);
   const left = Date.parse(board.releaseAt) - now;
   return (
     <Link
       href="/"
-      className="flex h-[46px] items-center justify-center text-[11.5px] font-medium tracking-[0.08em] text-foreground/75 uppercase"
+      className={cn('flex h-[46px] items-center justify-center text-[11.5px] font-medium tracking-[0.08em] text-foreground/75 uppercase', className)}
     >
       <span>
         Placar abre em{' '}

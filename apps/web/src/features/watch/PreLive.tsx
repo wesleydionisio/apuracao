@@ -96,13 +96,8 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
           t1={refs.t1 ? t1 : null}
           flip22={flip22}
           fullAxis
-          height={size === 'lg' ? 180 : 104}
+          height={size === 'lg' ? 200 : 168}
         />
-        <p className="mt-1 text-[11.5px] leading-snug text-muted-foreground">
-          {refs.y22 ? 'Em violeta: o 2º turno de 2022 ao longo da apuração (reconstrução). ' : ''}
-          {refs.t1 ? 'Em âmbar: o 1º turno. ' : ''}A linha vertical marca onde a liderança trocou de lado em 2022. A linha de hoje
-          começa às 17h, e a projeção (pontilhada, até 100%) a partir de 20% apurado.
-        </p>
       </div>
 
       <div className="mt-2.5 flex items-center justify-between gap-2 text-[11.5px] text-muted-foreground">
