@@ -12,7 +12,7 @@
 // O relógio é controlável (play/pausa/velocidade/ir para t) — usado pela barra de debug local.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { parseProgress, parseResult, twoWay, UF_REGION, type CandidateDef, type HistRow } from '@apuracao/shared';
+import { parseProgress, parseResult, tseTz, twoWay, UF_REGION, type CandidateDef, type HistRow } from '@apuracao/shared';
 import type { Config } from './config';
 import type { History } from './history';
 import type { Source } from './source';
@@ -367,6 +367,7 @@ export class ReplaySource implements Source {
       ele: this.cfg.tse.code,
       tpabr: m[2] === 'br' ? 'br' : munCode ? 'mu' : 'uf',
       cdabr: munCode || m[3],
+      tz: m[2] === 'br' ? '-03:00' : tseTz(uf, munCode || undefined),
       clock,
       done,
       cands: this.cands.map((x, i) => ({ ...x, vap: i === 0 ? c.va : c.vb })),
@@ -453,6 +454,8 @@ function fakeTse(o: {
   ele: string;
   tpabr: string;
   cdabr: string;
+  /** fuso da hora local do lugar, como o TSE grava dt/ht */
+  tz: string;
   clock: Date;
   done: boolean;
   cands: { n: string; name: string; seq: number; sq?: string; party?: string; vap: number }[];
@@ -464,12 +467,16 @@ function fakeTse(o: {
   blank: number;
   nulls: number;
 }) {
-  const brt = new Date(o.clock.getTime() - 3 * 3_600_000).toISOString();
-  const dt = `${brt.slice(8, 10)}/${brt.slice(5, 7)}/${brt.slice(0, 4)}`;
-  const ht = brt.slice(11, 19);
+  const wall = (h: number) => {
+    const iso = new Date(o.clock.getTime() + h * 3_600_000).toISOString();
+    return [`${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`, iso.slice(11, 19)];
+  };
+  // geração (dg/hg) em Brasília; totalização (dt/ht) na hora local
+  const [dg, hg] = wall(-3);
+  const [dt, ht] = wall(Number(o.tz.slice(0, 3)));
   const ts = Math.max(1, Math.round(o.el / 320));
   return {
-    ele: o.ele, t: '2', f: 's', tpabr: o.tpabr, cdabr: o.cdabr, dg: dt, hg: ht, dt, ht,
+    ele: o.ele, t: '2', f: 's', tpabr: o.tpabr, cdabr: o.cdabr, dg, hg, dt, ht,
     tf: o.done ? 's' : 'n', and: o.done ? 'f' : o.pst > 0 ? 'p' : 'n',
     carg: [{
       cd: '1', agr: o.cands.map((c) => ({

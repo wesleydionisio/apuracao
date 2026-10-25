@@ -62,6 +62,13 @@ test('arquivo antigo do CDN do TSE não faz o placar voltar nem repetir marco', 
   assert.equal(r.state.ufs['uf:ZZ'].pst, 60.47);
   assert.equal(r.state.br?.pst, 1.1);
   assert.equal(r.moments.length, 0);
+
+  // a hora guardada veio com o fuso errado e parece mais nova que a de agora: seção nova entra mesmo assim
+  r = step(r.state, brAt('2026-10-25T19:29:15-03:00', 1.2), zz('2026-10-25T20:00:00-02:00', 60.55, 141405, 95672));
+  assert.equal(r.state.ufs['uf:ZZ'].pst, 60.55);
+  // e com as mesmas seções, a versão "mais velha" fica de fora
+  r = step(r.state, brAt('2026-10-25T19:29:15-03:00', 1.2), zz('2026-10-25T19:59:00-02:00', 60.55, 141405, 95672));
+  assert.equal(r.state.ufs['uf:ZZ'].at, '2026-10-25T20:00:00-02:00');
 });
 
 test('projeção: sem modelo por cidade usa o modelo por UF; "à frente" só depois de ciclos seguidos', async () => {

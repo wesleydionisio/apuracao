@@ -17,7 +17,7 @@ import {
   type ProjModel,
   type Side,
 } from '@apuracao/shared';
-import { emptyState, projectionStep, runCycle, toBoard, type PollState } from './board';
+import { emptyState, isOlder, projectionStep, runCycle, toBoard, type PollState } from './board';
 import { config } from './config';
 import { loadHistory, readJson } from './history';
 import { hashOf, loadState, Output, writeJsonAtomic } from './output';
@@ -63,7 +63,7 @@ const munTargets = hist.municipalities
 
 async function fetchResult(uf: string, munTse?: string): Promise<ParsedResult | null> {
   const raw = await source.get(tsePaths.result(election, uf, munTse));
-  return raw ? parseResult(raw) : null;
+  return raw ? parseResult(raw, uf) : null;
 }
 
 async function cycle(opts: { allMun?: boolean } = {}) {
@@ -112,11 +112,11 @@ async function cycleAt(opts: { allMun?: boolean }) {
   progRes.forEach((raw, i) => {
     if (!raw || raw instanceof Error) return;
     const UF = ufCodes[i].toUpperCase();
-    for (const r of parseMunProgress(raw)) {
+    for (const r of parseMunProgress(raw, UF)) {
       const m = hist.byTse.get(`${UF}:${r.tse}`);
       // andamento de uma versão antiga do arquivo (CDN do TSE): fica o mais novo que já temos
-      const had = m && munProg.get(m.ibge)?.at;
-      if (had && r.at && Date.parse(r.at) < Date.parse(had)) continue;
+      const had = m && munProg.get(m.ibge);
+      if (had && isOlder({ pst: r.pst, at: r.at ?? '' }, { pst: had.pst, at: had.at ?? '' })) continue;
       if (m) munProg.set(m.ibge, { pst: r.pst, at: r.at, el: m.el, te: r.el, elc: r.elc, turnout: r.turnout });
     }
   });

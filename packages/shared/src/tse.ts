@@ -39,11 +39,36 @@ function pct(v: unknown): number {
 }
 
 /** "05/10/2026" + "12:51:05" -> "2026-10-05T12:51:05-03:00" */
-export function tseDate(d?: string, h?: string): string | null {
+export function tseDate(d?: string, h?: string, tz = '-03:00'): string | null {
   if (!d) return null;
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(d.trim());
   if (!m) return null;
-  return `${m[3]}-${m[2]}-${m[1]}T${(h || '00:00:00').trim()}-03:00`;
+  return `${m[3]}-${m[2]}-${m[1]}T${(h || '00:00:00').trim()}${tz}`;
+}
+
+/** o TSE grava dt/ht (hora da totalização) na hora local do lugar; dg/hg (geração do arquivo) é sempre a de Brasília */
+const UF_TZ: Record<string, string> = { AC: '-05:00', AM: '-04:00', MS: '-04:00', MT: '-04:00', RO: '-04:00', RR: '-04:00' };
+/** cidades fora do fuso da UF ("UF:código TSE"), conferidas nos horários do TSE na noite do 2º turno */
+const MUN_TZ: Record<string, string> = {
+  // oeste do Amazonas, em UTC-5 como o Acre
+  'AM:02917': '-05:00', // Amaturá
+  'AM:02054': '-05:00', // Atalaia do Norte
+  'AM:02135': '-05:00', // Benjamin Constant
+  'AM:02291': '-05:00', // Eirunepé
+  'AM:02313': '-05:00', // Envira
+  'AM:02020': '-05:00', // Guajará
+  'AM:02399': '-05:00', // Ipixuna
+  'AM:98370': '-05:00', // Itamarati
+  'AM:02755': '-05:00', // São Paulo de Olivença
+  'AM:98477': '-05:00', // Tabatinga
+  'PE:30015': '-02:00', // Fernando de Noronha
+};
+
+/** fuso do dt/ht de um arquivo do TSE. As cidades do exterior vêm no fuso de cada país e ficam
+ *  marcadas como Brasília (a hora delas não aparece em tela; o arquivo do exterior inteiro vem em Brasília). */
+export function tseTz(uf: string, munTse?: string): string {
+  const UF = uf.toUpperCase();
+  return (munTse && MUN_TZ[`${UF}:${munTse}`]) || UF_TZ[UF] || '-03:00';
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,10 +100,12 @@ export function parseColorMap(s: string | undefined): Record<string, string> {
   return out;
 }
 
-export function parseResult(raw: Any): ParsedResult {
+/** `uf`: UF do arquivo, para o fuso da hora de um município (o de UF já diz a própria UF) */
+export function parseResult(raw: Any, uf?: string): ParsedResult {
   if (!raw || typeof raw !== 'object') throw new Error('TSE: JSON vazio');
   const tpabr = String(raw.tpabr ?? '').toLowerCase();
   const scope: ParsedResult['scope'] = tpabr === 'mu' ? 'mun' : tpabr === 'uf' ? 'uf' : 'br';
+  const tz = scope === 'br' ? '-03:00' : scope === 'uf' ? tseTz(String(raw.cdabr)) : tseTz(uf ?? '', String(raw.cdabr));
   const votes: ParsedResult['votes'] = {};
   const names: ParsedResult['names'] = {};
   for (const [c, party] of candidatesOf(raw)) {
@@ -100,7 +127,7 @@ export function parseResult(raw: Any): ParsedResult {
     code: scope === 'br' ? 'br' : scope === 'uf' ? String(raw.cdabr).toUpperCase() : String(raw.cdabr),
     round: String(raw.t) === '2' ? 2 : 1,
     election: String(raw.ele ?? ''),
-    at: tseDate(raw.dt, raw.ht) ?? tseDate(raw.dg, raw.hg) ?? new Date().toISOString(),
+    at: tseDate(raw.dt, raw.ht, tz) ?? tseDate(raw.dg, raw.hg) ?? new Date().toISOString(),
     totalized: raw.tf === 's',
     sections: { total: num(s.ts), counted: num(s.st) },
     pst: pct(s.pstn ?? s.pst),
@@ -133,7 +160,7 @@ export function parseProgress(raw: Any): ProgressRow[] {
     el: num(r.e?.te),
     elc: num(r.e?.est),
     turnout: num(r.e?.c),
-    at: tseDate(r.dt, r.ht),
+    at: tseDate(r.dt, r.ht, tseTz(String(r.cdabr))),
   }));
 }
 
@@ -149,8 +176,8 @@ export interface MunProgress {
   at: string | null;
 }
 
-/** <uf>-e<ele>-ab.json: andamento de cada município da UF */
-export function parseMunProgress(raw: Any): MunProgress[] {
+/** <uf>-e<ele>-ab.json: andamento de cada município da UF (`uf` dá o fuso da hora de cada cidade) */
+export function parseMunProgress(raw: Any, uf = ''): MunProgress[] {
   return (raw?.abr ?? [])
     .filter((r: Any) => String(r.tpabr).toLowerCase().startsWith('mu'))
     .map((r: Any) => ({
@@ -159,7 +186,7 @@ export function parseMunProgress(raw: Any): MunProgress[] {
       el: num(r.e?.te),
       elc: num(r.e?.est),
       turnout: num(r.e?.c),
-      at: tseDate(r.dt, r.ht),
+      at: tseDate(r.dt, r.ht, tseTz(uf, String(r.cdabr))),
     }));
 }
 

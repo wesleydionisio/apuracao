@@ -75,10 +75,15 @@ const MAX_MOMENTS = 200;
 const same = (x: Snap | undefined | null, y: Snap) =>
   !!x && x.at === y.at && x.pst === y.pst && x.a === y.a && x.b === y.b && x.status === y.status;
 
-/** o CDN do TSE às vezes devolve uma versão antiga do arquivo (até a zerada da véspera):
- *  totalização mais velha que a que já temos é ignorada, para o placar não andar para trás
- *  nem disparar de novo um marco já cruzado */
-export const isStale = (s: Snap, prev: Snap | undefined | null) => !!prev && Date.parse(s.at) < Date.parse(prev.at);
+/** o CDN do TSE às vezes devolve uma versão antiga do arquivo (até a zerada da véspera): a apuração
+ *  não anda para trás, então menos seções apuradas (ou as mesmas, com totalização mais velha) é arquivo velho.
+ *  O % vem antes da hora para uma mudança de fuso na leitura da hora não travar o escopo. */
+export const isOlder = (s: { pst: number; at: string }, prev: { pst: number; at: string }) =>
+  s.pst < prev.pst || (s.pst === prev.pst && Date.parse(s.at) < Date.parse(prev.at));
+
+/** ignorar este parcial: é de um arquivo mais velho que o que já temos (e assim o placar não volta
+ *  nem dispara de novo um marco já cruzado) */
+export const isStale = (s: Snap, prev: Snap | undefined | null) => !!prev && isOlder(s, prev);
 
 export function runCycle(prev: PollState, i: CycleInput): CycleOutput {
   const t1uf = i.hist.t1?.uf;

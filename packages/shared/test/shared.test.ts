@@ -192,6 +192,29 @@ test('andamento por município (ab da UF)', async () => {
   assert.deepEqual(rows[0], { tse: '61000', pst: 100, el: 6336, elc: 6336, turnout: 5012, at: '2026-10-04T18:49:26-03:00' });
 });
 
+test('hora do TSE no fuso do lugar: dt/ht é hora local, dg/hg é Brasília', async () => {
+  const { parseMunProgress, tseTz } = await import('../src/index');
+  const head = (o: Record<string, string>) => ({ ele: '6258', t: '2', dg: '25/10/2026', hg: '19:41:05', dt: '25/10/2026', ...o });
+  const at = (raw: Record<string, string>, uf?: string) => Date.parse(parseResult(raw, uf).at);
+  const brt1940 = Date.parse('2026-10-25T19:40:00-03:00');
+  // às 19:40 de Brasília: Acre 17:40, Rondônia 18:40, exterior (o arquivo inteiro) em Brasília
+  assert.equal(parseResult(head({ tpabr: 'uf', cdabr: 'ac', ht: '17:40:52' })).at, '2026-10-25T17:40:52-05:00');
+  assert.ok(Math.abs(at(head({ tpabr: 'uf', cdabr: 'ac', ht: '17:40:52' })) - brt1940) < 60_000);
+  assert.ok(Math.abs(at(head({ tpabr: 'uf', cdabr: 'ro', ht: '18:40:47' })) - brt1940) < 60_000);
+  assert.ok(Math.abs(at(head({ tpabr: 'uf', cdabr: 'zz', ht: '19:40:34' })) - brt1940) < 60_000);
+  // cidades: a UF vem de quem buscou; oeste do AM em UTC-5, Noronha em UTC-2
+  assert.ok(Math.abs(at(head({ tpabr: 'mu', cdabr: '01392', ht: '17:40:45' }), 'ac') - brt1940) < 60_000); // Rio Branco
+  assert.ok(Math.abs(at(head({ tpabr: 'mu', cdabr: '98477', ht: '17:40:41' }), 'am') - brt1940) < 60_000); // Tabatinga
+  assert.ok(Math.abs(at(head({ tpabr: 'mu', cdabr: '02550', ht: '18:40:10' }), 'am') - brt1940) < 60_000); // Manaus
+  assert.ok(Math.abs(at(head({ tpabr: 'mu', cdabr: '30015', ht: '20:40:51' }), 'pe') - brt1940) < 60_000); // Noronha
+  // sem dt/ht: a hora de geração, que é de Brasília
+  assert.equal(parseResult(head({ tpabr: 'uf', cdabr: 'ac', dt: '' })).at, '2026-10-25T19:41:05-03:00');
+  // o mesmo código TSE no exterior não herda o fuso de Noronha
+  assert.equal(tseTz('ZZ', '30015'), '-03:00');
+  const rows = parseMunProgress({ abr: [{ tpabr: 'mun', cdabr: '98477', dt: '25/10/2026', ht: '17:40:41', s: {}, e: {} }] }, 'AM');
+  assert.equal(rows[0].at, '2026-10-25T17:40:41-05:00');
+});
+
 test('wireSide: só a/b viram lado; neutro, null e lixo são sem lado (cliente antigo ou novo)', () => {
   assert.equal(wireSide('a'), 'a');
   assert.equal(wireSide('b'), 'b');
