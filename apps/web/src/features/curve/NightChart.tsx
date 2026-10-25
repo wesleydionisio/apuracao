@@ -3,13 +3,16 @@
 import type { Board, CandidateDef } from '@apuracao/shared';
 import { twoWay } from '@apuracao/shared';
 import NumberFlow from '@number-flow/react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { staticData } from '@/lib/api';
 import { fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { monotonePath, nearest, separate, yDomain, type XY } from './geometry';
+import { LAYER, projectionPath } from './layers';
+import { Swatch } from './Swatch';
+import { matchup2022 } from '@/lib/y2022';
 
 type C22 = Awaited<ReturnType<typeof staticData.curve2022>>;
 interface Pt {
@@ -81,6 +84,7 @@ export default function NightChart({
   defaultMode = 'hoje',
   overlays,
   projection: withProjection = true,
+  toolbar,
 }: {
   board: Board;
   className?: string;
@@ -90,9 +94,11 @@ export default function NightChart({
   modes?: ChartMode[];
   defaultMode?: ChartMode;
   /** camadas controladas de fora (ex.: chips "Comparar com"); com isso o seletor interno some */
-  overlays?: { y22?: boolean; t1?: boolean };
+  overlays?: { y22?: boolean; t1?: boolean; proj?: boolean };
   /** desenha a projeção: o caminho do parcial até 100% e a faixa de 95% (padrão: sim, quando houver) */
   projection?: boolean;
+  /** botões das camadas, dentro do gráfico (no topo) */
+  toolbar?: ReactNode;
 }) {
   const [ca, cb] = board.candidates;
   const [mode, setMode] = useState<ChartMode>(defaultMode);
@@ -131,22 +137,9 @@ export default function NightChart({
 
   const pst = board.br?.pst ?? 0;
   const last = now[now.length - 1];
-  // projeção: o caminho do parcial até 100% se o que falta chegar aos poucos, na proporção (o contado mais uma fração
-  // w do resto estimado); em w = 1 é a projeção final. A faixa sai do mesmo jeito com o piso e o teto de 95%.
-  const cone = useMemo(() => {
-    const p = board.projection;
-    const br = board.br;
-    if (!withProjection || !board.flags.projection || !p || !br || !br.valid || !p.rem || !last || br.pst >= 99.8) return null;
-    const V = br.a + br.b;
-    const R = p.rem;
-    const at = (final: number, w: number) => ((br.a + w * ((final / 100) * (V + R) - br.a)) / (V + w * R)) * 100;
-    const n = 32;
-    const pts = Array.from({ length: n + 1 }, (_, i) => {
-      const w = i / n;
-      return { x: br.pst + w * (100 - br.pst), mid: at(p.pa, w), lo: at(p.lo, w), hi: at(p.hi, w) };
-    });
-    return { pts, p };
-  }, [withProjection, board.flags.projection, board.projection, board.br, last]);
+  // projeção: do ponto de agora até 100%, com a faixa de 95% (layers.ts)
+  const showProj = withProjection && (overlays ? overlays.proj !== false : true);
+  const cone = useMemo(() => (showProj && last ? projectionPath(board) : null), [showProj, last, board]);
   const dom = useMemo(
     () =>
       yDomain([
@@ -161,7 +154,7 @@ export default function NightChart({
   // "Hoje": o eixo x acompanha a apuração (a linha ocupa a largura); "× 2022": 0–100% para ver a noite inteira
   // a ponta da linha fica em ~45–50% da largura, deixando uma pista à direita para os rótulos
   // com a projeção, o eixo vai até 100%: a linha pontilhada mostra onde a noite deve terminar
-  const xMax = show22 || cone ? 100 : Math.min(100, Math.max(10, Math.ceil(pst / 0.5 / 5) * 5));
+  const xMax = show22 || cone || !last ? 100 : Math.min(100, Math.max(10, Math.ceil(pst / 0.5 / 5) * 5));
   const xTicks = xMax === 100 ? [0, 25, 50, 75, 100] : [0, xMax / 2, xMax].map((v) => Math.round(v * 10) / 10);
   const iw = Math.max(0, width - PAD.l - PAD.r);
   const ih = height - PAD.t - PAD.b;
@@ -217,11 +210,12 @@ export default function NightChart({
 
   const ariaSummary = last
     ? `${ca.short} ${fmtPct(last.a, 1)}%, ${cb.short} ${fmtPct(last.b, 1)}% com ${fmtPct(pst, 1)}% das urnas apuradas` +
-      (cone ? `; projeção de ${ca.short}: ${fmtPct(cone.p.pa, 1)}% (de ${fmtPct(cone.p.lo, 1)}% a ${fmtPct(cone.p.hi, 1)}%)` : '')
+      (cone ? `; projeção de ${ca.short}: ${fmtPct(cone.pa, 1)}% (de ${fmtPct(cone.lo, 1)}% a ${fmtPct(cone.hi, 1)}%)` : '')
     : 'Aguardando as primeiras urnas';
 
   return (
     <figure className={cn('select-none', className)}>
+      {toolbar && <div className="mb-2">{toolbar}</div>}
       <div ref={wrap} className="relative w-full" style={{ height }}>
         {width > 0 && (
           <svg width={width} height={height} className="absolute inset-0 overflow-visible" role="img" aria-label={`Curva da noite: ${ariaSummary}`}>
@@ -272,10 +266,16 @@ export default function NightChart({
                 const above = v > 50;
                 return (
                   <g key={`t1-${k}`}>
-                    <line x1={PAD.l} x2={PAD.l + iw} y1={y} y2={y} stroke={c.color} strokeOpacity={0.7} strokeWidth={1.25} strokeDasharray="5 4" />
-                    {/* à direita, junto da grade: o começo da curva costuma ser a parte mais agitada */}
-                    <text x={PAD.l + iw - 4} y={above ? y - 5 : y + 12} textAnchor="end" className="num text-[11px] font-medium" fill={c.color}>
-                      1º turno {fmtPct(v, 1)}%
+                    <line x1={PAD.l} x2={PAD.l + iw} y1={y} y2={y} stroke={LAYER.t1.color} strokeWidth={LAYER.t1.width} strokeDasharray={LAYER.t1.dash} />
+                    {/* com a projeção, à esquerda (a ponta direita é dos rótulos dela); sem, à direita (a esquerda é do começo da noite) */}
+                    <text
+                      x={cone ? PAD.l + 4 : PAD.l + iw - 4}
+                      y={above ? y - 5 : y + 12}
+                      textAnchor={cone ? 'start' : 'end'}
+                      className="num text-[11px] font-medium"
+                      fill={LAYER.t1.color}
+                    >
+                      1º turno · {c.short.split(' ')[0]} {fmtPct(v, 1)}%
                     </text>
                   </g>
                 );
@@ -294,13 +294,13 @@ export default function NightChart({
             ))}
             {show22 && (
               // 2022 é régua de fundo: tracejado fino e apagado, para não competir com a noite de hoje
-              <g opacity={0.4}>
-                <path d={line(past, 'a')} fill="none" stroke={ca.color} strokeWidth={1.25} strokeDasharray="3 4" />
-                <path d={line(past, 'b')} fill="none" stroke={cb.color} strokeWidth={1.25} strokeDasharray="3 4" />
+              <g opacity={0.75}>
+                <path d={line(past, 'a')} fill="none" stroke={LAYER.y22.color} strokeWidth={LAYER.y22.width} strokeDasharray={LAYER.y22.dash} />
+                <path d={line(past, 'b')} fill="none" stroke={LAYER.y22.color} strokeWidth={LAYER.y22.width} strokeDasharray={LAYER.y22.dash} />
                 {past
                   .filter((p) => p.src === 'fonte')
                   .map((p) => (
-                    <circle key={p.x} cx={sx(p.x)} cy={sy(p.a)} r={2.5} fill="var(--background)" stroke={ca.color} strokeWidth={1.25} />
+                    <circle key={p.x} cx={sx(p.x)} cy={sy(p.a)} r={2.5} fill="var(--background)" stroke={LAYER.y22.color} strokeWidth={1.25} />
                   ))}
               </g>
             )}
@@ -325,9 +325,9 @@ export default function NightChart({
                         d={monotonePath(cone.pts.map((q) => [sx(q.x), sy(f(q.mid))] as XY))}
                         fill="none"
                         stroke={c.color}
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeDasharray="0.1 5"
+                        strokeWidth={LAYER.proj.width}
+                        strokeLinecap={LAYER.proj.cap}
+                        strokeDasharray={LAYER.proj.dash}
                       />
                       <circle cx={sx(100)} cy={sy(f(end.mid))} r={3.5} fill={c.color} stroke="var(--background)" strokeWidth={1.5} />
                     </g>
@@ -348,6 +348,16 @@ export default function NightChart({
                     </g>
                   );
                 })}
+              </g>
+            )}
+            {/* sem linha ainda: os dois no ponto de partida (0% apurado, 50%) */}
+            {!last && (
+              <g aria-hidden>
+                <circle cx={sx(0) + 4} cy={sy(50)} r={4} fill={cb.color} stroke="var(--background)" strokeWidth={1.5} />
+                <circle cx={sx(0) + 8} cy={sy(50)} r={4} fill={ca.color} stroke="var(--background)" strokeWidth={1.5} />
+                <text x={sx(0) + 18} y={sy(50) - 8} className="fill-foreground text-[11px] font-semibold">
+                  {board.released ? 'hoje: aguardando as primeiras urnas' : 'hoje: começa às 17h'}
+                </text>
               </g>
             )}
             {/* scrub */}
@@ -445,6 +455,7 @@ export default function NightChart({
                 </span>
               </div>
             ))}
+            {show22 && <div className="mt-1 border-t pt-1 text-[10.5px] text-muted-foreground">2022: {matchup2022(board)}</div>}
           </div>
         )}
 
@@ -458,7 +469,7 @@ export default function NightChart({
           onPointerUp={(e) => e.pointerType !== 'mouse' && setTimeout(() => setProbe(null), 1600)}
         />
 
-        {now.length < 2 && (
+        {now.length < 2 && !show22 && !showT1 && last && (
           <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-[13px] text-muted-foreground">
             {board.released ? 'A curva aparece com as primeiras urnas apuradas' : 'Às 17h a curva de hoje começa aqui'}
           </div>
@@ -466,28 +477,30 @@ export default function NightChart({
       </div>
 
       <figcaption className="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        {/* todas as legendas no mesmo lugar, só a ativa visível: a altura não muda com os filtros */}
-        <span className="grid min-w-0 text-[11px] leading-tight text-muted-foreground [&>*]:col-start-1 [&>*]:row-start-1">
-          {(
-            [
-              ['both', show22 && showT1, '2022 (curva) · 1º turno (reta)'],
-              ['y22', show22 && !showT1, flip22 !== null ? `2022 (reconstruída) · virou com ${fmtPct(flip22, 0)}%` : '2022 (reconstruída)'],
-              ['t1', showT1 && !show22, '1º turno'],
-              ['none', !show22 && !showT1, '% dos votos válidos'],
-            ] as const
-          ).map(([k, on, text]) => (
-            <span key={k} className={on ? undefined : 'invisible'} aria-hidden={!on}>
-              {k !== 'none' && <span className="mr-1 inline-block w-3 border-t border-dashed border-muted-foreground align-middle" />}
-              {text}
-            </span>
-          ))}
-        </span>
-        {cone && (
-          <span className="text-[11px] leading-tight text-muted-foreground">
-            <span className="mr-1 inline-block w-3 border-t-2 border-dotted border-muted-foreground align-middle" />
-            projeção até 100% · faixa de 95% (estimativa)
+        {/* legenda: uma amostra do traço por camada ligada (as mesmas dos chips) */}
+        <span className="flex min-h-4 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] leading-tight text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <Swatch k="hoje" cands={board.candidates} />% dos válidos
           </span>
-        )}
+          {cone && (
+            <span className="inline-flex items-center gap-1.5">
+              <Swatch k="proj" cands={board.candidates} />
+              projeção até 100% · faixa de 95%
+            </span>
+          )}
+          {show22 && (
+            <span className="inline-flex items-center gap-1.5">
+              <Swatch k="y22" cands={board.candidates} />
+              {`2022, ${matchup2022(board)} (reconstrução)`}
+              {flip22 !== null ? ` · virou com ${fmtPct(flip22, 0)}%` : ''}
+            </span>
+          )}
+          {showT1 && (
+            <span className="inline-flex items-center gap-1.5">
+              <Swatch k="t1" cands={board.candidates} />1º turno
+            </span>
+          )}
+        </span>
         {!overlays && modes.length > 1 && (
           <ToggleGroup
             type="single"

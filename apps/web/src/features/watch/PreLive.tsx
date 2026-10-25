@@ -88,7 +88,7 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
         </div>
         {/* o gráfico fica sempre; os botões só ligam/desligam as referências desenhadas nele */}
         <div className="mb-2">
-          <RefChips refs={refs} set={setRefs} hist={hist} showChart={false} />
+          <RefChips refs={refs} set={setRefs} hist={hist} showChart={false} board={board} />
         </div>
         <NightSpark
           board={board}
@@ -99,8 +99,9 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
           height={size === 'lg' ? 180 : 104}
         />
         <p className="mt-1 text-[11.5px] leading-snug text-muted-foreground">
-          {refs.y22 ? 'Tracejado: o 2º turno de 2022 ao longo da apuração (reconstrução). ' : ''}A linha vertical marca onde a
-          liderança trocou de lado em 2022. A linha de hoje começa às 17h.
+          {refs.y22 ? 'Em violeta: o 2º turno de 2022 ao longo da apuração (reconstrução). ' : ''}
+          {refs.t1 ? 'Em âmbar: o 1º turno. ' : ''}A linha vertical marca onde a liderança trocou de lado em 2022. A linha de hoje
+          começa às 17h, e a projeção (pontilhada, até 100%) a partir de 20% apurado.
         </p>
       </div>
 

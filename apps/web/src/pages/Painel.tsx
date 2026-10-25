@@ -30,6 +30,7 @@ import { preBoard } from '../lib/prelive';
 import { useBoard } from '../store/board';
 import { Fill } from '@/components/core/bars';
 import { PainelSkeleton } from '@/components/skeletons';
+import { NAMES_2022 } from '../lib/y2022';
 
 const MapCard = lazy(() => import('@/features/map/MapCard'));
 
@@ -172,9 +173,12 @@ function Live({ board }: { board: Board }) {
   const hero = (
     <>
       <TopBar board={board} snap={br} />
-      {/* um só controle: "Comparar com" liga as camadas do gráfico e as referências nas linhas */}
-      <NightChart board={board} overlays={refs} />
-      <RefChips className="mt-3" disabled={{ t1: !values.t1, y22: !values.y22 }} />
+      {/* um só controle: os chips dentro do gráfico ligam as camadas e as referências nas linhas */}
+      <NightChart
+        board={board}
+        overlays={refs}
+        toolbar={<RefChips cands={board.candidates} disabled={{ t1: !values.t1, y22: !values.y22, proj: !board.projection }} />}
+      />
       <div ref={watch}>
         <CandidateRows board={board} snap={br} refs={activeRefs(refs, values)} reserve className="mt-2" />
       </div>
@@ -366,7 +370,8 @@ function Context2022({ board, className }: { board: Board; className?: string })
   const vb = br.votes[nb] ?? 0;
   const tot = va + vb || 1;
   // em 2022 os candidatos podem ser outros: rotulamos pelo partido do lado
-  const label = (c: CandidateDef, n: string) => (n === c.n && c.party ? c.party : `nº ${n}`);
+  // em 2022 o lado pode ter sido outra pessoa (22: Jair, não Flávio): nome de quem foi e o partido
+  const label = (c: CandidateDef, n: string) => [NAMES_2022[n] ?? `nº ${n}`, n === c.n ? c.party : null].filter(Boolean).join(' · ');
   return (
     <Section icon={History} title="Como foi da última vez" meta={<MetaPill>2º turno de 2022</MetaPill>} className={className}>
       <div className="flex items-baseline justify-between">

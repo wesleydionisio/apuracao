@@ -8,6 +8,7 @@ import { CandidateAvatar } from '@/components/core/candidate';
 import { fmtInt, fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Fill } from '@/components/core/bars';
+import { label2022 } from '@/lib/y2022';
 
 const PCT2 = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
 const WINDOW_MS = 5 * 60_000;
@@ -58,10 +59,10 @@ export interface RowRefs {
 }
 
 const REF_LABEL: Record<keyof RowRefs, string> = { t1: '1º turno', y22: '2022' };
-/** 1º turno: tique cheio; 2022: tique vazado — distinguíveis sem depender de cor */
+/** 1º turno: tique cheio âmbar; 2022: tique vazado violeta — as cores das camadas do gráfico, e a forma distingue sem cor */
 export const REF_TICK: Record<keyof RowRefs, string> = {
-  t1: 'bg-foreground ring-2 ring-background',
-  y22: 'bg-background ring-[1.5px] ring-foreground',
+  t1: 'bg-[var(--ref-t1)] ring-2 ring-background',
+  y22: 'bg-background ring-[1.5px] ring-[var(--ref-y22)]',
 };
 
 export function RefTick({ k, className }: { k: keyof RowRefs; className?: string }) {
@@ -88,8 +89,8 @@ function Row({
   reserve?: boolean;
   /** já há voto apurado (antes das 17h não) */
   counted?: boolean;
-  /** referências já convertidas para este candidato (0–100) */
-  refs: { k: keyof RowRefs; v: number }[];
+  /** referências já convertidas para este candidato (0–100), com o rótulo (2022 pode ser outra pessoa) */
+  refs: { k: keyof RowRefs; v: number; label?: string }[];
 }) {
   return (
     <li className="py-3.5 first:pt-1">
@@ -134,12 +135,12 @@ function Row({
       </div>
       {(refs.length > 0 || reserve) && (
         // reserve: altura fixa mesmo vazia, para ligar/desligar referências não empurrar a página
-        <dl className={cn('mt-2 flex gap-x-4 text-[12px] text-muted-foreground', reserve ? 'h-5 flex-nowrap items-center overflow-hidden' : 'flex-wrap gap-y-1')}>
+        <dl className={cn('mt-2 flex gap-x-4 pl-0.5 text-[12px] text-muted-foreground', reserve ? 'h-5 flex-nowrap items-center overflow-hidden' : 'flex-wrap gap-y-1')}>
           {refs.map((r) => (
             <div key={r.k} className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
               <dt className="flex items-center gap-1.5">
                 <RefTick k={r.k} />
-                {REF_LABEL[r.k]}
+                {r.label ?? REF_LABEL[r.k]}
               </dt>
               <dd className="num flex items-center gap-1.5">
                 <span className="font-medium text-foreground">{fmtPct(r.v, 1)}%</span>
@@ -175,7 +176,11 @@ export function CandidateRows({
   const refsFor = (side: 'a' | 'b') =>
     (Object.entries(refs ?? {}) as [keyof RowRefs, number | null | undefined][])
       .filter((e): e is [keyof RowRefs, number] => typeof e[1] === 'number')
-      .map(([k, v]) => ({ k, v: side === 'a' ? v : 100 - v }));
+      .map(([k, v]) => ({
+        k,
+        v: side === 'a' ? v : 100 - v,
+        label: k === 'y22' ? label2022(board, side === 'a' ? ca : cb) : undefined,
+      }));
   // líder primeiro, como num placar
   const rows = [
     { c: ca, pct: snap.pa, votes: snap.a, lead: snap.lead === 'a', delta: d, refs: refsFor('a') },

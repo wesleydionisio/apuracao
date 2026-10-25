@@ -13,9 +13,11 @@ import { cn } from '@/lib/utils';
 import { flipOf, useCurve22, useHistRefs, type HistRefs } from './data';
 
 import { NightSpark } from './NightSpark';
+import { Swatch } from '@/features/curve/Swatch';
 import { useRefs, type Refs } from './refs';
 import { Fill, SplitFill } from '@/components/core/bars';
 import { DataTip, SplitTip } from '@/components/core/datatip';
+import { matchup2022 } from '@/lib/y2022';
 
 const PCT2 = { minimumFractionDigits: 2, maximumFractionDigits: 2 } as const;
 const PCT1 = { minimumFractionDigits: 1, maximumFractionDigits: 1 } as const;
@@ -78,7 +80,7 @@ function Side({
  * Referências numa linha de altura fixa: ligar ou desligar 1º turno/2022 troca só o conteúdo,
  * nunca empurra o que vem abaixo.
  */
-function RefLine({ t1, y22 }: { t1: number | null; y22: number | null }) {
+function RefLine({ t1, y22, who22 }: { t1: number | null; y22: number | null; who22: string }) {
   const cell = (label: string, title: string, pa: number | null, align: 'l' | 'r') => (
     <div className={cn('flex min-w-0 items-center gap-1.5', align === 'r' && 'justify-end')} title={title}>
       {pa !== null && (
@@ -99,7 +101,7 @@ function RefLine({ t1, y22 }: { t1: number | null; y22: number | null }) {
       ) : (
         <>
           {cell('1º turno', '1º turno de 2026, só os dois finalistas', t1, 'l')}
-          {cell('2022', '2º turno de 2022, mesmos partidos', y22, 'r')}
+          {cell('2022', `2º turno de 2022: ${who22}`, y22, 'r')}
         </>
       )}
     </div>
@@ -157,32 +159,90 @@ export function VersusBar({
   );
 }
 
-export function RefChips({ refs, set, hist, showChart }: { refs: Refs; set: (p: Partial<Refs>) => void; hist: HistRefs; showChart: boolean }) {
-  const value = [refs.t1 && 't1', refs.y22 && 'y22', showChart && refs.chart && 'chart'].filter(Boolean) as string[];
+export function RefChips({
+  refs,
+  set,
+  hist,
+  showChart,
+  board,
+  only,
+  className,
+}: {
+  refs: Refs;
+  set: (p: Partial<Refs>) => void;
+  hist: HistRefs;
+  showChart: boolean;
+  board: Board;
+  /** mostrar só estes botões */
+  only?: ('proj' | 't1' | 'y22' | 'chart')[];
+  className?: string;
+}) {
+  const has = (k: 'proj' | 't1' | 'y22' | 'chart') => !only || only.includes(k);
+  const value = [refs.proj && 'proj', refs.t1 && 't1', refs.y22 && 'y22', showChart && refs.chart && 'chart'].filter(Boolean) as string[];
   const item =
-    // 32px visíveis + alvo de toque de 44px (pseudo-elemento), sem engordar o placar
-    'relative h-8 rounded-full border border-border bg-transparent px-3 before:absolute before:-inset-y-1.5 before:inset-x-0 text-[12px] font-medium text-muted-foreground shadow-none hover:bg-accent hover:text-foreground data-[state=on]:border-foreground data-[state=on]:bg-foreground data-[state=on]:text-background';
+    // 32px visíveis + alvo de toque de 44px (pseudo-elemento), sem engordar o placar; ligado = fundo suave, a amostra do traço acende
+    'group relative h-8 gap-1.5 rounded-full border border-border bg-transparent px-2.5 before:absolute before:-inset-y-1.5 before:inset-x-0 text-[12px] font-medium text-muted-foreground shadow-none hover:bg-accent hover:text-foreground data-[state=on]:border-foreground/50 data-[state=on]:bg-accent data-[state=on]:text-foreground';
+  const sw = 'opacity-40 transition-opacity group-data-[state=on]:opacity-100';
   return (
     <ToggleGroup
       type="multiple"
       spacing={1.5}
       value={value}
-      onValueChange={(v) => set({ t1: v.includes('t1'), y22: v.includes('y22'), ...(showChart ? { chart: v.includes('chart') } : {}) })}
-      aria-label="Mostrar referências"
+      onValueChange={(v) =>
+        set({
+          ...(has('proj') ? { proj: v.includes('proj') } : {}),
+          ...(has('t1') ? { t1: v.includes('t1') } : {}),
+          ...(has('y22') ? { y22: v.includes('y22') } : {}),
+          ...(showChart && has('chart') ? { chart: v.includes('chart') } : {}),
+        })
+      }
+      aria-label="Mostrar camadas"
+      className={cn('flex-wrap justify-start', className)}
     >
-      <ToggleGroupItem value="t1" className={item} aria-label="Mostrar 1º turno 2026">
-        1º turno
-      </ToggleGroupItem>
-      <ToggleGroupItem value="y22" className={item} aria-label="Mostrar 2º turno de 2022, mesmos partidos">
-        2022
-      </ToggleGroupItem>
-      {showChart && (
+      {has('proj') && (
+        <ToggleGroupItem value="proj" className={item} aria-label="Mostrar a projeção até 100% no gráfico" disabled={!board.projection}>
+          <Swatch k="proj" cands={board.candidates} className={sw} />
+          Projeção
+        </ToggleGroupItem>
+      )}
+      {has('t1') && (
+        <ToggleGroupItem value="t1" className={item} aria-label="Mostrar 1º turno 2026" disabled={hist.t1 === null}>
+          <Swatch k="t1" cands={board.candidates} className={sw} />
+          1º turno
+        </ToggleGroupItem>
+      )}
+      {has('y22') && (
+        <ToggleGroupItem value="y22" className={item} aria-label={`Mostrar 2º turno de 2022: ${matchup2022(board)}`}>
+          <Swatch k="y22" cands={board.candidates} className={sw} />
+          2022
+        </ToggleGroupItem>
+      )}
+      {showChart && has('chart') && (
         <ToggleGroupItem value="chart" className={item} aria-label="Mostrar gráfico da noite">
           <ChartSpline className="size-3.5" aria-hidden />
           Gráfico
         </ToggleGroupItem>
       )}
     </ToggleGroup>
+  );
+}
+
+/** legenda do gráfico: uma amostra do traço por camada desenhada */
+function SparkLegend({ board, proj, y22, t1 }: { board: Board; proj: boolean; y22: boolean; t1: boolean }) {
+  const items = [
+    proj && ['proj', 'projeção até 100% · faixa de 95%'],
+    y22 && ['y22', `2022: ${matchup2022(board)}`],
+    t1 && ['t1', '1º turno'],
+  ].filter(Boolean) as ['proj' | 'y22' | 't1', string][];
+  return (
+    <p className="mt-1 flex h-5 flex-wrap items-center gap-x-3 overflow-hidden text-[12px] text-muted-foreground">
+      {items.map(([k, label]) => (
+        <span key={k} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          <Swatch k={k} cands={board.candidates} />
+          {label}
+        </span>
+      ))}
+    </p>
   );
 }
 
@@ -263,9 +323,14 @@ export function LiveScore({
         <VersusBar board={board} pa={pa} marks={marks} className={size === 'lg' ? 'mt-3' : 'mt-1.5'} />
         {essential ? null : (
           <>
-            <RefLine t1={refs.t1 ? hist.t1 : null} y22={refs.y22 ? hist.y22 : null} />
+            <RefLine t1={refs.t1 ? hist.t1 : null} y22={refs.y22 ? hist.y22 : null} who22={matchup2022(board)} />
             <div className={cn('relative flex items-center justify-between gap-2', size === 'lg' ? 'mt-4' : 'mt-2')}>
-              <RefChips refs={refs} set={setRefs} hist={hist} showChart={!chartAlways} />
+              {/* as camadas ficam dentro do gráfico; aqui fora, só o botão que abre o gráfico (aba Chat) */}
+              {chartAlways ? (
+                <span className="text-[12px] font-semibold">A noite até aqui</span>
+              ) : (
+                <RefChips refs={refs} set={setRefs} hist={hist} showChart only={['chart']} board={board} />
+              )}
               <Link
                 href="/painel"
                 className="relative inline-flex h-8 shrink-0 items-center gap-0.5 rounded-full pr-1 pl-2 before:absolute before:-inset-y-1.5 before:inset-x-0 text-[12px] font-medium text-muted-foreground hover:text-foreground"
@@ -287,20 +352,20 @@ export function LiveScore({
                       <X className="size-4" aria-hidden />
                     </button>
                   </div>
-                  <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={120} />
-                  {refs.y22 && curve22 && <p className="mt-1 text-[12px] text-muted-foreground">Curva tracejada: 2022 no mesmo ponto da apuração, reconstrução aproximada</p>}
+                  <RefChips refs={refs} set={setRefs} hist={hist} showChart={false} board={board} className="mb-2" />
+                  <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} proj={refs.proj} height={120} />
+                  <SparkLegend board={board} proj={refs.proj && !!board.projection} y22={refs.y22 && !!curve22} t1={refs.t1 && hist.t1 !== null} />
                 </div>
               )}
             </div>
           </>
         )}
         {chartAlways && (
-          <div className="mt-4">
-            <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} height={size === 'lg' ? 220 : 104} />
-            {/* linha reservada: ligar 2022 não empurra o letreiro */}
-            <p className="mt-1 h-5 text-[12px] text-muted-foreground">
-              {refs.y22 && curve22 ? 'Curva tracejada: 2022 no mesmo ponto da apuração, reconstrução aproximada' : null}
-            </p>
+          <div className="mt-2">
+            <RefChips refs={refs} set={setRefs} hist={hist} showChart={false} board={board} className="mb-2" />
+            <NightSpark board={board} curve22={refs.y22 ? curve22 : null} t1={refs.t1 ? hist.t1 : null} flip22={flip22} proj={refs.proj} height={size === 'lg' ? 220 : 104} />
+            {/* linha reservada: ligar camadas não empurra o letreiro */}
+            <SparkLegend board={board} proj={refs.proj && !!board.projection} y22={refs.y22 && !!curve22} t1={refs.t1 && hist.t1 !== null} />
           </div>
         )}
       </div>

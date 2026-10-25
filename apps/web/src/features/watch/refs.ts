@@ -1,5 +1,5 @@
 // Referências ligadas/desligadas pelo usuário, compartilhadas com o Painel.
-// localStorage 'refs' = { t1, y22, chart } — campos desconhecidos são preservados ao gravar.
+// localStorage 'refs' = { t1, y22, chart, proj } — campos desconhecidos são preservados ao gravar.
 import { useCallback, useEffect, useState } from 'react';
 
 export interface Refs {
@@ -9,12 +9,14 @@ export interface Refs {
   y22: boolean;
   /** gráfico aberto na tela Ao vivo */
   chart: boolean;
+  /** projeção no gráfico (caminho até 100% e faixa) */
+  proj: boolean;
 }
 
 const KEY = 'refs';
 const EVT = 'refs-change';
 // 2022 ligado de saída: a curva e a virada de 2022 são a referência principal da noite
-const DEFAULTS: Refs = { t1: false, y22: true, chart: false };
+const DEFAULTS: Refs = { t1: false, y22: true, chart: false, proj: true };
 
 function load(): Record<string, unknown> {
   try {
@@ -31,6 +33,7 @@ function readRefs(): Refs {
     t1: typeof raw.t1 === 'boolean' ? raw.t1 : DEFAULTS.t1,
     y22: typeof raw.y22 === 'boolean' ? raw.y22 : DEFAULTS.y22,
     chart: typeof raw.chart === 'boolean' ? raw.chart : DEFAULTS.chart,
+    proj: typeof raw.proj === 'boolean' ? raw.proj : DEFAULTS.proj,
   };
 }
 

@@ -4,6 +4,8 @@
 // inteira, para ver onde a liderança virou em 2022. Com zoom, a virada de 2022 fora da janela vira um aviso na borda.
 import type { Board } from '@apuracao/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { LAYER, projectionPath } from '@/features/curve/layers';
+import { matchup2022 } from '@/lib/y2022';
 import { cn } from '@/lib/utils';
 
 type P = [number, number];
@@ -65,6 +67,7 @@ export function NightSpark({
   flip22,
   height = 112,
   fullAxis = false,
+  proj = false,
   className,
 }: {
   board: Board;
@@ -76,6 +79,8 @@ export function NightSpark({
   height?: number;
   /** eixo x sempre 0–100% (antes das 17h: a noite inteira, com a referência de 2022) */
   fullAxis?: boolean;
+  /** projeção: do ponto de agora até 100%, com a faixa de 95% */
+  proj?: boolean;
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -93,6 +98,7 @@ export function NightSpark({
   // ignora o ruído das primeiras urnas (< 0,5%)
   const pts = useMemo(() => board.curve.filter((p) => p.pst >= 0.5), [board.curve]);
   const last = pts[pts.length - 1];
+  const cone = useMemo(() => (proj && last ? projectionPath(board, 24) : null), [proj, last, board]);
 
   const padL = 4;
   const padR = 44;
@@ -102,7 +108,8 @@ export function NightSpark({
   const ih = height - padT - padB;
 
   // com 2022 na tela, a comparação precisa da noite inteira (a virada pode estar lá na frente)
-  const xMax = useTween(fullAxis || curve22?.length ? 100 : xWindow(last?.pst ?? 0));
+  // com 2022 ou com a projeção na tela, a noite inteira (a projeção vai até 100%)
+  const xMax = useTween(fullAxis || curve22?.length || cone ? 100 : xWindow(last?.pst ?? 0));
   const full = xMax > 99.5;
   // o eixo y também só considera o trecho visível de 2022
   const vis22 = (curve22 ?? []).filter((p) => p.pst <= xMax);
@@ -111,6 +118,7 @@ export function NightSpark({
     ...pts.map((p) => Math.abs(p.pa - 50)),
     ...vis22.map((p) => Math.abs(p.pa - 50)),
     t1 != null ? Math.abs(t1 - 50) : 0,
+    ...(cone ? cone.pts.flatMap((q) => [Math.abs(q.lo - 50), Math.abs(q.hi - 50)]) : []),
   );
   const span = Math.ceil((dev + 1) / 5) * 5;
   const x = (pst: number) => padL + (Math.min(xMax, Math.max(0, pst)) / xMax) * iw;
@@ -223,16 +231,56 @@ export function NightSpark({
             { c: cb, v: 100 - t1 },
           ].map(({ c, v }) => (
             <g key={`t1-${c.key}`}>
-              <line x1={padL} x2={xEnd} y1={y(v)} y2={y(v)} stroke={c.color} strokeOpacity={0.6} strokeWidth={1.25} strokeDasharray="6 4" />
-              <text x={xEnd - 4} y={v > 50 ? y(v) - 4 : y(v) + 11} textAnchor="end" className="text-[11px] font-medium tabular-nums" fill={c.color}>
-                1º turno {fmt(v)}%
+              <line x1={padL} x2={xEnd} y1={y(v)} y2={y(v)} stroke={LAYER.t1.color} strokeWidth={LAYER.t1.width} strokeDasharray={LAYER.t1.dash} />
+              <text x={padL + 2} y={v > 50 ? y(v) - 4 : y(v) + 11} className="text-[11px] font-medium tabular-nums" fill={LAYER.t1.color}>
+                1º turno · {c.short.split(' ')[0]} {fmt(v)}%
               </text>
             </g>
           ))}
         {g22 && (
-          <g opacity={0.4} clipPath="url(#spark-plot)">
-            <path d={a22} fill="none" stroke={ca.color} strokeWidth={1.5} strokeDasharray="3 3" />
-            <path d={b22} fill="none" stroke={cb.color} strokeWidth={1.5} strokeDasharray="3 3" />
+          <g opacity={0.75} clipPath="url(#spark-plot)">
+            <path d={a22} fill="none" stroke={LAYER.y22.color} strokeWidth={LAYER.y22.width} strokeDasharray={LAYER.y22.dash} />
+            <path d={b22} fill="none" stroke={LAYER.y22.color} strokeWidth={LAYER.y22.width} strokeDasharray={LAYER.y22.dash} />
+          </g>
+        )}
+        {cone && (
+          <g clipPath="url(#spark-plot)">
+            {[
+              { c: ca, f: (v: number) => v },
+              { c: cb, f: (v: number) => 100 - v },
+            ].map(({ c, f }) => {
+              const top = cone.pts.map((q) => `${x(q.x).toFixed(1)},${y(f(q.hi)).toFixed(1)}`);
+              const bot = [...cone.pts].reverse().map((q) => `${x(q.x).toFixed(1)},${y(f(q.lo)).toFixed(1)}`);
+              return (
+                <g key={`proj-${c.key}`}>
+                  <path d={`M${top.join('L')}L${bot.join('L')}Z`} fill={c.color} fillOpacity={0.14} />
+                  <path
+                    d={path(cone.pts.map((q) => [x(q.x), y(f(q.mid))]))}
+                    fill="none"
+                    stroke={c.color}
+                    strokeWidth={LAYER.proj.width}
+                    strokeLinecap={LAYER.proj.cap}
+                    strokeDasharray={LAYER.proj.dash}
+                  />
+                </g>
+              );
+            })}
+          </g>
+        )}
+        {cone && (
+          // projeção final na ponta (100%): o de cima acima da linha, o de baixo abaixo
+          <g aria-hidden>
+            {[
+              { c: ca, v: cone.pa },
+              { c: cb, v: 100 - cone.pa },
+            ].map(({ c, v }) => (
+              <g key={`pe-${c.key}`}>
+                <circle cx={xEnd} cy={y(v)} r={3} fill={c.color} className="stroke-background" strokeWidth={1.5} />
+                <text x={xEnd - 5} y={v >= 50 ? y(v) - 6 : y(v) + 13} textAnchor="end" className="text-[11px] font-semibold tabular-nums" fill={c.color}>
+                  {fmt(v)}%
+                </text>
+              </g>
+            ))}
           </g>
         )}
         <path d={lineB} fill="none" stroke={cb.color} strokeWidth={2.25} strokeLinecap="round" />
@@ -256,10 +304,18 @@ export function NightSpark({
               <g key={c.key}>
                 <circle cx={x(last.pst)} cy={py} r={7} fill={c.color} opacity={0.18} className="live-ping" style={{ transformOrigin: `${x(last.pst)}px ${py}px` }} />
                 <circle cx={x(last.pst)} cy={py} r={3.5} fill={c.color} className="stroke-background" strokeWidth={1.5} />
-                {frac(last.pst) < 0.86 && (
-                  <text x={x(last.pst) + 8} y={ly + 3.5} className="text-[11px] font-semibold tabular-nums" fill={c.color}>
-                    {fmt(v)}%
-                  </text>
+                {cone ? (
+                  frac(last.pst) > 0.12 && (
+                    <text x={x(last.pst) - 8} y={ly + 3.5} textAnchor="end" className="text-[11px] font-semibold tabular-nums" fill={c.color}>
+                      {fmt(v)}%
+                    </text>
+                  )
+                ) : (
+                  frac(last.pst) < 0.86 && (
+                    <text x={x(last.pst) + 8} y={ly + 3.5} className="text-[11px] font-semibold tabular-nums" fill={c.color}>
+                      {fmt(v)}%
+                    </text>
+                  )
                 )}
               </g>
             ))}
@@ -314,6 +370,7 @@ export function NightSpark({
               </span>
             </div>
           ))}
+          {pa22 !== null && <div className="mt-1 border-t pt-1 text-[10.5px] text-muted-foreground">2022: {matchup2022(board)}</div>}
         </div>
       )}
       {/* sem linha ainda e sem referências desenhadas: o aviso no meio (com 2022/1º turno ele cobriria os rótulos) */}

@@ -8,12 +8,14 @@ import { staticData } from '@/lib/api';
 export interface Refs {
   t1: boolean;
   y22: boolean;
+  /** projeção no gráfico (caminho até 100% e faixa) */
+  proj: boolean;
 }
 
 const KEY = 'refs';
 const EVT = 'refs-change';
 // 2022 ligado por padrão: a curva da noite anterior é a melhor régua para ler a virada
-const DEFAULT: Refs = { t1: false, y22: true };
+const DEFAULT: Refs = { t1: false, y22: true, proj: true };
 
 let cache: Refs | null = null;
 let raw: string | null = null;
@@ -29,7 +31,7 @@ function read(): Refs {
   raw = s;
   try {
     const p = s ? JSON.parse(s) : {};
-    cache = { t1: !!p.t1, y22: p.y22 === undefined ? DEFAULT.y22 : !!p.y22 };
+    cache = { t1: !!p.t1, y22: p.y22 === undefined ? DEFAULT.y22 : !!p.y22, proj: p.proj === undefined ? DEFAULT.proj : !!p.proj };
   } catch {
     cache = DEFAULT;
   }

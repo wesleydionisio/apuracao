@@ -24,6 +24,7 @@ import HexMap from './HexMap';
 import { ABROAD } from './abroad-coords';
 import type { WorldCity, WorldHit } from './WorldMap';
 import { CandidateLines, CompareRow, CountedBar, FlipNote, Kpi, ofUf, pair, RefLegend, SectionTitle, StatusBadge, TransferBlock, TransferSkeleton, VersusBar } from './parts';
+import { matchup2022 } from '@/lib/y2022';
 
 const WorldMap = lazy(() => import('./WorldMap'));
 
@@ -154,7 +155,7 @@ function UfDetail({ board, uf, desktop }: { board: Board; uf: string; desktop: b
               <CompareRow label="Brasil agora" hint={`${fmtPct(board.br.pst, 1)}% apurado`} pa={board.br.pa} cands={cands} delta={snap?.valid ? snap.pa - board.br.pa : undefined} />
             ) : null}
             <CompareRow label="1º turno 2026" hint="só os votos dos dois finalistas" pa={pa1} cands={cands} loading={t1Wait} delta={snap?.valid ? (pa1 == null ? null : snap.pa - pa1) : undefined} />
-            <CompareRow label="2º turno 2022" hint="mesmos partidos" pa={p22} cands={cands} loading={y22Wait} delta={snap?.valid ? (p22 == null ? null : snap.pa - p22) : undefined} />
+            <CompareRow label="2º turno 2022" hint={matchup2022(board)} pa={p22} cands={cands} loading={y22Wait} delta={snap?.valid ? (p22 == null ? null : snap.pa - p22) : undefined} />
           </ul>
           {snap?.valid && <p className="mt-1 text-[12px] text-muted-foreground">À direita: quantos pontos o estado andou na direção de cada um, comparado a cada referência.</p>}
         </section>
@@ -409,12 +410,12 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
               ? `Todos os países somados no placar. Toque numa cidade para ver como votou (${withLive} de ${rows.length} com parcial).`
               : layer === 't1'
                 ? 'Confronto direto entre os dois finalistas no 1º turno de 2026. Toque numa cidade.'
-                : '2º turno de 2022, pelos mesmos partidos. Toque numa cidade.'
+                : `2º turno de 2022: ${matchup2022(board)}. Toque numa cidade.`
             : layer === 'live'
               ? `Toque numa cidade. O hexágono cresce conforme a região é apurada (${withLive} de ${rows.length} cidades com parcial).`
               : layer === 't1'
                 ? 'Confronto direto entre os dois finalistas no 1º turno de 2026. Toque numa cidade.'
-                : '2º turno de 2022, pelos mesmos partidos. Toque numa cidade.'}
+                : `2º turno de 2022: ${matchup2022(board)}. Toque numa cidade.`}
         </p>
       </div>
 

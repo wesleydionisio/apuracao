@@ -10,7 +10,7 @@ export function Fill({ pct, className, style }: { pct: number; className?: strin
   return (
     <div
       className={cn('h-full w-full transition-transform duration-700 ease-out will-change-transform', className)}
-      style={{ ...style, transform: `translateX(${clamp(pct) - 100}%)` }}
+      style={{ ...style, transform: `translateX(${clamp(pct) - 100}%)`, ...(clamp(pct) <= 0 ? { opacity: 0 } : null) }}
     />
   );
 }
