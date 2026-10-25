@@ -3,7 +3,7 @@
 import type { Board, CandidateDef, Municipality, Snap } from '@apuracao/shared';
 import { flipped, fmtPct, twoWay, ufName } from '@apuracao/shared';
 import NumberFlow from '@number-flow/react';
-import { ArrowRightLeft, ChevronRight, MapPin, Scale, Shuffle, Users } from 'lucide-react';
+import { ArrowRightLeft, ChevronRight, MapPin, Scale, Shuffle, Users, Vote } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useParams } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
@@ -37,6 +37,7 @@ import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 import { CityDetailSkeleton } from '@/components/skeletons';
 import { matchup2022 } from '@/lib/y2022';
+import { VoteTotals } from '@/features/score/VoteTotals';
 
 export default function CityPage() {
   const board = useBoard((s) => s.board);
@@ -219,6 +220,13 @@ function CitySheet({ board, view, onPick }: { board: Board; view: CityView; onPi
         </ul>
         {base !== null && <p className="pb-3 text-[12px] text-muted-foreground">À direita: quantos pontos {mun.name} está mais perto de cada um do que a referência.</p>}
       </section>
+
+      {now && (
+        <section className="rounded-2xl border bg-card p-4">
+          <SectionTitle icon={Vote}>Votos apurados</SectionTitle>
+          <VoteTotals snap={now} />
+        </section>
+      )}
 
       {now && view.t1 && (
         <section className="rounded-2xl border bg-card p-4">

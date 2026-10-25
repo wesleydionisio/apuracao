@@ -20,6 +20,7 @@ import { activeRefs, useRefs, useRefValues } from '@/features/score/refs';
 import { RemainingTable } from '@/features/score/Remaining';
 import { MetaPill, Section, SectionSkeleton } from '@/features/score/Section';
 import { StatusBadge } from '@/features/score/status';
+import { VoteTotals } from '@/features/score/VoteTotals';
 import { cn } from '@/lib/utils';
 import { countdownParts } from '../components/chrome';
 import { FlipsCard, TransferCard, useAsync } from '../components/context';
@@ -183,6 +184,9 @@ function Live({ board }: { board: Board }) {
         <CandidateRows board={board} snap={br} refs={activeRefs(refs, values)} reserve className="mt-2" />
       </div>
       <Kpis board={board} snap={br} t1={values.t1?.rows.br} className="mt-2 mb-5" />
+      <Section icon={Vote} title="Votos apurados" meta={<MetaPill>dados oficiais do TSE</MetaPill>}>
+        <VoteTotals snap={pre ? null : br} />
+      </Section>
       {pre && <Matchup board={board} />}
       {br.status === 'totalizado' && leader && (
         <p className="mb-5 rounded-xl border bg-card p-3 text-[13px] leading-relaxed">

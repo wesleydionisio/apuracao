@@ -11,6 +11,7 @@ import { LineBone } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
+import { VoteTotals } from '@/features/score/VoteTotals';
 import { UfProjection } from '@/features/score/Projection';
 import { staticData } from '@/lib/api';
 import { fmtCompact } from '@/lib/format';
@@ -104,6 +105,10 @@ function UfDetail({ board, uf, desktop }: { board: Board; uf: string; desktop: b
             <>
               <CandidateLines cands={cands} snap={snap} />
               <UfProjection board={board} uf={uf} />
+              <div className="mt-5">
+                <h3 className="mb-2 text-[13px] font-semibold">Votos apurados</h3>
+                <VoteTotals snap={snap} />
+              </div>
               {pa1 == null && p22 == null && (t1Wait || y22Wait) && (
                 // mesmo cartão (barra com as marcas + legenda de uma linha), em fantasma
                 <div className="mt-4 rounded-xl bg-muted/50 p-3" aria-hidden>
