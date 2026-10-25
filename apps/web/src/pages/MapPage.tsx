@@ -139,6 +139,43 @@ function MapView({ board }: { board: Board }) {
     .filter((r) => !(effective === r))
     .map((r) => ({ label: r === 't1' ? '1º turno' : '2022', values: refs[r] }));
 
+  // controles da camada e do modo de ver: dentro do bloco do mapa, como os chips dos gráficos
+  const controls = (
+    <div className="mb-3 space-y-2">
+      {/* camada à esquerda, modo de ver à direita, numa linha só (em telas muito estreitas quebra e o modo fica à direita) */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
+        <LayerChips value={effective} onChange={setLayer} cands={cands} live={live} who22={matchup2022(board)} />
+        <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como" className="ml-auto">
+          <ToggleGroupItem value="hex" aria-label="Grade de hexágonos">
+            <Hexagon />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="map" aria-label="Estados">
+            <MapIcon />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="list" aria-label="Lista">
+            <Rows3 />
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+      {/* nos estados e na lista: sempre no lugar; fora da camada "Agora" fica invisível (não empurra o resto) */}
+      {!byCity && (
+        <div className={cn('flex flex-wrap items-center gap-2', effective !== 'live' && 'invisible')} role="group" aria-label="Comparar com" aria-hidden={effective !== 'live'}>
+          <GitCompareArrows className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="text-xs text-muted-foreground">Comparar com</span>
+          {(['t1', 'y2022'] as RefLayer[]).map((r) => {
+            const on = compare === r;
+            return (
+              <button key={r} type="button" aria-pressed={on} onClick={() => setCompare(on ? null : r)} className={chipClass(on)}>
+                <Swatch k={r === 't1' ? 't1' : 'y22'} cands={cands} className={cn('transition-opacity', !on && 'opacity-40')} />
+                {REF_LABEL[r]}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-4 pb-2">
       <header className="pt-1">
@@ -156,45 +193,6 @@ function MapView({ board }: { board: Board }) {
         </h1>
       </header>
 
-      <div className="space-y-2">
-        {/* camada à esquerda, modo de ver à direita, numa linha só (em telas muito estreitas quebra e o modo fica à direita) */}
-        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
-          <LayerChips value={effective} onChange={setLayer} cands={cands} live={live} who22={board ? matchup2022(board) : undefined} />
-          <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como" className="ml-auto">
-            <ToggleGroupItem value="hex" aria-label="Grade de hexágonos">
-              <Hexagon />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="map" aria-label="Estados">
-              <MapIcon />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="list" aria-label="Lista">
-              <Rows3 />
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-        {/* sempre no lugar; fora da camada "Agora" fica invisível (não empurra o resto) */}
-        {(
-          <div
-            className={cn('flex items-center gap-2', (effective !== 'live' || byCity) && 'invisible')}
-            role="group"
-            aria-label="Comparar com"
-            aria-hidden={effective !== 'live' || byCity}
-          >
-            <GitCompareArrows className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="text-xs text-muted-foreground">Comparar com</span>
-            {(['t1', 'y2022'] as RefLayer[]).map((r) => {
-              const on = compare === r;
-              return (
-                <button key={r} type="button" aria-pressed={on} onClick={() => setCompare(on ? null : r)} className={chipClass(on)}>
-                  <Swatch k={r === 't1' ? 't1' : 'y22'} cands={cands} className={cn('transition-opacity', !on && 'opacity-40')} />
-                  {REF_LABEL[r]}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
       <StateTally
         values={values}
         electorate={electorate}
@@ -204,6 +202,7 @@ function MapView({ board }: { board: Board }) {
 
       {byCity ? (
         <section className="rounded-2xl border bg-card p-3 sm:p-5">
+          {controls}
           <Suspense fallback={<Skeleton className="aspect-[1000/1051] w-full rounded-xl" />}>
             <CityMap
               layer={effective}
@@ -215,6 +214,7 @@ function MapView({ board }: { board: Board }) {
         </section>
       ) : view === 'map' ? (
         <section className="rounded-2xl border bg-card p-3 sm:p-5">
+          {controls}
           <div className="relative mx-auto max-w-[620px]">
             <Suspense fallback={<Skeleton className="aspect-[1000/1051] w-full rounded-xl" />}>
               <HexMap
@@ -246,15 +246,18 @@ function MapView({ board }: { board: Board }) {
           </div>
         </section>
       ) : (
-        <StateList
-          values={values}
-          electorate={electorate}
-          cands={cands}
-          onPick={pick}
-          showPst={effective === 'live'}
-          swing={effective === 'live' && compare ? swingOf(values, refs[compare]) : undefined}
-          swingLabel={compare ? REF_LABEL[compare] : undefined}
-        />
+        <section>
+          {controls}
+          <StateList
+            values={values}
+            electorate={electorate}
+            cands={cands}
+            onPick={pick}
+            showPst={effective === 'live'}
+            swing={effective === 'live' && compare ? swingOf(values, refs[compare]) : undefined}
+            swingLabel={compare ? REF_LABEL[compare] : undefined}
+          />
+        </section>
       )}
 
       <MapRankings values={values} swing={swing} refLabel={REF_LABEL[rankRef]} cands={cands} onPick={pick} />

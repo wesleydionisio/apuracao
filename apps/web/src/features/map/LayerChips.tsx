@@ -31,7 +31,8 @@ export function LayerChips({
 }) {
   return (
     <div className={cn('flex flex-wrap items-center gap-1.5', className)} role="radiogroup" aria-label="Camada do mapa">
-      {label && <span className="mr-0.5 text-[12px] text-muted-foreground">{label}</span>}
+      {/* em telas bem estreitas o rótulo sai: os três chips cabem numa linha */}
+      {label && <span className="mr-0.5 hidden text-[12px] text-muted-foreground min-[400px]:inline">{label}</span>}
       {ITEMS.filter((i) => live || i.k !== 'live').map(({ k, sw, label: l, hint }) => {
         const on = value === k;
         return (

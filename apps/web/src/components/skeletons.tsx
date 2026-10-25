@@ -70,15 +70,13 @@ export function MapSkeleton() {
         <Bone className="mt-1.5 h-7 w-44 rounded-lg lg:w-72" />
         <Bone className="mt-1.5 h-7 w-32 rounded-lg lg:hidden" />
       </div>
-      <div className="space-y-2">
-        <div className="flex h-9 items-center justify-between gap-2">
-          <Bone className="h-9 w-[205px] rounded-lg" />
-          <Bone className="h-8 w-[124px] shrink-0 rounded-md" />
-        </div>
-        <div className="h-8" />
-      </div>
       <Bone className="h-[135px] rounded-2xl" />
+      {/* chips da camada e modo de ver ficam dentro do cartão do mapa */}
       <div className="rounded-2xl border bg-card p-3 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <Bone className="h-8 w-[290px] rounded-full" />
+          <Bone className="ml-auto h-8 w-[124px] shrink-0 rounded-md" />
+        </div>
         <Bone className="mx-auto aspect-[1000/1051] w-full max-w-[620px] lg:max-w-none" />
       </div>
     </Wrap>
