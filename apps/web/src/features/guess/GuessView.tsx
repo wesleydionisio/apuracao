@@ -161,8 +161,8 @@ function GuessDetail({ board, v, mine }: { board: Board; v: View; mine: boolean 
                   : `Errei por ${fmtPct(live.dist, 2)} ponto${live.dist >= 2 ? 's' : ''}`
                 : 'Meu palpite para o 2º turno'
             }
-            foot={state === 'final' && live ? `TSE: ${fmtPct(live.pa, 2)}% × ${fmtPct(100 - live.pa, 2)}%` : 'Palpite · não é pesquisa nem projeção'}
-            cta={state === 'final' ? 'E você?' : 'Qual é o seu?'}
+            foot={state === 'final' && live ? `TSE: ${fmtPct(live.pa, 2)}% × ${fmtPct(100 - live.pa, 2)}%` : ''}
+            cta={state === 'final' ? 'E você?' : `Faça seu palpite também em ${location.host}`}
           />
         }
       />
@@ -391,7 +391,7 @@ function CardPreview({ nick, pa, ca, cb, headline, foot, cta }: { nick: string; 
             <div style={{ flexBasis: `${pa}%`, background: ca.color }} />
             <div className="flex-1" style={{ background: cb.color }} />
           </div>
-          <div className="mt-1.5 truncate text-center text-[7px] text-muted-foreground">{foot}</div>
+          {foot && <div className="mt-1.5 truncate text-center text-[7px] text-muted-foreground">{foot}</div>}
         </div>
         <div className="mx-auto rounded-full bg-foreground px-2 py-1 text-[7.5px] font-bold text-background">{cta}</div>
       </div>

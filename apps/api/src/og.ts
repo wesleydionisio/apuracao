@@ -20,7 +20,7 @@ const h = (style: Style, ...children: Child[]): Node => ({
 });
 
 /** muda quando o desenho muda: invalida o cache em disco dos cards antigos */
-const DESIGN = 'v3';
+const DESIGN = 'v4';
 
 let fonts: { name: string; data: Buffer; weight: 400 | 800; style: 'normal' }[] | null = null;
 function loadFonts() {
@@ -245,13 +245,13 @@ function guessStory(o: GuessIn) {
       bar(o.pa, ca, cb, 28),
       o.result
         ? h({ justifyContent: 'center', fontSize: 32, color: MUTED }, `Resultado do TSE: ${fmtPct(o.result.pa, 2)}% × ${fmtPct(100 - o.result.pa, 2)}%`)
-        : h({ justifyContent: 'center', fontSize: 30, color: MUTED }, 'Palpite · não é pesquisa nem projeção'),
+        : null,
     ),
     h(
       { justifyContent: 'center' },
       h(
-        { background: FG, color: BG, borderRadius: 999, padding: '24px 44px', fontSize: 34, fontWeight: 800 },
-        o.result ? `E você? Veja em ${host()}` : `Qual é o seu? Palpite em ${host()}`,
+        { background: FG, color: BG, borderRadius: 999, padding: '24px 44px', fontSize: o.result ? 34 : 30, fontWeight: 800 },
+        o.result ? `E você? Veja em ${host()}` : `Faça seu palpite também em ${host()}`,
       ),
     ),
   );
@@ -273,14 +273,14 @@ function guessOg(o: GuessIn) {
   return render(
     h(
       { width: 1200, height: 630, background: BG, color: FG, fontFamily: 'Inter', flexDirection: 'column', padding: '48px 64px', gap: 24 },
-      header('· 2º turno · palpite', o.result ? rankLine(o.result.rank, o.result.total) : 'não é pesquisa nem projeção', 22),
+      header('· 2º turno · palpite', o.result ? rankLine(o.result.rank, o.result.total) : '25 de outubro', 22),
       h(
         { flexDirection: 'column', gap: 4 },
         h({ fontSize: 24, color: MUTED }, o.result ? `${o.nick} · resultado` : `Palpite de ${o.nick}`),
         h({ fontSize: 46, fontWeight: 800, letterSpacing: -1.5 }, headline(o)),
       ),
       h({ flexDirection: 'column', gap: 18, flexGrow: 1, justifyContent: 'center' }, row(ca, o.pa), row(cb, pb), bar(o.pa, ca, cb, 14)),
-      footer(o.result ? `Resultado TSE: ${ca.short} ${fmtPct(o.result.pa, 2)}%` : 'Qual é o seu palpite?', 22),
+      footer(o.result ? `Resultado TSE: ${ca.short} ${fmtPct(o.result.pa, 2)}%` : 'Faça seu palpite também em', 22),
     ),
     'og',
   );
