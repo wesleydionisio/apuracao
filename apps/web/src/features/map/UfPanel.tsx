@@ -11,7 +11,6 @@ import { LineBone } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { UfProjection } from '@/features/score/Projection';
 import { staticData } from '@/lib/api';
 import { fmtCompact } from '@/lib/format';
@@ -25,6 +24,7 @@ import { ABROAD } from './abroad-coords';
 import type { WorldCity, WorldHit } from './WorldMap';
 import { CandidateLines, CompareRow, CountedBar, FlipNote, Kpi, ofUf, pair, RefLegend, SectionTitle, StatusBadge, TransferBlock, TransferSkeleton, VersusBar } from './parts';
 import { matchup2022 } from '@/lib/y2022';
+import { LayerChips } from './LayerChips';
 
 const WorldMap = lazy(() => import('./WorldMap'));
 
@@ -335,22 +335,17 @@ function Municipalities({ board, uf, live }: { board: Board; uf: string; live: b
     <section className="border-t py-4">
       <SectionTitle
         right={
-          <ToggleGroup
-            type="single"
-            size="sm"
-            variant="outline"
+          <LayerChips
             value={layer}
-            onValueChange={(v) => {
-              if (!v) return;
-              setLayer(v as MapLayer);
+            onChange={(v) => {
+              setLayer(v);
               setHit(null);
             }}
-            aria-label="Camada do mapa municipal"
-          >
-            {canLive && <ToggleGroupItem value="live">Agora</ToggleGroupItem>}
-            <ToggleGroupItem value="t1">1º turno</ToggleGroupItem>
-            <ToggleGroupItem value="y2022">2022</ToggleGroupItem>
-          </ToggleGroup>
+            cands={cands}
+            live={canLive}
+            who22={matchup2022(board)}
+            label={null}
+          />
         }
       >
         {abroad ? 'Cidades no exterior' : 'Municípios'}

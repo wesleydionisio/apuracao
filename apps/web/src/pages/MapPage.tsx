@@ -20,6 +20,9 @@ import type { HexHit } from '@/features/map/HexMap';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 import { MapSkeleton } from '@/components/skeletons';
+import { LayerChips } from '@/features/map/LayerChips';
+import { chipClass, Swatch } from '@/features/curve/Swatch';
+import { matchup2022 } from '@/lib/y2022';
 
 type View = 'hex' | 'map' | 'list';
 const VIEW_KEY = 'map:view';
@@ -67,8 +70,6 @@ export default function MapPage() {
   if (!board) return <MapSkeleton />;
   return <MapView board={board} />;
 }
-
-const segItem = 'rounded-md! px-3 data-[state=on]:bg-card data-[state=on]:shadow-sm';
 
 function MapView({ board }: { board: Board }) {
   const params = useParams<{ uf?: string }>();
@@ -158,19 +159,7 @@ function MapView({ board }: { board: Board }) {
       <div className="space-y-2">
         {/* camada à esquerda, modo de ver à direita, numa linha só (em telas muito estreitas quebra e o modo fica à direita) */}
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
-          <ToggleGroup type="single" size="sm" value={effective} onValueChange={(v) => v && setLayer(v as MapLayer)} aria-label="Camada" className="rounded-lg bg-muted p-0.5">
-            {live && (
-              <ToggleGroupItem value="live" className={segItem}>
-                Agora
-              </ToggleGroupItem>
-            )}
-            <ToggleGroupItem value="t1" className={segItem}>
-              1º turno
-            </ToggleGroupItem>
-            <ToggleGroupItem value="y2022" className={segItem}>
-              2022
-            </ToggleGroupItem>
-          </ToggleGroup>
+          <LayerChips value={effective} onChange={setLayer} cands={cands} live={live} who22={board ? matchup2022(board) : undefined} />
           <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && setView(v as View)} aria-label="Ver como" className="ml-auto">
             <ToggleGroupItem value="hex" aria-label="Grade de hexágonos">
               <Hexagon />
@@ -196,16 +185,8 @@ function MapView({ board }: { board: Board }) {
             {(['t1', 'y2022'] as RefLayer[]).map((r) => {
               const on = compare === r;
               return (
-                <button
-                  key={r}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => setCompare(on ? null : r)}
-                  className={cn(
-                    'press inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition-colors',
-                    on ? 'border-foreground bg-foreground text-background' : 'bg-card text-muted-foreground hover:text-foreground',
-                  )}
-                >
+                <button key={r} type="button" aria-pressed={on} onClick={() => setCompare(on ? null : r)} className={chipClass(on)}>
+                  <Swatch k={r === 't1' ? 't1' : 'y22'} cands={cands} className={cn('transition-opacity', !on && 'opacity-40')} />
                   {REF_LABEL[r]}
                 </button>
               );

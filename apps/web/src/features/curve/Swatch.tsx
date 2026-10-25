@@ -26,3 +26,11 @@ export function Swatch({ k, cands, className }: { k: LayerKey; cands: CandidateD
     </svg>
   );
 }
+
+/** chip de camada (gráficos e mapas): contorno; ligado = fundo suave e contorno mais forte, a amostra do traço acende */
+export const chipClass = (on: boolean) =>
+  cn(
+    // alvo de toque de 44px sem engordar o chip
+    'press relative inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold whitespace-nowrap transition-colors before:absolute before:-inset-y-1.5 before:inset-x-0 disabled:opacity-40',
+    on ? 'border-foreground/50 bg-accent text-foreground' : 'bg-transparent text-muted-foreground hover:text-foreground',
+  );

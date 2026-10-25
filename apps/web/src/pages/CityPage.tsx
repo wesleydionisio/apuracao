@@ -14,8 +14,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { CityCommand, CityPicker } from '@/features/city/CityCommand';
 import { loadCityIndex, pushRecent, type RecentCity } from '@/features/city/search';
 import { leaderOf, marginPts } from '@/features/map/colors';
-import { cityHref, pa2022, useUfMunicipalities, type MunRow } from '@/features/map/data';
+import { cityHref, pa2022, useUfMunicipalities, type MapLayer, type MunRow } from '@/features/map/data';
 import HexMap, { type HexHit } from '@/features/map/HexMap';
+import { LayerChips } from '@/features/map/LayerChips';
 import {
   CompareRow,
   CountedBar,
@@ -35,6 +36,7 @@ import { fmtCompact, fmtInt } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 import { CityDetailSkeleton } from '@/components/skeletons';
+import { matchup2022 } from '@/lib/y2022';
 
 export default function CityPage() {
   const board = useBoard((s) => s.board);
@@ -239,9 +241,6 @@ function CitySheet({ board, view, onPick }: { board: Board; view: CityView; onPi
         <WhenSeen h={220}>
           <PlaceMap board={board} mun={mun} cands={cands} live={!!now} />
         </WhenSeen>
-        <p className="mt-2 text-center text-[12px] text-muted-foreground">
-          {mun.name} contornada no mapa {ofUf(mun.uf)}; cada região na cor de quem lidera {now ? 'agora' : 'no 1º turno'}.
-        </p>
       </section>
 
       <SimilarCities board={board} mun={mun} />
@@ -346,12 +345,15 @@ function PreLive({ live, name, pa1, cands }: { live: boolean; name: string; pa1:
 function PlaceMap({ board, mun, cands, live }: { board: Board; mun: Municipality; cands: CandidateDef[]; live: boolean }) {
   const { data } = useUfMunicipalities(mun.uf, !!board.released && board.flags.map_mun);
   const [hit, setHit] = useState<HexHit | null>(null);
+  const [pick, setPick] = useState<MapLayer | null>(null);
+  const layer: MapLayer = pick === null || (pick === 'live' && !live) ? (live ? 'live' : 't1') : pick;
   const name = hit ? (data?.rows.find((r) => r.m.ibge === hit.ibge)?.m.name ?? null) : null;
   return (
     <div className="relative" onPointerLeave={(e) => e.pointerType === 'mouse' && setHit(null)}>
+      <LayerChips value={layer} onChange={setPick} cands={cands} live={live} who22={matchup2022(board)} className="mb-2" />
       <HexMap
         cands={cands}
-        layer={live ? 'live' : 't1'}
+        layer={layer}
         scope={mun.uf}
         highlight={hit?.ibge ?? mun.ibge}
         dimOthers
@@ -374,6 +376,10 @@ function PlaceMap({ board, mun, cands, live }: { board: Board; mun: Municipality
           />
         </div>
       )}
+      <p className="mt-2 text-center text-[12px] text-muted-foreground">
+        {mun.name} contornada no mapa {ofUf(mun.uf)}; cada região na cor de quem{' '}
+        {layer === 'live' ? 'lidera agora' : layer === 't1' ? 'venceu no 1º turno' : `venceu em 2022 (${matchup2022(board)})`}.
+      </p>
     </div>
   );
 }
