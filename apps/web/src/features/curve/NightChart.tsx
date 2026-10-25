@@ -9,9 +9,11 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { staticData } from '@/lib/api';
 import { fmtPct } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { monotonePath, nearest, separate, yDomain, type XY } from './geometry';
+import { monotonePath, nearest, niceTicks, separate, yDomain, type XY } from './geometry';
 import { LAYER, projectionPath } from './layers';
 import { Swatch } from './Swatch';
+import { useXZoom } from './zoom';
+import { ZoomButtons } from './ZoomButtons';
 import { matchup2022 } from '@/lib/y2022';
 
 type C22 = Awaited<ReturnType<typeof staticData.curve2022>>;
@@ -140,31 +142,40 @@ export default function NightChart({
   // projeção: do ponto de agora até 100%, com a faixa de 95% (layers.ts)
   const showProj = withProjection && (overlays ? overlays.proj !== false : true);
   const cone = useMemo(() => (showProj && last ? projectionPath(board) : null), [showProj, last, board]);
-  const dom = useMemo(
-    () =>
-      yDomain([
-        ...now.map((p) => p.a),
-        ...(show22 ? past.map((p) => p.a) : []),
-        ...(showT1 ? [t1!] : []),
-        ...(cone ? cone.pts.flatMap((q) => [q.lo, q.hi]) : []),
-      ]),
-    [now, past, show22, showT1, t1, cone],
-  );
-
   // "Hoje": o eixo x acompanha a apuração (a linha ocupa a largura); "× 2022": 0–100% para ver a noite inteira
   // a ponta da linha fica em ~45–50% da largura, deixando uma pista à direita para os rótulos
   // com a projeção, o eixo vai até 100%: a linha pontilhada mostra onde a noite deve terminar
   const xMax = show22 || cone || !last ? 100 : Math.min(100, Math.max(10, Math.ceil(pst / 0.5 / 5) * 5));
-  const xTicks = xMax === 100 ? [0, 25, 50, 75, 100] : [0, xMax / 2, xMax].map((v) => Math.round(v * 10) / 10);
   const iw = Math.max(0, width - PAD.l - PAD.r);
   const ih = height - PAD.t - PAD.b;
-  const sx = (x: number) => PAD.l + (Math.min(x, xMax) / xMax) * iw;
+  // zoom e arrasto no eixo x (zoom.ts): [va, vb] é a janela visível
+  const zoom = useXZoom(wrap, xMax, { l: PAD.l, w: iw }, (v) => setProbe(v === null ? null : Math.max(0, Math.min(xMax, v))));
+  const [va, vb] = zoom.view;
+  const vw = Math.max(1e-6, vb - va);
+  const inView = (x: number, m = 0) => x >= va - m * vw && x <= vb + m * vw;
+  const xTicks = zoom.zoomed ? niceTicks(va, vb) : xMax === 100 ? [0, 25, 50, 75, 100] : [0, xMax / 2, xMax].map((v) => Math.round(v * 10) / 10);
+  // o eixo y só considera o que está na janela (com zoom, aproxima de verdade)
+  const dom = useMemo(
+    () =>
+      yDomain(
+        [
+          ...now.filter((p) => inView(p.x, 0.02)).map((p) => p.a),
+          ...(show22 ? past.filter((p) => inView(p.x, 0.02)).map((p) => p.a) : []),
+          ...(showT1 ? [t1!] : []),
+          ...(cone ? cone.pts.filter((q) => inView(q.x, 0.05)).flatMap((q) => [q.lo, q.hi]) : []),
+        ],
+        zoom.zoomed,
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [now, past, show22, showT1, t1, cone, va, vb, zoom.zoomed],
+  );
+  const sx = (x: number) => PAD.l + ((x - va) / vw) * iw;
   const sy = (y: number) => PAD.t + ((dom.hi - y) / (dom.hi - dom.lo)) * ih;
   const line = (pts: Pt[], k: 'a' | 'b') => monotonePath(pts.map((p) => [sx(p.x), sy(p[k])] as XY));
 
   // rótulos do fim da linha (HTML sobre o SVG)
   const labels = useMemo(() => {
-    if (!last || !width) return null;
+    if (!last || !width || !inView(last.x)) return null;
     const ex = sx(last.x);
     // com a projeção à direita da ponta, os rótulos de agora vão para a esquerda
     const right = !cone && ex + 12 + 124 <= PAD.l + iw;
@@ -184,29 +195,21 @@ export default function NightChart({
     const [ya, yb] = separate(ya0, yb0, LABEL_H, PAD.t + LABEL_H / 2 - 6, PAD.t + ih - LABEL_H / 2 + 6);
     return { ex, ya, yb, right };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [last, width, dom, ih, iw, xMax, cone]);
+  }, [last, width, dom, ih, iw, xMax, cone, va, vb]);
 
   // rótulos da projeção no fim (100%): o de cima acima da própria linha, o de baixo abaixo
   const projLabels = useMemo(() => {
-    if (!cone || !width) return null;
+    if (!cone || !width || vb < 99.5) return null;
     const end = cone.pts[cone.pts.length - 1];
     const aUp = end.mid >= 50;
     const off = 22;
     const [ya, yb] = separate(sy(end.mid) + (aUp ? -off : off), sy(100 - end.mid) + (aUp ? off : -off), 34, PAD.t + 12, PAD.t + ih - 12);
     return { ya, yb, end };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cone, width, dom, ih]);
+  }, [cone, width, dom, ih, va, vb]);
 
   const pNow = probe !== null ? nearest(now, probe, 6) : null;
   const pPast = probe !== null && show22 ? nearest(past, probe, 8) : null;
-
-  const onPointer = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType === 'mouse' || e.buttons || e.type === 'pointerdown') {
-      const r = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - r.left - PAD.l) / Math.max(1, iw)) * xMax;
-      setProbe(Math.max(0, Math.min(xMax, x)));
-    }
-  };
 
   const ariaSummary = last
     ? `${ca.short} ${fmtPct(last.a, 1)}%, ${cb.short} ${fmtPct(last.b, 1)}% com ${fmtPct(pst, 1)}% das urnas apuradas` +
@@ -215,11 +218,17 @@ export default function NightChart({
 
   return (
     <figure className={cn('select-none', className)}>
-      {toolbar && <div className="mb-2">{toolbar}</div>}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        {toolbar ?? <span />}
+        {(now.length > 1 || show22 || cone) && <ZoomButtons z={zoom} />}
+      </div>
       <div ref={wrap} className="relative w-full" style={{ height }}>
         {width > 0 && (
           <svg width={width} height={height} className="absolute inset-0 overflow-visible" role="img" aria-label={`Curva da noite: ${ariaSummary}`}>
             <defs>
+              <clipPath id="night-plot">
+                <rect x={PAD.l - 6} y={0} width={iw + 12} height={height} />
+              </clipPath>
               <pattern id="falta" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
                 <line x1="0" y1="0" x2="0" y2="6" stroke="var(--border)" strokeWidth="2" />
               </pattern>
@@ -227,9 +236,21 @@ export default function NightChart({
             {/* o que ainda falta apurar */}
             {pst < 99.5 && (
               <g>
-                <rect x={sx(pst)} y={PAD.t} width={Math.max(0, sx(xMax) - sx(pst))} height={ih} fill="url(#falta)" opacity={0.6} />
-                {sx(xMax) - sx(pst) > 70 && !labels?.right && (
-                  <text x={(sx(pst) + sx(xMax)) / 2} y={PAD.t + ih - 8} textAnchor="middle" className="fill-muted-foreground text-[11px]">
+                <rect
+                  x={Math.max(PAD.l, sx(pst))}
+                  y={PAD.t}
+                  width={Math.max(0, Math.min(PAD.l + iw, sx(xMax)) - Math.max(PAD.l, sx(pst)))}
+                  height={ih}
+                  fill="url(#falta)"
+                  opacity={0.6}
+                />
+                {Math.min(PAD.l + iw, sx(xMax)) - Math.max(PAD.l, sx(pst)) > 70 && !labels?.right && (
+                  <text
+                    x={(Math.max(PAD.l, sx(pst)) + Math.min(PAD.l + iw, sx(xMax))) / 2}
+                    y={PAD.t + ih - 8}
+                    textAnchor="middle"
+                    className="fill-muted-foreground text-[11px]"
+                  >
                     a apurar
                   </text>
                 )}
@@ -289,12 +310,12 @@ export default function NightChart({
                 textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}
                 className="num fill-muted-foreground text-[11px]"
               >
-                {v.toLocaleString('pt-BR')}%{i === xTicks.length - 1 && xMax < 100 ? ' apurado' : ''}
+                {v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%{i === xTicks.length - 1 && xMax < 100 && !zoom.zoomed ? ' apurado' : ''}
               </text>
             ))}
             {show22 && (
               // 2022 é régua de fundo: tracejado fino e apagado, para não competir com a noite de hoje
-              <g opacity={0.75}>
+              <g opacity={0.75} clipPath="url(#night-plot)">
                 <path d={line(past, 'a')} fill="none" stroke={LAYER.y22.color} strokeWidth={LAYER.y22.width} strokeDasharray={LAYER.y22.dash} />
                 <path d={line(past, 'b')} fill="none" stroke={LAYER.y22.color} strokeWidth={LAYER.y22.width} strokeDasharray={LAYER.y22.dash} />
                 {past
@@ -305,13 +326,13 @@ export default function NightChart({
               </g>
             )}
             {now.length > 1 && (
-              <g strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={probe !== null ? 0.9 : 1}>
+              <g strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={probe !== null ? 0.9 : 1} clipPath="url(#night-plot)">
                 <path d={line(now, 'b')} stroke={cb.color} strokeWidth={2.25} />
                 <path d={line(now, 'a')} stroke={ca.color} strokeWidth={2.25} />
               </g>
             )}
             {cone && (
-              <g>
+              <g clipPath="url(#night-plot)">
                 {(['a', 'b'] as const).map((k) => {
                   const c = k === 'a' ? ca : cb;
                   const f = (v: number) => (k === 'a' ? v : 100 - v);
@@ -335,7 +356,7 @@ export default function NightChart({
                 })}
               </g>
             )}
-            {last && (
+            {last && inView(last.x) && (
               <g>
                 {(['a', 'b'] as const).map((k) => {
                   const c = k === 'a' ? ca : cb;
@@ -351,7 +372,7 @@ export default function NightChart({
               </g>
             )}
             {/* sem linha ainda: os dois no ponto de partida (0% apurado, 50%) */}
-            {!last && (
+            {!last && inView(0) && (
               <g aria-hidden>
                 <circle cx={sx(0) + 4} cy={sy(50)} r={4} fill={cb.color} stroke="var(--background)" strokeWidth={1.5} />
                 <circle cx={sx(0) + 8} cy={sy(50)} r={4} fill={ca.color} stroke="var(--background)" strokeWidth={1.5} />
@@ -459,15 +480,9 @@ export default function NightChart({
           </div>
         )}
 
-        {/* camada de captura: arrasto horizontal faz scrub, vertical rola a página */}
-        <div
-          className="absolute inset-0 touch-pan-y"
-          onPointerDown={onPointer}
-          onPointerMove={onPointer}
-          onPointerLeave={() => setProbe(null)}
-          onPointerCancel={() => setProbe(null)}
-          onPointerUp={(e) => e.pointerType !== 'mouse' && setTimeout(() => setProbe(null), 1600)}
-        />
+        {/* camada de captura (zoom.ts): pinça/Ctrl+rolagem aproxima, arrastar move com zoom, sem zoom o dedo lê o valor;
+            a vertical rola a página */}
+        <div className={cn('absolute inset-0 touch-pan-y', zoom.zoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair')} {...zoom.bind} />
 
         {now.length < 2 && !show22 && !showT1 && last && (
           <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-[13px] text-muted-foreground">

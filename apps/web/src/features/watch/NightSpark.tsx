@@ -5,6 +5,8 @@
 import type { Board } from '@apuracao/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LAYER, projectionPath } from '@/features/curve/layers';
+import { ZoomButtons } from '@/features/curve/ZoomButtons';
+import { useXZoom } from '@/features/curve/zoom';
 import { matchup2022 } from '@/lib/y2022';
 import { cn } from '@/lib/utils';
 
@@ -110,42 +112,37 @@ export function NightSpark({
   // com 2022 na tela, a comparação precisa da noite inteira (a virada pode estar lá na frente)
   // com 2022 ou com a projeção na tela, a noite inteira (a projeção vai até 100%)
   const xMax = useTween(fullAxis || curve22?.length || cone ? 100 : xWindow(last?.pst ?? 0));
-  const full = xMax > 99.5;
-  // o eixo y também só considera o trecho visível de 2022
-  const vis22 = (curve22 ?? []).filter((p) => p.pst <= xMax);
+  // zoom e arrasto no eixo x (curve/zoom.ts): [va, vb] é a janela visível
+  const [probe, setProbe] = useState<number | null>(null);
+  const zoom = useXZoom(ref, xMax, { l: padL, w: iw }, (v) => setProbe(v === null ? null : Math.max(0, Math.min(100, v))));
+  const [va, vb] = zoom.view;
+  const vw = Math.max(1e-6, vb - va);
+  const full = vb > 99.5;
+  const inView = (pst: number, m = 0) => pst >= va - m * vw && pst <= vb + m * vw;
+  // o eixo y só considera o que está na janela (com zoom, aproxima de verdade)
+  const vis22 = (curve22 ?? []).filter((p) => inView(p.pst, 0.02));
   const dev = Math.max(
-    4,
-    ...pts.map((p) => Math.abs(p.pa - 50)),
+    zoom.zoomed ? 1.5 : 4,
+    ...pts.filter((p) => inView(p.pst, 0.02)).map((p) => Math.abs(p.pa - 50)),
     ...vis22.map((p) => Math.abs(p.pa - 50)),
     t1 != null ? Math.abs(t1 - 50) : 0,
-    ...(cone ? cone.pts.flatMap((q) => [Math.abs(q.lo - 50), Math.abs(q.hi - 50)]) : []),
+    ...(cone ? cone.pts.filter((q) => inView(q.x, 0.05)).flatMap((q) => [Math.abs(q.lo - 50), Math.abs(q.hi - 50)]) : []),
   );
-  const span = Math.ceil((dev + 1) / 5) * 5;
-  const x = (pst: number) => padL + (Math.min(xMax, Math.max(0, pst)) / xMax) * iw;
+  const span = zoom.zoomed ? Math.ceil(dev + 0.5) : Math.ceil((dev + 1) / 5) * 5;
+  const x = (pst: number) => padL + ((pst - va) / vw) * iw;
   const xEnd = padL + iw;
   /** posição relativa na largura (0–1), para decidir onde cabe rótulo */
-  const frac = (pst: number) => Math.min(1, Math.max(0, pst / xMax));
+  const frac = (pst: number) => Math.min(1, Math.max(0, (pst - va) / vw));
   const y = (pa: number) => padT + ((50 + span - pa) / (2 * span)) * ih;
 
   const lineA = path(pts.map((p) => [x(p.pst), y(p.pa)]));
   const lineB = path(pts.map((p) => [x(p.pst), y(100 - p.pa)]));
   // até o primeiro ponto depois da janela (o recorte do svg corta o excesso)
-  const g22 = curve22?.length ? curve22.slice(0, Math.min(curve22.length, curve22.findIndex((p) => p.pst > xMax) + 1 || curve22.length)) : null;
+  const g22 = curve22?.length ? curve22 : null;
   const a22 = g22 ? path(g22.map((p) => [x(p.pst), y(p.pa)])) : '';
   const b22 = g22 ? path(g22.map((p) => [x(p.pst), y(100 - p.pa)])) : '';
 
-  // leitura por ponto: mouse por cima ou dedo (tocar/arrastar) mostra hoje e 2022 naquele % apurado
-  const [probe, setProbe] = useState<number | null>(null);
-  const release = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pstAt = (clientX: number) => {
-    const r = ref.current?.getBoundingClientRect();
-    return r ? Math.max(0, Math.min(xMax, ((clientX - r.left - padL) / iw) * xMax)) : null;
-  };
-  const onPointer = (e: React.PointerEvent) => {
-    if (e.pointerType !== 'mouse' && e.type === 'pointermove' && !e.buttons) return;
-    if (release.current) clearTimeout(release.current);
-    setProbe(pstAt(e.clientX));
-  };
+  // leitura por ponto: mouse por cima ou dedo (tocar/arrastar sem zoom) mostra hoje e 2022 naquele % apurado
   const nowAt =
     probe !== null && last && probe <= last.pst + 1
       ? pts.reduce((b, p) => (Math.abs(p.pst - probe) < Math.abs(b.pst - probe) ? p : b), pts[0])
@@ -173,12 +170,9 @@ export function NightSpark({
   return (
     <div
       ref={ref}
-      className={cn('relative w-full cursor-crosshair touch-pan-y select-none', className)}
+      className={cn('relative w-full touch-pan-y select-none', zoom.zoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair', className)}
       style={{ height }}
-      onPointerDown={onPointer}
-      onPointerMove={onPointer}
-      onPointerLeave={(e) => e.pointerType === 'mouse' && setProbe(null)}
-      onPointerUp={(e) => e.pointerType !== 'mouse' && (release.current = setTimeout(() => setProbe(null), 1800))}
+      {...zoom.bind}
     >
       <svg width={w} height={height} className="block overflow-visible" role="img" aria-label={last ? `Evolução da noite: com ${fmt(last.pst)}% apurado, ${ca.short} ${fmt(last.pa)}% e ${cb.short} ${fmt(100 - last.pa)}%` : 'Evolução da noite'}>
         <defs>
@@ -205,12 +199,13 @@ export function NightSpark({
         </text>
         {/* virada de 2022: linha vertical no % apurado em que a liderança trocou — a zona de atenção da noite */}
         {/* virada de 2022 ainda fora da janela do zoom: o ponto crítico não some, vira um aviso na borda */}
-        {flip22 && flip22.pst > xMax + 0.5 && (
-          <text x={xEnd - 2} y={padT + 8} textAnchor="end" className="fill-foreground/80 text-[11px] font-medium tabular-nums">
+        {flip22 && flip22.pst > vb + 0.5 && (
+          // com zoom, abaixo dos botões (o "ver tudo" ocupa o topo)
+          <text x={xEnd - 2} y={padT + (zoom.zoomed ? 30 : 8)} textAnchor="end" className="fill-foreground/80 text-[11px] font-medium tabular-nums">
             virada em 2022 · {fmt(flip22.pst)}% →
           </text>
         )}
-        {flip22 && flip22.pst <= xMax && (
+        {flip22 && inView(flip22.pst) && (
           <g aria-hidden>
             <line x1={x(flip22.pst)} x2={x(flip22.pst)} y1={padT} y2={padT + ih} className="stroke-foreground/50" strokeWidth={1.25} strokeDasharray="2 3" />
             <circle cx={x(flip22.pst)} cy={y(50)} r={3.5} fill={(flip22.lead === 'a' ? ca : cb).color} className="stroke-background" strokeWidth={1.5} />
@@ -267,7 +262,7 @@ export function NightSpark({
             })}
           </g>
         )}
-        {cone && (
+        {cone && full && (
           // projeção final na ponta (100%): o de cima acima da linha, o de baixo abaixo
           <g aria-hidden>
             {[
@@ -283,19 +278,21 @@ export function NightSpark({
             ))}
           </g>
         )}
-        <path d={lineB} fill="none" stroke={cb.color} strokeWidth={2.25} strokeLinecap="round" />
-        <path d={lineA} fill="none" stroke={ca.color} strokeWidth={2.25} strokeLinecap="round" />
+        <g clipPath="url(#spark-plot)">
+          <path d={lineB} fill="none" stroke={cb.color} strokeWidth={2.25} strokeLinecap="round" />
+          <path d={lineA} fill="none" stroke={ca.color} strokeWidth={2.25} strokeLinecap="round" />
+        </g>
         {/* antes das 17h: o 2º turno de hoje zerado, os dois no ponto de partida */}
         {!pts.length && fullAxis && (
           <g aria-hidden>
-            <circle cx={x(0)} cy={y(50)} r={4} fill={cb.color} className="stroke-background" strokeWidth={1.5} />
+            <circle cx={x(0)} cy={y(50)} r={4} fill={cb.color} className="stroke-background" strokeWidth={1.5} opacity={inView(0) ? 1 : 0} />
             <circle cx={x(0) + 3} cy={y(50)} r={4} fill={ca.color} className="stroke-background" strokeWidth={1.5} />
             <text x={x(0) + 12} y={y(50) - 7} className="fill-foreground text-[11px] font-semibold tabular-nums">
               hoje: 0% apurado
             </text>
           </g>
         )}
-        {last && (
+        {last && inView(last.pst) && (
           <>
             {[
               { c: ca, py: y(last.pa), ly: ya, v: last.pa },
@@ -332,12 +329,12 @@ export function NightSpark({
           </g>
         )}
         <text x={padL} y={height - 2} className="fill-muted-foreground text-[11px] tabular-nums">
-          0%
+          {va < 0.05 ? '0' : fmt(va)}%
         </text>
         <text x={xEnd} y={height - 2} textAnchor="end" className="fill-muted-foreground text-[11px] tabular-nums">
-          {full ? '100% apurado' : `${Math.round(xMax)}%`}
+          {full ? '100% apurado' : zoom.zoomed ? `${fmt(vb)}%` : `${Math.round(vb)}%`}
         </text>
-        {last && frac(last.pst) > 0.08 && frac(last.pst) < 0.85 && (
+        {last && inView(last.pst) && frac(last.pst) > 0.12 && frac(last.pst) < 0.85 && (
           <text x={x(last.pst)} y={height - 2} textAnchor="middle" className="fill-foreground text-[11px] font-medium tabular-nums">
             {fmt(last.pst)}%
           </text>
@@ -373,6 +370,7 @@ export function NightSpark({
           {pa22 !== null && <div className="mt-1 border-t pt-1 text-[10.5px] text-muted-foreground">2022: {matchup2022(board)}</div>}
         </div>
       )}
+      {(pts.length > 1 || g22 || cone) && <ZoomButtons z={zoom} className="absolute top-0 left-1" />}
       {/* sem linha ainda e sem referências desenhadas: o aviso no meio (com 2022/1º turno ele cobriria os rótulos) */}
       {!pts.length && !g22 && t1 == null && !fullAxis && (
         <div className="absolute inset-0 flex items-center justify-center text-[12px] text-muted-foreground">

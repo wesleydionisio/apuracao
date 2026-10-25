@@ -1,7 +1,8 @@
 // Zoom e arrasto do mapa em canvas, sem biblioteca. Celular: pinça (e arrasto com dois dedos); com zoom, um
 // dedo arrasta. Sem zoom, um dedo arrasta só para os lados e na vertical continua rolando a página
 // (touch-action: pan-y), para o mapa não prender a rolagem. Computador: a rolagem do mouse dá zoom (e a pinça do
-// trackpad), arrastar com o mouse move; com o mapa todo afastado, rolar para baixo volta a rolar a página.
+// trackpad), arrastar com o mouse move; com o mouse em cima do mapa a página não rola (nem nos limites do zoom:
+// rolar a página no meio do gesto deslocava o mapa sob o cursor).
 // Nos dois: duplo toque/clique aproxima, botões +/−, teclado (+, −, 0, setas). O mapa pode passar das bordas
 // por uma margem (`slack`), com ou sem zoom: dá para puxar a região da borda para longe do dedo e dos botões.
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
@@ -101,16 +102,16 @@ export function useViewport(
     }
   }, [w, h, set]);
 
-  // rolagem = zoom (a pinça do trackpad chega como rolagem com ctrlKey). Afastado ao máximo, rolar para baixo
-  // rola a página; aproximado ao máximo, rolar para cima também: o mapa nunca prende a rolagem nos extremos
+  // rolagem = zoom (a pinça do trackpad chega como rolagem com ctrlKey). Com o mouse em cima, a página nunca rola:
+  // nos limites do zoom o gesto só não faz nada (sair do mapa devolve a rolagem da página)
   useEffect(() => {
     const node = el.current;
     if (!node || !enabled) return;
     const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
       const dy = e.deltaMode === 1 ? e.deltaY * 20 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
       const k = v.current.k;
       if ((dy > 0 && k <= 1.0001) || (dy < 0 && k >= MAX_ZOOM - 0.0001)) return;
-      e.preventDefault();
       cancelAnimationFrame(anim.current);
       const r = node.getBoundingClientRect();
       // pinça do trackpad manda passos pequenos e muitos: mais sensível

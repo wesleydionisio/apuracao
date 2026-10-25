@@ -42,11 +42,14 @@ export function monotonePath(pts: XY[]): string {
   return d;
 }
 
-/** Domínio simétrico em torno de 50% com folga; passo dos ticks 2, 5 ou 10. */
-export function yDomain(values: number[]): { lo: number; hi: number; ticks: number[] } {
+/**
+ * Domínio simétrico em torno de 50% com folga; passo dos ticks 2, 5 ou 10.
+ * `tight` (com zoom): folga mínima e passos de até 0,5 ponto, para a diferença pequena aparecer.
+ */
+export function yDomain(values: number[], tight = false): { lo: number; hi: number; ticks: number[] } {
   const dev = values.length ? Math.max(...values.map((v) => Math.abs(v - 50))) : 0;
-  const raw = Math.max(4, dev + 1.5);
-  const step = raw <= 6 ? 2 : raw <= 15 ? 5 : 10;
+  const raw = tight ? Math.max(1, dev + 0.4) : Math.max(4, dev + 1.5);
+  const step = tight && raw <= 1.5 ? 0.5 : tight && raw <= 3 ? 1 : raw <= 6 ? 2 : raw <= 15 ? 5 : 10;
   const half = Math.ceil(raw / step) * step;
   const ticks: number[] = [];
   for (let v = 50 - half + step; v < 50 + half; v += step) ticks.push(v);
@@ -93,4 +96,13 @@ export function nearest<T extends { x: number }>(pts: T[], x: number, tolerance 
   }
   const best = Math.abs(pts[lo].x - x) <= Math.abs(pts[hi].x - x) ? pts[lo] : pts[hi];
   return Math.abs(best.x - x) <= tolerance ? best : null;
+}
+
+/** 3 a 5 marcas "redondas" no intervalo [a, b] (eixo x com zoom) */
+export function niceTicks(a: number, b: number): number[] {
+  const span = b - a;
+  const step = [0.1, 0.2, 0.5, 1, 2, 2.5, 5, 10, 20, 25].find((s) => span / s <= 5) ?? 25;
+  const out: number[] = [];
+  for (let v = Math.ceil(a / step - 1e-9) * step; v <= b + 1e-9; v += step) out.push(Math.round(v * 100) / 100);
+  return out;
 }
