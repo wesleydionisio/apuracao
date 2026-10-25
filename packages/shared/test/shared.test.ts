@@ -151,11 +151,27 @@ test('detectMoments: marcos, viradas e ids determinísticos', () => {
     now: '2026-10-25T18:00:00-03:00',
   });
   const ids = m.map((x) => x.id);
-  assert.ok(ids.includes('milestone:br:10'));
+  // 8% → 26% num ciclo: só o maior marco cruzado, e o título diz quanto já está apurado
+  assert.ok(!ids.includes('milestone:br:10'));
   assert.ok(ids.includes('milestone:br:25'));
+  assert.match(m.find((x) => x.id === 'milestone:br:25')!.title, /^🔔 Brasil passa de 25% das urnas apuradas \(26,0%\)/);
   assert.ok(ids.some((i) => i.startsWith('virada:br:b')));
   assert.ok(ids.includes('uf_milestone:BA:50'));
   assert.ok(ids.some((i) => i.startsWith('virada_uf:BA:b')));
+});
+
+test('detectMoments: exterior chegando de uma vez não diz "50%" com 57,6% apurado', () => {
+  const base = { cands, prevBr: snap({ pst: 0.25 }), br: snap({ pst: 0.29 }) };
+  const ufMoment = (from: number, to: number) =>
+    detectMoments({ ...base, prevUfs: { 'uf:ZZ': snap({ s: 'uf:ZZ', pst: from }) }, ufs: { 'uf:ZZ': snap({ s: 'uf:ZZ', pst: to, pa: 59.67, pb: 40.33 }) } });
+  const jump = ufMoment(0, 57.59);
+  assert.equal(jump.length, 1);
+  assert.equal(jump[0].id, 'uf_milestone:ZZ:50');
+  assert.equal(jump[0].title, '🔔 Exterior passa de 50% apurado (57,6%): A 59,7% × 40,3% B');
+  // cruzou rente ao marco: título de sempre
+  assert.equal(ufMoment(49.9, 50.03)[0].title, '🔔 Exterior, 50% apurado: A 59,7% × 40,3% B');
+  // 40% → 100% num ciclo: só o de 100%
+  assert.deepEqual(ufMoment(40, 100).map((x) => x.id), ['uf_milestone:ZZ:100']);
 });
 
 test('moderação: termos, leet, links e tamanho', () => {

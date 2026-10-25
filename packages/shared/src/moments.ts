@@ -25,6 +25,10 @@ export interface MomentInput {
 }
 
 const crossed = (prev: number, now: number, mark: number) => prev < mark && now >= mark;
+/** maior marco cruzado neste ciclo: um salto grande (o exterior chegando de uma vez) vira um marco só */
+const topCrossed = (marks: number[], prev: number, now: number) => marks.filter((m) => crossed(prev, now, m)).pop();
+/** o título nunca diz menos do que já está apurado: "passa de 50% (57,6%)" quando o salto foi além do marco */
+const overshot = (mark: number, pst: number) => fmtPct(pst, 1) !== fmtPct(mark, 1);
 
 export function detectMoments(i: MomentInput): Moment[] {
   const out: Moment[] = [];
@@ -34,17 +38,17 @@ export function detectMoments(i: MomentInput): Moment[] {
     `${i.cands[0].short} ${fmtPct(s.pa, 1)}% × ${fmtPct(s.pb, 1)}% ${i.cands[1].short}`;
   const push = (m: Omit<Moment, 'at'>) => out.push({ ...m, at });
 
-  const prevPst = i.prevBr?.pst ?? 0;
-  for (const mark of MILESTONES) {
-    if (crossed(prevPst, i.br.pst, mark)) {
-      push({
-        id: `milestone:br:${mark}`,
-        kind: 'milestone',
-        scope: 'br',
-        title: `🔔 Brasil, ${mark}% das urnas apuradas: ${lineOf(i.br)}`,
-        payload: { mark, pa: i.br.pa, pb: i.br.pb },
-      });
-    }
+  const brMark = topCrossed(MILESTONES, i.prevBr?.pst ?? 0, i.br.pst);
+  if (brMark !== undefined) {
+    push({
+      id: `milestone:br:${brMark}`,
+      kind: 'milestone',
+      scope: 'br',
+      title: overshot(brMark, i.br.pst)
+        ? `🔔 Brasil passa de ${brMark}% das urnas apuradas (${fmtPct(i.br.pst, 1)}%): ${lineOf(i.br)}`
+        : `🔔 Brasil, ${brMark}% das urnas apuradas: ${lineOf(i.br)}`,
+      payload: { mark: brMark, pst: i.br.pst, pa: i.br.pa, pb: i.br.pb },
+    });
   }
   if (i.prevBr?.lead && i.br.lead && i.prevBr.lead !== i.br.lead) {
     push({
@@ -78,16 +82,17 @@ export function detectMoments(i: MomentInput): Moment[] {
     const p = i.prevUfs[key];
     if (!p) continue;
     const uf = key.slice(3);
-    for (const mark of UF_MILESTONES) {
-      if (crossed(p.pst, s.pst, mark)) {
-        push({
-          id: `uf_milestone:${uf}:${mark}`,
-          kind: 'uf_milestone',
-          scope: key,
-          title: `🔔 ${ufName(uf)}, ${mark}% apurado: ${lineOf(s)}`,
-          payload: { mark, pa: s.pa },
-        });
-      }
+    const mark = topCrossed(UF_MILESTONES, p.pst, s.pst);
+    if (mark !== undefined) {
+      push({
+        id: `uf_milestone:${uf}:${mark}`,
+        kind: 'uf_milestone',
+        scope: key,
+        title: overshot(mark, s.pst)
+          ? `🔔 ${ufName(uf)} passa de ${mark}% apurado (${fmtPct(s.pst, 1)}%): ${lineOf(s)}`
+          : `🔔 ${ufName(uf)}, ${mark}% apurado: ${lineOf(s)}`,
+        payload: { mark, pst: s.pst, pa: s.pa },
+      });
     }
     // só depois de 5% apurado: antes disso é ruído
     if (p.lead && s.lead && p.lead !== s.lead && s.pst >= 5) {

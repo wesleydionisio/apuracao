@@ -75,22 +75,31 @@ const MAX_MOMENTS = 200;
 const same = (x: Snap | undefined | null, y: Snap) =>
   !!x && x.at === y.at && x.pst === y.pst && x.a === y.a && x.b === y.b && x.status === y.status;
 
+/** o CDN do TSE às vezes devolve uma versão antiga do arquivo (até a zerada da véspera):
+ *  totalização mais velha que a que já temos é ignorada, para o placar não andar para trás
+ *  nem disparar de novo um marco já cruzado */
+export const isStale = (s: Snap, prev: Snap | undefined | null) => !!prev && Date.parse(s.at) < Date.parse(prev.at);
+
 export function runCycle(prev: PollState, i: CycleInput): CycleOutput {
   const t1uf = i.hist.t1?.uf;
   const ufs: Record<string, Snap> = {};
   for (const p of i.ufs) {
-    ufs[`uf:${p.code}`] = toSnap(p, i.cands, { fallback: ratesFromHistory(t1uf?.[p.code]) });
+    const key = `uf:${p.code}`;
+    const s = toSnap(p, i.cands, { fallback: ratesFromHistory(t1uf?.[p.code]) });
+    ufs[key] = isStale(s, prev.ufs[key]) ? prev.ufs[key] : s;
   }
   // BR: o restante esperado é a soma por UF (pondera comparecimento de cada estado)
   let br = toSnap(i.br, i.cands, { fallback: ratesFromHistory(i.hist.t1?.br) });
   const ufList = Object.values(ufs);
   if (ufList.length >= 27) br = withRemaining(br, ufList.reduce((s, u) => s + u.rem, 0));
+  if (isStale(br, prev.br)) br = prev.br!;
 
   const mun: Record<string, Snap> = { ...prev.mun };
   const munNew: Record<string, Snap> = {};
   for (const { ibge, p } of i.mun) {
     const key = `mun:${ibge}`;
     const s = toSnap(p, i.cands, { key, fallback: ratesFromHistory(i.hist.t1Mun[ibge]) });
+    if (isStale(s, prev.mun[key])) continue;
     mun[key] = s;
     munNew[key] = s;
   }

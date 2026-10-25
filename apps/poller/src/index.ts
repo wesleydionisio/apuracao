@@ -114,6 +114,9 @@ async function cycleAt(opts: { allMun?: boolean }) {
     const UF = ufCodes[i].toUpperCase();
     for (const r of parseMunProgress(raw)) {
       const m = hist.byTse.get(`${UF}:${r.tse}`);
+      // andamento de uma versão antiga do arquivo (CDN do TSE): fica o mais novo que já temos
+      const had = m && munProg.get(m.ibge)?.at;
+      if (had && r.at && Date.parse(r.at) < Date.parse(had)) continue;
       if (m) munProg.set(m.ibge, { pst: r.pst, at: r.at, el: m.el, te: r.el, elc: r.elc, turnout: r.turnout });
     }
   });

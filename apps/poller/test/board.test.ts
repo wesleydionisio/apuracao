@@ -31,6 +31,39 @@ test('primeiro ciclo só semeia: não dispara marcos atrasados', () => {
   assert.equal(r.state.curve.length, 1);
 });
 
+test('arquivo antigo do CDN do TSE não faz o placar voltar nem repetir marco', () => {
+  const br = parseResult(fx('t2-br.json'));
+  const cands = detectCandidates(br);
+  const map = { a: cands[0].n, b: cands[1].n };
+  const [na, nb] = [cands[0].n, cands[1].n];
+  const zz = (at: string, pst: number, a: number, b: number) => ({
+    ...br, scope: 'uf' as const, code: 'ZZ', at, pst, valid: a + b, votes: { [na]: a, [nb]: b },
+  });
+  const brAt = (at: string, pst: number) => ({ ...br, at, pst, valid: 1000, votes: { [na]: 600, [nb]: 400 } });
+  const step = (st: ReturnType<typeof emptyState>, b: ReturnType<typeof brAt>, z: ReturnType<typeof zz>) =>
+    runCycle(st, { cands, br: b, ufs: [z], mun: [], hist, y2022Map: map, bigMunEl: 1 });
+
+  // véspera zerada → exterior chega com 57,59%: um marco, com o % real
+  let r = step(emptyState(), brAt('2026-10-24T20:11:36-03:00', 0), zz('2026-10-24T20:11:36-03:00', 0, 0, 0));
+  r = step(r.state, brAt('2026-10-25T17:06:58-03:00', 0.29), zz('2026-10-25T17:05:27-03:00', 57.59, 141386, 95551));
+  assert.deepEqual(r.moments.map((m) => m.id), ['uf_milestone:ZZ:50']);
+  assert.match(r.moments[0].title, /passa de 50% apurado \(57,6%\)/);
+
+  // o CDN devolve a versão zerada da véspera: fica o que já tínhamos, sem mudança nem marco
+  const kept = r.state;
+  r = step(kept, brAt('2026-10-25T16:46:00-03:00', 0), zz('2026-10-24T20:11:36-03:00', 0, 0, 0));
+  assert.equal(r.state.ufs['uf:ZZ'].pst, 57.59);
+  assert.equal(r.state.br?.pst, 0.29);
+  assert.equal(r.changed.length, 0);
+  assert.equal(r.moments.length, 0);
+
+  // e a versão nova de novo: segue normal, sem repetir o marco
+  r = step(r.state, brAt('2026-10-25T19:02:54-03:00', 1.1), zz('2026-10-25T19:02:54-03:00', 60.47, 141386, 95551));
+  assert.equal(r.state.ufs['uf:ZZ'].pst, 60.47);
+  assert.equal(r.state.br?.pst, 1.1);
+  assert.equal(r.moments.length, 0);
+});
+
 test('projeção: sem modelo por cidade usa o modelo por UF; "à frente" só depois de ciclos seguidos', async () => {
   const { projectionStep } = await import('../src/board');
   const { toSnap } = await import('@apuracao/shared');
