@@ -50,7 +50,7 @@ export function RemainingTable({ board, limit = 7, className }: { board: Board; 
       className={className}
     >
       {!rows.length && !board.released ? (
-        <Empty title="Começa às 17h">Os estados com mais votos a apurar aparecem aqui, com quem lidera em cada um e o 1º turno ao lado.</Empty>
+        <Empty title="Começa às 19h">Os estados com mais votos a apurar aparecem aqui, com quem lidera em cada um e o 1º turno ao lado.</Empty>
       ) : !rows.length ? (
         <Empty title="Nada relevante a apurar">Todos os estados estão praticamente apurados.</Empty>
       ) : (

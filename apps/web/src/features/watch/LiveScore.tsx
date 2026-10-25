@@ -275,7 +275,7 @@ export function LiveScore({
   const s = board.br;
   const [ca, cb] = board.candidates;
   const pa = s && s.valid ? s.pa : null;
-  // antes das 17h (placar zerado da aba Chat): 0% para os dois, a barra fica neutra
+  // antes das 19h (placar zerado da aba Chat): 0% para os dois, a barra fica neutra
   const zero = s?.status === 'nao_iniciada' && !s.valid;
   const marks: { v: number; label: string }[] = [];
   if (refs.t1 && hist.t1 !== null) marks.push({ v: hist.t1, label: '1º t.' });
@@ -402,7 +402,7 @@ export function LiveScoreCompact({ board }: { board: Board }) {
 
 /**
  * Topo da aba Chat (celular): o essencial do placar em pouca altura, para sobrar tela para a conversa.
- * Antes das 17h, a contagem no lugar dos números (sem 0,00% nem barras vazias); depois, os dois %, a barra e o apurado.
+ * Antes das 19h, a contagem no lugar dos números (sem 0,00% nem barras vazias); depois, os dois %, a barra e o apurado.
  */
 export function LiveScoreEssential({ board }: { board: Board }) {
   const s = board.br;

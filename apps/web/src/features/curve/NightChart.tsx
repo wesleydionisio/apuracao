@@ -377,7 +377,7 @@ export default function NightChart({
                 <circle cx={sx(0) + 4} cy={sy(50)} r={4} fill={cb.color} stroke="var(--background)" strokeWidth={1.5} />
                 <circle cx={sx(0) + 8} cy={sy(50)} r={4} fill={ca.color} stroke="var(--background)" strokeWidth={1.5} />
                 <text x={sx(0) + 18} y={sy(50) - 8} className="fill-foreground text-[11px] font-semibold">
-                  {board.released ? 'hoje: aguardando as primeiras urnas' : 'hoje: começa às 17h'}
+                  {board.released ? 'hoje: aguardando as primeiras urnas' : 'hoje: começa às 19h'}
                 </text>
               </g>
             )}
@@ -486,7 +486,7 @@ export default function NightChart({
 
         {now.length < 2 && !show22 && !showT1 && last && (
           <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-[13px] text-muted-foreground">
-            {board.released ? 'A curva aparece com as primeiras urnas apuradas' : 'Às 17h a curva de hoje começa aqui'}
+            {board.released ? 'A curva aparece com as primeiras urnas apuradas' : 'Às 19h a curva de hoje começa aqui'}
           </div>
         )}
       </div>

@@ -86,7 +86,7 @@ export function useCurve22(board: Board | null, enabled: boolean) {
   return pts;
 }
 
-/** antes das 17h: o mesmo placar com tudo zerado (a aba Chat já mostra os candidatos frente a frente) */
+/** antes das 19h: o mesmo placar com tudo zerado (a aba Chat já mostra os candidatos frente a frente) */
 export function zeroBoard(b: Board): Board {
   if (b.br) return b;
   return {

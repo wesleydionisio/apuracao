@@ -254,7 +254,7 @@ function guessPoster(fmt: Poster, o: GuessIn) {
     h(
       { alignItems: 'center', gap: 12, fontSize: 22, fontWeight: 800, letterSpacing: 2, border: `1px solid ${LINE}`, borderRadius: 999, padding: '12px 24px', background: `${CARD}cc` },
       dot(r ? FG : '#22c55e', 14),
-      r ? 'RESULTADO OFICIAL' : 'APURAÇÃO AO VIVO · 25/10 · 17H',
+      r ? 'RESULTADO OFICIAL' : 'APURAÇÃO AO VIVO · 25/10 · 19H',
     ),
   );
 
@@ -406,7 +406,7 @@ function guessOg(o: GuessIn) {
 // ---------------------------------------------------------------- placar, cidade, momento
 
 /**
- * Card de divulgação (antes das 17h): o convite, não o placar. Título grande, os dois candidatos frente a frente
+ * Card de divulgação (antes das 19h): o convite, não o placar. Título grande, os dois candidatos frente a frente
  * nas cores de cada lado e o que o site tem (placar, chat, palpite). É o que aparece ao colar o link no X/WhatsApp.
  */
 export function teaserCard(cands: CandidateDef[]) {
@@ -443,7 +443,7 @@ export function teaserCard(cands: CandidateDef[]) {
         h(
           { alignItems: 'center', gap: 10, fontSize: 20, fontWeight: 800, letterSpacing: 1.5, color: FG, border: `1px solid ${LINE}`, borderRadius: 999, padding: '8px 18px', background: CARD },
           dot('#22c55e', 12),
-          'AO VIVO DOMINGO, 17H',
+          'AO VIVO DOMINGO, 19H',
         ),
       ),
       h(
@@ -484,7 +484,7 @@ export function scoreCard(o: { title: string; snap: Snap | null; cands: Candidat
         h(
           { flexDirection: 'column', gap: 10, flexShrink: 1 },
           h({ fontSize: 30, fontWeight: 800 }, `${ca.short} × ${cb.short}`),
-          h({ fontSize: 26, color: MUTED }, stripEmoji(o.subtitle ?? 'Placar ao vivo a partir das 17h (Brasília)')),
+          h({ fontSize: 26, color: MUTED }, stripEmoji(o.subtitle ?? 'Placar ao vivo a partir das 19h (Brasília)')),
         ),
       );
   const status = s

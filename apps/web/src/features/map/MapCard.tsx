@@ -20,7 +20,7 @@ export default function MapCard() {
   const board = useBoard((s) => s.board);
   const started = !!board?.released && !!board.br;
   const [pick, setPick] = useState<MapLayer | null>(null);
-  // sem escolha: ao vivo depois das 17h, o 1º turno antes; "Agora" escolhido antes da hora vira 1º turno
+  // sem escolha: ao vivo depois das 19h, o 1º turno antes; "Agora" escolhido antes da hora vira 1º turno
   const want: MapLayer = pick === null || (pick === 'live' && !started) ? (started ? 'live' : 't1') : pick;
   const { values, layer } = useStateValues(board, want);
   const [tip, setTip] = useState<HexHit | null>(null);

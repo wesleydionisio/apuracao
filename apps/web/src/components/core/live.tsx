@@ -66,6 +66,20 @@ export function SourceStamp({ at, className, short = false }: { at?: string | nu
   );
 }
 
+/** a votação foi prorrogada no próprio domingo: por que a contagem mudou de 17h para 19h, com a fonte */
+export const EXTENSION_URL = 'https://g1.globo.com/politica/eleicoes/2026/noticia/2026/10/25/zanin-prorroga-votacao.ghtml';
+
+export function ExtensionNotice({ className }: { className?: string }) {
+  return (
+    <p className={cn('rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-[12.5px] leading-snug text-foreground', className)}>
+      <strong className="font-semibold">Votação prorrogada até as 19h</strong> em todo o país, por decisão do ministro Cristiano Zanin, do STF.{' '}
+      <a href={EXTENSION_URL} target="_blank" rel="noreferrer" className="whitespace-nowrap text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground">
+        Fonte: g1
+      </a>
+    </p>
+  );
+}
+
 /** variação em pontos percentuais: ↗ 0,4 / ↘ 1,2 — direção pela seta, nunca pela cor */
 export function Delta({ v, digits = 1, className, suffix = '' }: { v: number | null | undefined; digits?: number; className?: string; suffix?: string }) {
   if (v === null || v === undefined || Math.abs(v) < 10 ** -digits / 2) {

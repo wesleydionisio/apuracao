@@ -338,7 +338,7 @@ function PreLive({ live, name, pa1, cands }: { live: boolean; name: string; pa1:
   return (
     <div>
       <p className="text-sm text-muted-foreground text-pretty">
-        {live ? `Ainda sem parcial do TSE para ${name}. Atualizamos sozinhos a cada 30 segundos.` : `A parcial de ${name} aparece aqui a partir das 17h de domingo.`}
+        {live ? `Ainda sem parcial do TSE para ${name}. Atualizamos sozinhos a cada 30 segundos.` : `A parcial de ${name} aparece aqui a partir das 19h de domingo.`}
       </p>
       {pa1 !== null && (
         <div className="mt-4">

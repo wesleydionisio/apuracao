@@ -1,6 +1,6 @@
 // Mini gráfico da noite para a tela Ao vivo: % dos válidos × % de urnas apuradas.
 // O eixo x dá zoom conforme a apuração: no começo mostra só o trecho inicial (a curva não fica espremida num canto)
-// e vai abrindo até 0–100% perto do fim. Com a curva de 2022 ligada (ou antes das 17h, `fullAxis`) é sempre a noite
+// e vai abrindo até 0–100% perto do fim. Com a curva de 2022 ligada (ou antes das 19h, `fullAxis`) é sempre a noite
 // inteira, para ver onde a liderança virou em 2022. Com zoom, a virada de 2022 fora da janela vira um aviso na borda.
 import type { Board } from '@apuracao/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -79,7 +79,7 @@ export function NightSpark({
   /** onde a liderança trocou em 2022 (% apurado) e quem passou à frente: marcador vertical */
   flip22?: { pst: number; lead: 'a' | 'b' } | null;
   height?: number;
-  /** eixo x sempre 0–100% (antes das 17h: a noite inteira, com a referência de 2022) */
+  /** eixo x sempre 0–100% (antes das 19h: a noite inteira, com a referência de 2022) */
   fullAxis?: boolean;
   /** projeção: do ponto de agora até 100%, com a faixa de 95% */
   proj?: boolean;
@@ -282,7 +282,7 @@ export function NightSpark({
           <path d={lineB} fill="none" stroke={cb.color} strokeWidth={2.25} strokeLinecap="round" />
           <path d={lineA} fill="none" stroke={ca.color} strokeWidth={2.25} strokeLinecap="round" />
         </g>
-        {/* antes das 17h: o 2º turno de hoje zerado, os dois no ponto de partida */}
+        {/* antes das 19h: o 2º turno de hoje zerado, os dois no ponto de partida */}
         {!pts.length && fullAxis && (
           <g aria-hidden>
             <circle cx={x(0)} cy={y(50)} r={4} fill={cb.color} className="stroke-background" strokeWidth={1.5} opacity={inView(0) ? 1 : 0} />
@@ -370,7 +370,7 @@ export function NightSpark({
           {pa22 !== null && <div className="mt-1 border-t pt-1 text-[10.5px] text-muted-foreground">2022: {matchup2022(board)}</div>}
         </div>
       )}
-      {/* botões só com a linha de hoje: antes das 17h eles cobririam os rótulos (a pinça segue valendo) */}
+      {/* botões só com a linha de hoje: antes das 19h eles cobririam os rótulos (a pinça segue valendo) */}
       {pts.length > 1 && <ZoomButtons z={zoom} className="absolute top-0 left-1" />}
       {/* sem linha ainda e sem referências desenhadas: o aviso no meio (com 2022/1º turno ele cobriria os rótulos) */}
       {!pts.length && !g22 && t1 == null && !fullAxis && (

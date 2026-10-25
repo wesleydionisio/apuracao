@@ -807,7 +807,7 @@ const versus = () => {
   return c ? `${c[0].short} x ${c[1].short}` : 'presidente';
 };
 const DEFAULT_DESC =
-  'Acompanhe a apuração do 2º turno ao vivo com dados oficiais do TSE e comente em tempo real no chat, com a torcida de cada lado. Resultado por estado e por cidade, e seu palpite antes das 17h.';
+  'Acompanhe a apuração do 2º turno ao vivo com dados oficiais do TSE e comente em tempo real no chat, com a torcida de cada lado. Resultado por estado e por cidade, e seu palpite antes das 19h.';
 /** muda quando o card de compartilhamento muda: X e WhatsApp guardam a imagem pelo endereço */
 const OG_VER = 'c3';
 
@@ -852,7 +852,7 @@ const pages: Record<string, () => Omit<Meta, 'path' | 'image'>> = {
   }),
   '/palpite': () => ({
     title: `Palpite do 2º turno 2026: quem vence, ${versus()}? | ${BRAND}`,
-    description: 'Dê seu palpite para o resultado do 2º turno antes das 17h e veja, durante a apuração, quão perto você chegou. Gere seu card para compartilhar.',
+    description: 'Dê seu palpite para o resultado do 2º turno antes das 19h e veja, durante a apuração, quão perto você chegou. Gere seu card para compartilhar.',
   }),
   '/chat': () => ({
     title: `Chat ao vivo da apuração do 2º turno | ${BRAND}`,
@@ -955,7 +955,7 @@ app.get<{ Params: { uf: string; slug: string } }>('/cidade/:uf/:slug', async (re
     title: `Apuração em ${m.name} (${m.uf}) no 2º turno 2026: resultado ao vivo | ${BRAND}`,
     description: now
       ? `${fmtPct(now.pst, 1)}% apurado em ${m.name}: ${versus()}. Compare com ${m.uf}, o Brasil, o 1º turno e 2022. Dados oficiais do TSE.`
-      : `Resultado do 2º turno em ${m.name} (${m.uf}) ao vivo a partir das 17h de domingo, e como a cidade votou no 1º turno e em 2022.`,
+      : `Resultado do 2º turno em ${m.name} (${m.uf}) ao vivo a partir das 19h de domingo, e como a cidade votou no 1º turno e em 2022.`,
     path: `/cidade/${m.uf.toLowerCase()}/${m.slug}`,
     image: `/api/og/city/${m.ibge}.png?v=${now?.pst ?? 0}`,
   });

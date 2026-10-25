@@ -1,8 +1,8 @@
-// Antes das 17h: contagem regressiva e o confronto no 1º turno (o convite para o palpite é o cartão logo abaixo).
+// Antes das 19h: contagem regressiva e o confronto no 1º turno (o convite para o palpite é o cartão logo abaixo).
 import type { Board } from '@apuracao/shared';
 import NumberFlow, { NumberFlowGroup } from '@number-flow/react';
 import { CandidateAvatar } from '@/components/core/candidate';
-import { SourceStamp } from '@/components/core/live';
+import { ExtensionNotice, SourceStamp } from '@/components/core/live';
 import { VersusGlow } from '@/components/core/versus';
 import { useNow } from '@/components/ui';
 import { fmtInt, fmtPct } from '@/lib/format';
@@ -54,9 +54,10 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
     <section aria-label="Antes da apuração" className={cn(size === 'lg' ? 'p-0' : 'px-4 pt-3 pb-3')}>
       {/* o convite do palpite fica no cartão logo abaixo (GuessCta): aqui só a contagem, num alinhamento só */}
       <p className="text-[11.5px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
-        {left > 0 ? 'Placar ao vivo às 17h de domingo, em' : 'O placar abre em instantes'}
+        {left > 0 ? 'Placar ao vivo às 19h de domingo, em' : 'O placar abre em instantes'}
       </p>
-      <div className="mt-1.5">{left > 0 ? <Countdown ms={left} size={size} /> : <span className="display text-[34px] font-semibold">17:00</span>}</div>
+      <div className="mt-1.5">{left > 0 ? <Countdown ms={left} size={size} /> : <span className="display text-[34px] font-semibold">19:00</span>}</div>
+      <ExtensionNotice className="mt-2.5" />
 
       <div className={cn('relative overflow-hidden rounded-xl border bg-card/60 px-3 pt-2.5 pb-3', size === 'lg' ? 'mt-6' : 'mt-3')}>
         <VersusGlow a={ca.color} b={cb.color} />
@@ -80,7 +81,7 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
         <VersusBar board={board} pa={t1} marks={[]} className="mt-2.5" />
       </div>
 
-      {/* o gráfico da noite já antes das 17h: a apuração de 2022 (tracejada), o 1º turno e onde a liderança virou */}
+      {/* o gráfico da noite já antes das 19h: a apuração de 2022 (tracejada), o 1º turno e onde a liderança virou */}
       <div className={size === 'lg' ? 'mt-6' : 'mt-4'}>
         <div className="mb-1 flex items-center justify-between gap-2 text-[11.5px] text-muted-foreground">
           <span className="font-medium text-foreground">O que observar na apuração</span>
@@ -108,7 +109,7 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
               <span className="font-semibold text-foreground">{fmtInt(stats.guesses)}</span> palpites
             </>
           ) : (
-            'Palpites abertos até 17h'
+            'Palpites abertos até 19h'
           )}
           {online ? (
             <>

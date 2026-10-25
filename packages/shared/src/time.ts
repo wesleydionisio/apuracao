@@ -1,7 +1,7 @@
 // Horários oficiais. Brasília = UTC−3 (sem horário de verão desde 2019).
 export const ELECTION_DAY = '2026-10-25';
 /** placar e projeções só aparecem a partir daqui; palpites fecham aqui */
-export const DEFAULT_RELEASE_AT = '2026-10-25T17:00:00-03:00';
+export const DEFAULT_RELEASE_AT = '2026-10-25T19:00:00-03:00';
 
 export const releaseAt = (env?: string) => new Date(env || DEFAULT_RELEASE_AT);
 export const isReleased = (now: Date = new Date(), at: Date = releaseAt()) => now.getTime() >= at.getTime();

@@ -2,7 +2,7 @@
 import { ArrowUpRight } from 'lucide-react';
 import { useEffect } from 'react';
 import { CandidateAvatar, useCandidateCssVars } from '@/components/core/candidate';
-import { SourceStamp } from '@/components/core/live';
+import { EXTENSION_URL, SourceStamp } from '@/components/core/live';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 import { Pct, SplitBar } from './bits';
@@ -29,7 +29,10 @@ export function EmbedPage() {
               ))}
             </span>
             <p className="text-[14px] leading-snug">
-              A apuração do 2º turno começa às <strong>17h</strong> (Brasília).
+              A apuração do 2º turno começa às <strong>19h</strong> (Brasília): votação prorrogada pelo STF.{' '}
+              <a href={EXTENSION_URL} target="_blank" rel="noreferrer" className="text-muted-foreground underline underline-offset-2">
+                Fonte: g1
+              </a>
             </p>
           </div>
         ) : (

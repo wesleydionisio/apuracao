@@ -1,4 +1,4 @@
-// Antes das 17h o servidor não publica placar nenhum (nem zerado: garantia legal, aplicada no poller e no WS).
+// Antes das 19h o servidor não publica placar nenhum (nem zerado: garantia legal, aplicada no poller e no WS).
 // Para o site já mostrar todos os painéis montados — e o visitante ver antes o que vai ter —, o front desenha os
 // mesmos componentes do ao vivo sobre um placar ZERADO: 0% apurado, "aguardando", nenhum número inventado.
 // `released` continua false, então cada componente sabe que é a véspera.
@@ -47,5 +47,5 @@ export function preBoard(board: Board): Board {
   return out;
 }
 
-/** é a véspera (antes das 17h)? */
+/** é a véspera (antes das 19h)? */
 export const isPre = (board: Board) => !board.released;

@@ -87,7 +87,7 @@ function Row({
   delta: number | null;
   final: boolean;
   reserve?: boolean;
-  /** já há voto apurado (antes das 17h não) */
+  /** já há voto apurado (antes das 19h não) */
   counted?: boolean;
   /** referências já convertidas para este candidato (0–100), com o rótulo (2022 pode ser outra pessoa) */
   refs: { k: keyof RowRefs; v: number; label?: string }[];

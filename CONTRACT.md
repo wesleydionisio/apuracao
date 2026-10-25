@@ -20,7 +20,7 @@ Gerados pelo poller a cada ciclo (Cache-Control `s-maxage=5, stale-while-revalid
 
 | Caminho | Tipo | Notas |
 |---|---|---|
-| `/data/br.json` | `Board` | placar completo. Antes das 17h: `released=false`, `br=null`, `ufs={}`. `projection` (≥ 20% apurado): `pa/lo/hi` (faixa de 95%), `model` (`cidade` \| `uf`), `lead` (lado já confirmado, com histerese), `ufs` (faixa por UF com 20%+), `curve` (a faixa ao longo da noite) |
+| `/data/br.json` | `Board` | placar completo. Antes das 19h: `released=false`, `br=null`, `ufs={}`. `projection` (≥ 20% apurado): `pa/lo/hi` (faixa de 95%), `model` (`cidade` \| `uf`), `lead` (lado já confirmado, com histerese), `ufs` (faixa por UF com 20%+), `curve` (a faixa ao longo da noite) |
 | `/data/mun/<UF>.json` | `MunBoard` | só municípios já coletados (top ~300 por eleitorado) |
 | `/data/site.json` | `SiteConfig` | gravado pela API (boot e painel admin): patrocínio, "anuncie aqui", Super Chat ligado |
 
@@ -53,7 +53,7 @@ Coordenadas arredondadas (3 casas), malha IBGE "qualidade mínima".
 | `GET /api/auth/username?u=` | `{ ok, valid }` (disponível / formato válido) |
 | `POST /api/auth/logout` | apaga o cookie `sid` |
 | `POST /api/auth/dev` | só sem `GOOGLE_CLIENT_ID` e fora de produção: body `{ email }`, mesmo retorno de `/google` |
-| `POST /api/guess` | body `{ nick, pa, uf?, ufPa?, mun?, munPa? }` → `{ guess: Guess, url }`. 1 por `aid` (repostar atualiza). 403 `closed` depois das 17h |
+| `POST /api/guess` | body `{ nick, pa, uf?, ufPa?, mun?, munPa? }` → `{ guess: Guess, url }`. 1 por `aid` (repostar atualiza). 403 `closed` depois das 19h |
 | `GET /api/guess/:id` | `{ guess, live: { pa, dist, rank, total, ufRank?, ufTotal?, munRank?, munTotal? } \| null, final: boolean }` |
 | `GET /api/city/:ibge` | `{ mun: Municipality, now: Snap \| null, t1: HistRow \| null, y2022: HistRow \| null, uf: Snap \| null, br: Snap \| null }` |
 | `GET /api/city/by-slug/:uf/:slug` | idem |
@@ -101,7 +101,7 @@ Online: cada worker WS grava `online:<worker>` = conexões, `EX 15`, a cada 5s.
 | `DATABASE_URL` | poller, api | vazio = sem Postgres (api usa `var/guesses.ndjson`) |
 | `SECRET` | api, ws | `dev-secret` |
 | `ADMIN_TOKEN` | api | vazio = admin desligado |
-| `RELEASE_AT` | todos | `2026-10-25T17:00:00-03:00` |
+| `RELEASE_AT` | todos | `2026-10-25T19:00:00-03:00` |
 | `TSE_ELECTION` / `TSE_T1` | poller | `6258` / `6257` |
 | `CAND_A` / `CAND_B` | poller | ordem `seq` do TSE |
 | `SOURCE` | poller | `tse` \| `replay` (simulação acelerada) |

@@ -1,4 +1,4 @@
-// Modo demo: ?mock=1 usa as fixtures de apps/web/dev-fixtures (só em dev). ?pre=1 simula antes das 17h.
+// Modo demo: ?mock=1 usa as fixtures de apps/web/dev-fixtures (só em dev). ?pre=1 simula antes das 19h.
 function flag(name: string): boolean {
   try {
     const q = new URLSearchParams(location.search);

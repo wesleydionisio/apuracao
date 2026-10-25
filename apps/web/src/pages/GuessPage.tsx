@@ -9,7 +9,7 @@ import { useMyGuess } from '@/features/guess/mine';
 import { GuessTicket, guessesOpen, myGuessId } from '@/features/guess/Ticket';
 import { useBoard } from '@/store/board';
 
-/** /palpite — antes das 17h o ticket; depois, "encerrados" com atalho para o ranking de quem palpitou */
+/** /palpite — antes das 19h o ticket; depois, "encerrados" com atalho para o ranking de quem palpitou */
 export function PalpitePage() {
   const board = useBoard((s) => s.board);
   if (!board) return <GuessSkeleton released={lastReleased()} />;

@@ -52,7 +52,7 @@ export function VoteTotals({ snap, className }: { snap: Snap | null; className?:
             brancos e nulos sobre quem votou; comparecimento e abstenção sobre o eleitorado.
           </>
         ) : (
-          'Os totais oficiais do TSE aparecem aqui a partir das 17h.'
+          'Os totais oficiais do TSE aparecem aqui a partir das 19h.'
         )}
       </p>
     </div>

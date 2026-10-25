@@ -40,7 +40,7 @@ pnpm dev:web
 Abra http://localhost:5173.
 
 **Barra de debug (só local):** com o poller em `SOURCE=replay`, aparece uma barra no topo para arrastar o
-% apurado para frente e para trás, pausar/acelerar a noite, totalizar e forçar "antes das 17h". Ela fala
+% apurado para frente e para trás, pausar/acelerar a noite, totalizar e forçar "antes das 19h". Ela fala
 com `/__dev` (proxy do Vite para `:3003/dev`) e não entra no build de produção.
 
 **Roteiro da noite:** `apps/poller/scenarios/domingo.json` (padrão) define a margem nacional de um
@@ -151,7 +151,7 @@ compose que não publica porta nenhuma para fora: o nginx da máquina termina o 
 - **Voltar uma versão:** Run workflow com `rollback` (ou um commit), ou na VPS: `./infra/deploy.sh rollback`.
 - **O chat não cai à toa:** os workers WS só reiniciam quando o código deles (`apps/ws`, `packages`, dependências,
   compose) muda, um de cada vez. Ajuste só na API ou no site não derruba conexão nenhuma. Cirúrgico, na VPS:
-  `./infra/deploy.sh --only api` (ou `--only caddy`, `--only api,poller`). Depois das 17h, nunca `ws1`/`ws2` juntos.
+  `./infra/deploy.sh --only api` (ou `--only caddy`, `--only api,poller`). Depois das 19h, nunca `ws1`/`ws2` juntos.
 - **O /ws não passa pelo Caddy:** o nginx da máquina manda direto para os workers (`127.0.0.1:3012` e `3013`,
   `least_conn`); o Caddy pode reiniciar sem derrubar o chat. O nginx também só aceita o `CF-Connecting-IP` vindo das
   faixas da Cloudflare (quem bate direto no IP com o cabeçalho inventado vira o próprio IP).
@@ -227,7 +227,7 @@ chamada. Se o modelo falhar ou estourar a cota, um disjuntor deixa o chat só co
 - **`/admin`**: carga da máquina e de cada worker WS, online, contas e palpites, Super Chats (aprovar/ocultar) e patrocínio.
   Token = `ADMIN_TOKEN` (em dev sem ele: `admin`). A API limita tentativas erradas.
 - **Palpite:** cartão com contagem ao vivo, "fulano palpitou agora" e para que lado o Brasil está palpitando na tela Ao vivo;
-  faixa "E o seu?" no topo do chat. Fecham às 17h.
+  faixa "E o seu?" no topo do chat. Fecham às 19h.
 - **LGPD:** aviso curto de cookies (só cookies necessários) com link para a política; some no "Entendi".
 
 ### Kill switches
@@ -249,14 +249,14 @@ Cole o JSON em `var/manual/<mesmo caminho do TSE>`, por exemplo
 |---|---|
 | 14h | freeze de código |
 | 16h | poller ligado (modo observação: grava internamente, `released=false`, nada público) |
-| 17h | liberação automática por `RELEASE_AT`: placar, WS e projeção (projeção só ≥ 20% apurado) |
+| 19h | liberação automática por `RELEASE_AT`: placar, WS e projeção (projeção só ≥ 20% apurado) |
 | — | no `/admin`, seção Projeção: "No ar" deve ser "modelo por cidade"; se aparecer a reserva, o motivo está ao lado |
 | — | olhar `curl localhost:3003/health`, `/metrics` dos workers e o chat |
 | totalização | cards de resultado dos palpites passam a mostrar acerto e posição |
 
 ## Garantias legais embutidas
 
-- Placar e projeção só a partir das 17h de Brasília, aplicado no servidor (poller e WS), não só no front.
+- Placar e projeção só a partir das 19h de Brasília, aplicado no servidor (poller e WS), não só no front.
 - "Matematicamente definido" só quando a vantagem supera **todo** o eleitorado ainda não apurado.
 - Projeção sempre com intervalo, rótulo "estimativa" e % apurado ao lado; a chance de vitória não é publicada.
 - Nunca "eleito" antes de `tf = s` (totalização final) do TSE.

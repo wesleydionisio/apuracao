@@ -29,7 +29,7 @@ Rotas: `/ws`, `/health` (JSON), `/metrics` (texto: conexões, msgs/s in/out, ida
 | `SECRET` | `dev-secret` | mesmo da API (valida o cookie `aid`) |
 | `REDIS_URL` | — | vazio = memória |
 | `DATA_DIR` | `<repo>/public/data` | |
-| `RELEASE_AT` | `2026-10-25T17:00:00-03:00` | |
+| `RELEASE_AT` | `2026-10-25T19:00:00-03:00` | |
 | `WORKER_ID` | `<hostname>-<pid>` | |
 | `TRUST_PROXY` | `1` | usa `cf-connecting-ip`/`x-forwarded-for`. **Só deixe 1 atrás de Cloudflare/Caddy** |
 | `ALLOWED_ORIGINS` | — | ex.: `https://apuracao.com.br`; vazio = qualquer origem |

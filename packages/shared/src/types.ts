@@ -150,7 +150,7 @@ export interface Flags {
 export interface Board {
   v: number;
   generatedAt: string;
-  /** false enquanto está antes do horário de divulgação (17h de Brasília) */
+  /** false enquanto está antes do horário de divulgação (19h de Brasília) */
   released: boolean;
   releaseAt: string;
   source: { name: 'TSE'; url: string; at: string | null };

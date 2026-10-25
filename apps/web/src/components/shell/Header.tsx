@@ -44,7 +44,7 @@ export function headerMini(path: string): 'none' | 'hero' | 'pinned' {
 }
 
 /**
- * Antes das 17h, nas telas "pinned", a faixa só teria a contagem: ela vai para o centro do cabeçalho (que fica vazio)
+ * Antes das 19h, nas telas "pinned", a faixa só teria a contagem: ela vai para o centro do cabeçalho (que fica vazio)
  * e a faixa some; no celular, só "em 15:54:40". O App usa o mesmo para a folga do topo.
  */
 export function useMiniInHeader(path: string): boolean {
@@ -79,7 +79,7 @@ export function Header() {
   const inHeader = useMiniInHeader(path);
   const wide = useMedia('(min-width: 640px)');
   const mini = inHeader ? 'none' : headerMini(path);
-  // Painel antes das 17h: a contagem já é o topo da página; o mini (só a contagem de novo) ficaria por cima dela
+  // Painel antes das 19h: a contagem já é o topo da página; o mini (só a contagem de novo) ficaria por cima dela
   const show = mini === 'pinned' || (mini === 'hero' && live && !hero);
   return (
     <>

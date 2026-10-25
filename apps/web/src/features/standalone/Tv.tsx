@@ -3,7 +3,7 @@ import type { Board, CandidateDef, Snap } from '@apuracao/shared';
 import { useEffect } from 'react';
 import { NightChart } from '@/features/curve';
 import { CandidateAvatar, useCandidateCssVars } from '@/components/core/candidate';
-import { LivePill } from '@/components/core/live';
+import { EXTENSION_URL, LivePill } from '@/components/core/live';
 import { useNow } from '@/components/ui';
 import { fmtBrt } from '@apuracao/shared';
 import { fmtCompact, fmtPct } from '@/lib/format';
@@ -67,10 +67,16 @@ function Countdown({ board, now }: { board: Board; now: number }) {
         <CandidateAvatar c={ca} size="xl" priority className="size-[11vw] rounded-[2.2vw] ring-[0.4vw] ring-background" />
         <CandidateAvatar c={cb} size="xl" priority className="size-[11vw] rounded-[2.2vw] ring-[0.4vw] ring-background" />
       </div>
-      <div className="text-[2.4vw] text-muted-foreground">A apuração do 2º turno começa às 17h (Brasília)</div>
+      <div className="text-[2.4vw] text-muted-foreground">A apuração do 2º turno começa às 19h (Brasília)</div>
       <div className="display text-[11vw] leading-none font-semibold">
         {l.d ? `${l.d}d ` : ''}
         {two(l.h)}:{two(l.m)}:{two(l.s)}
+      </div>
+      <div className="text-[1.6vw] text-muted-foreground">
+        Votação prorrogada até as 19h pelo ministro Cristiano Zanin, do STF ·{' '}
+        <a href={EXTENSION_URL} target="_blank" rel="noreferrer" className="underline underline-offset-4">
+          fonte: g1
+        </a>
       </div>
     </div>
   );

@@ -110,7 +110,7 @@ export function CityDetailSkeleton() {
   );
 }
 
-/** Palpite: o cartão do palpite (formulário antes das 17h, aviso depois) */
+/** Palpite: o cartão do palpite (formulário antes das 19h, aviso depois) */
 export function GuessSkeleton({ released }: { released: boolean }) {
   return (
     <Wrap label="Carregando palpite" className="space-y-3 pt-1">

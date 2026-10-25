@@ -1,6 +1,6 @@
 // Convite para o palpite com "movimento": quantos já palpitaram (subindo ao vivo), quem acabou de palpitar,
 // para que lado o Brasil está palpitando e quanto falta para fechar. Na tela Ao vivo (cartão) e no chat (faixa).
-// Depois das 17h os palpites fecham: fica só o atalho para quem palpitou acompanhar a posição.
+// Depois das 19h os palpites fecham: fica só o atalho para quem palpitou acompanhar a posição.
 import type { Board } from '@apuracao/shared';
 import { fmtPct } from '@apuracao/shared';
 import NumberFlow from '@number-flow/react';
@@ -77,7 +77,7 @@ export function GuessCta({ board, className }: { board: Board; className?: strin
             Palpites abertos
           </span>
           <span className="num text-muted-foreground">
-            fecham às 17h · <span className="font-semibold text-foreground">{fmtCountdown(left)}</span>
+            fecham às 19h · <span className="font-semibold text-foreground">{fmtCountdown(left)}</span>
           </span>
         </div>
 
@@ -178,7 +178,7 @@ export function GuessStrip() {
             <span className="text-muted-foreground">palpites até agora. E o seu?</span>
           </>
         ) : (
-          <span className="text-muted-foreground">Os palpites fecham às 17h. E o seu?</span>
+          <span className="text-muted-foreground">Os palpites fecham às 19h. E o seu?</span>
         )}
       </Link>
       <Button asChild size="sm" className="h-7 shrink-0 rounded-full px-3 text-[12px]">

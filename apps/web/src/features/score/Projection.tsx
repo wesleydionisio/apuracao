@@ -90,8 +90,8 @@ export function ProjectionBand({ board, className }: { board: Board; className?:
   const br = board.br;
   const now = (k: 'a' | 'b') => (br?.valid ? (k === 'a' ? br.pa : br.pb) : null);
   if (!p) {
-    // antes das 17h ou com menos de 20% apurado: o cartão já montado, esperando
-    const when = board.released ? 'com 20% apurado' : 'às 17h';
+    // antes das 19h ou com menos de 20% apurado: o cartão já montado, esperando
+    const when = board.released ? 'com 20% apurado' : 'às 19h';
     return (
       <Section
         icon={TrendingUp}

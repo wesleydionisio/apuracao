@@ -23,7 +23,7 @@ for (const f of [...POSTERS, 'og'] as const) {
   save(`guess-result-${f}.png`, await guessCard(f, { nick: 'Capivara Atenta 12', pa: 48.6, cands, result }));
 }
 save('board.png', await scoreCard({ title: 'Apuração do 2º turno ao vivo', snap: board.br, cands, at: board.source.at }));
-save('board-pre.png', await scoreCard({ title: 'Apuração do 2º turno ao vivo a partir das 17h', snap: null, cands }));
+save('board-pre.png', await scoreCard({ title: 'Apuração do 2º turno ao vivo a partir das 19h', snap: null, cands }));
 const m = board.moments[0];
 if (m) save('moment.png', await scoreCard({ title: m.title, snap: board.br, cands, at: m.at }));
 save('city.png', await scoreCard({ title: 'Campinas (SP)', snap: board.ufs['uf:SP'] ?? board.br, cands, at: board.source.at }));

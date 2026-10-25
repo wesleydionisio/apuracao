@@ -73,7 +73,7 @@ export function GuessTicket({ board }: { board: Board }) {
           <Lock className="size-4" aria-hidden />
           Palpites encerrados
         </div>
-        <p className="mt-2 text-[17px] font-semibold leading-snug text-balance">Os palpites fecharam às 17h, quando a apuração começou.</p>
+        <p className="mt-2 text-[17px] font-semibold leading-snug text-balance">Os palpites fecharam às 19h, quando a apuração começou.</p>
         {mine ? (
           <Button size="lg" className="mt-4 h-12 w-full rounded-xl text-[15px]" onClick={() => nav(`/p/${mine}`)}>
             Ver meu palpite e meu ranking
@@ -122,7 +122,7 @@ export function GuessTicket({ board }: { board: Board }) {
       <header className="px-5 pt-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-[17px] font-semibold leading-tight">{mine ? 'Ajustar seu palpite' : 'Seu palpite para o 2º turno'}</h2>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground" title="Palpites fecham às 17h de domingo">
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground" title="Palpites fecham às 19h de domingo">
           <Clock className="size-3" aria-hidden />
           <span className="num">
             {left.d ? `${left.d}d ` : ''}
@@ -232,7 +232,7 @@ export function GuessTicket({ board }: { board: Board }) {
           {busy ? 'Salvando…' : mine ? 'Salvar ajuste' : 'Palpitar e gerar meu card'}
         </Button>
         <p className="text-center text-[12px] text-muted-foreground">
-          {mine ? 'Você tem um palpite só; dá para ajustar até as 17h de domingo.' : 'Um palpite por aparelho. Dá para ajustar até as 17h de domingo.'}
+          {mine ? 'Você tem um palpite só; dá para ajustar até as 19h de domingo.' : 'Um palpite por aparelho. Dá para ajustar até as 19h de domingo.'}
           {stats?.guesses ? (
             <span className="block">
               <span className="num">{fmtInt(stats.guesses)}</span> palpites feitos

@@ -129,7 +129,7 @@ export function TransferCard({ board, className }: { board: Board; className?: s
   return (
     <Section icon={Waypoints} title="De onde vieram os votos" meta={<MetaPill>vs 1º turno</MetaPill>} className={className}>
       {!br?.valid ? (
-        <Empty title="Começa às 17h">
+        <Empty title="Começa às 19h">
           Quanto cada um ganhou dos votos dos eliminados, dos brancos e nulos e de quem não votou no 1º turno.
         </Empty>
       ) : loading ? (

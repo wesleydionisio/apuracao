@@ -86,7 +86,7 @@ function MapView({ board }: { board: Board }) {
   const live = !!board.released && !!board.br;
   /** grade e pontos: mapas por cidade (a comparação por estado não se aplica) */
   const byCity = view === 'hex';
-  // sem escolha do usuário a camada acompanha a liberação (17h); escolhida, fica
+  // sem escolha do usuário a camada acompanha a liberação (19h); escolhida, fica
   const [layer, setLayer] = useState<MapLayer | null>(null);
   const effective: MapLayer = layer === null || (layer === 'live' && !live) ? (live ? 'live' : 't1') : layer;
   const [compare, setCompareState] = useState<RefLayer | null>(savedCompare);

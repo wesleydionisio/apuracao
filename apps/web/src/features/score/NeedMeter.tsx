@@ -68,7 +68,7 @@ function Arc({ have, need, color }: { have: number; need: number | null; color: 
 export function NeedMeter({ board, snap, className }: { board: Board; snap: Snap; className?: string }) {
   if (snap.status === 'nao_iniciada' && !board.released)
     return (
-      <Section icon={Gauge} title="Vira ou não vira?" meta={<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">às 17h</span>} className={className}>
+      <Section icon={Gauge} title="Vira ou não vira?" meta={<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">às 19h</span>} className={className}>
         <div className="chart relative" aria-hidden>
           <Arc have={0} need={null} color="var(--muted-foreground)" />
           <div className="pointer-events-none absolute inset-x-0 bottom-[14%] flex flex-col items-center text-center">

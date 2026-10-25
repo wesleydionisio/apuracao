@@ -290,7 +290,7 @@ export function toBoard(
     curve: [],
     moments: [],
   };
-  // antes das 17h: nada de placar nem projeção, nem mesmo zerado
+  // antes das 19h: nada de placar nem projeção, nem mesmo zerado
   if (!o.released || !st.br) return base;
   return {
     ...base,

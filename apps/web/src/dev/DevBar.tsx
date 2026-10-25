@@ -1,5 +1,5 @@
 // Barra de debug — só em `vite dev` com o poller em SOURCE=replay.
-// Arrasta o % apurado para frente e para trás, pausa/acelera a noite e força "antes das 17h".
+// Arrasta o % apurado para frente e para trás, pausa/acelera a noite e força "antes das 19h".
 // Fica sobreposta ao topo (não mexe no layout que está sendo depurado) e recolhe num botão.
 import type { Board, Snap } from '@apuracao/shared';
 import { ChevronDown, ChevronUp, Pause, Play, RotateCcw, SlidersHorizontal } from 'lucide-react';
@@ -26,7 +26,7 @@ const SPEEDS = [1, 5, 20, 60];
 const JUMPS = [0, 5, 10, 25, 50, 75, 90, 99];
 const RELEASE: { v: DevStatus['released']; label: string }[] = [
   { v: 'auto', label: 'auto' },
-  { v: 'off', label: 'antes das 17h' },
+  { v: 'off', label: 'antes das 19h' },
   { v: 'on', label: 'ao vivo' },
 ];
 

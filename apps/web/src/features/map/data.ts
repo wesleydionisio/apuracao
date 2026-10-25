@@ -47,7 +47,7 @@ export interface UfValue {
 
 export type MapLayer = 'live' | 't1' | 'y2022';
 
-/** valores por UF para o mapa: ao vivo depois das 17h; antes, o confronto A×B do 1º turno */
+/** valores por UF para o mapa: ao vivo depois das 19h; antes, o confronto A×B do 1º turno */
 export function useStateValues(board: Board | null, layer?: MapLayer) {
   const live = !!board?.released && !!board.br;
   const want: MapLayer = layer ?? (live ? 'live' : 't1');

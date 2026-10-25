@@ -140,7 +140,7 @@ function UfDetail({ board, uf, desktop }: { board: Board; uf: string; desktop: b
             </>
           ) : (
             <p className="rounded-xl bg-muted/60 p-3 text-sm text-muted-foreground">
-              {live ? `Ainda sem urnas apuradas ${inUf(uf)}.` : `A parcial ${ofUf(uf)} aparece aqui a partir das 17h de domingo.`}
+              {live ? `Ainda sem urnas apuradas ${inUf(uf)}.` : `A parcial ${ofUf(uf)} aparece aqui a partir das 19h de domingo.`}
             </p>
           )}
         </section>

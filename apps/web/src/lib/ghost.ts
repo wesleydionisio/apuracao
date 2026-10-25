@@ -6,7 +6,7 @@ import { DEFAULT_RELEASE_AT } from '@apuracao/shared';
 
 const KEY = 'last-released';
 
-/** a última tela vista era "antes das 17h" ou placar? (decide qual fantasma desenhar; sem histórico, pelo relógio) */
+/** a última tela vista era "antes das 19h" ou placar? (decide qual fantasma desenhar; sem histórico, pelo relógio) */
 export function lastReleased(): boolean {
   try {
     const v = localStorage.getItem(KEY);

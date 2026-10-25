@@ -6,7 +6,7 @@ import { ArrowRight, CalendarClock, History, Radio, Users, Vote } from 'lucide-r
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'wouter';
 import { CandidateAvatar } from '@/components/core/candidate';
-import { SourceStamp } from '@/components/core/live';
+import { ExtensionNotice, SourceStamp } from '@/components/core/live';
 import { VersusGlow } from '@/components/core/versus';
 import { Button } from '@/components/ui/button';
 import { NightChart } from '@/features/curve';
@@ -39,7 +39,7 @@ export default function Painel() {
   const board = useBoard((s) => s.board);
   const loadError = useBoard((s) => s.loadError);
   if (!board) return <Loading error={loadError} />;
-  // antes das 17h: o mesmo painel do ao vivo, zerado, com a contagem regressiva no topo
+  // antes das 19h: o mesmo painel do ao vivo, zerado, com a contagem regressiva no topo
   if (!board.released || !board.br) return <Live board={preBoard(board)} />;
   return <Live board={board} />;
 }
@@ -119,7 +119,7 @@ function Freshness() {
   );
 }
 
-/** topo enxuto: título curto, status, barra de apuração e procedência (antes das 17h: a contagem regressiva) */
+/** topo enxuto: título curto, status, barra de apuração e procedência (antes das 19h: a contagem regressiva) */
 function TopBar({ board, snap }: { board: Board; snap: Snap }) {
   if (!board.released)
     return (
@@ -130,9 +130,10 @@ function TopBar({ board, snap }: { board: Board; snap: Snap }) {
         </div>
         <p className="mt-1 text-[13px] text-muted-foreground">A apuração começa em</p>
         <Countdown board={board} />
+        <ExtensionNotice className="mt-3" />
         <Button asChild className="mt-4 h-11 w-full justify-between rounded-xl px-4 text-[14px] lg:w-auto lg:gap-6">
           <Link href="/palpite">
-            Fazer meu palpite antes das 17h
+            Fazer meu palpite antes das 19h
             <ArrowRight className="size-4" aria-hidden />
           </Link>
         </Button>
@@ -250,7 +251,7 @@ function Live({ board }: { board: Board }) {
   );
 }
 
-// ------------------------------------------------------------------ antes das 17h
+// ------------------------------------------------------------------ antes das 19h
 
 function Countdown({ board }: { board: Board }) {
   const now = useNow(1000);

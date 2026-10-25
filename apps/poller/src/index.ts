@@ -50,7 +50,7 @@ const fetchPriority = (ibge: string, el: number) => el * (fetchedCycle.has(ibge)
 /** ordem das cidades no mapa de pontos (static/dots.json); o mungrid.json segue esta ordem */
 const dotOrder: string[] = readJson<{ mun: string[] }>(path.join(config.staticDir, 'dots.json'))?.mun ?? [];
 let lastGridHash = '';
-/** só no replay local: forçar "antes das 17h" / "ao vivo" para depurar as duas telas */
+/** só no replay local: forçar "antes das 19h" / "ao vivo" para depurar as duas telas */
 let releaseOverride: 'auto' | 'on' | 'off' = 'auto';
 const replay = source instanceof ReplaySource ? source : null;
 const health = { startedAt: new Date().toISOString(), lastOk: 0, lastChange: 0, errors: 0, consecutiveErrors: 0, lastError: '' };
@@ -147,7 +147,7 @@ async function cycleAt(opts: { allMun?: boolean }) {
   await stepProjection();
 
   const released = releaseOverride === 'auto' ? isReleased(new Date(), config.releaseAt) : releaseOverride === 'on';
-  // "antes das 17h" forçado mostra a contagem para o horário real de domingo
+  // "antes das 19h" forçado mostra a contagem para o horário real de domingo
   const releaseAt = releaseOverride === 'off' ? new Date(DEFAULT_RELEASE_AT) : config.releaseAt;
   const flags = await out.flags();
   const board = toBoard(state, {

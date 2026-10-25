@@ -44,7 +44,7 @@ export default function ChatPage() {
   ) : kb || emoji ? (
     <LiveScoreCompact board={zeroBoard(board)} />
   ) : (
-    // compacto: antes das 17h a contagem entre os candidatos; depois os %, a barra e o apurado
+    // compacto: antes das 19h a contagem entre os candidatos; depois os %, a barra e o apurado
     <LiveScoreEssential board={board} />
   );
   return <ChatView room="br" layout="shell" top={<div className="border-b">{top}</div>} roomBar={<RoomBar compact right={<Watching />} />} onEmojiOpen={setEmoji} />;

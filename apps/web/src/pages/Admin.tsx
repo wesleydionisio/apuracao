@@ -327,7 +327,7 @@ function Server({ ov }: { ov: Overview }) {
         v={
           ov.board ? (
             <span className={cn(ov.board.ageS > 60 && 'text-destructive')}>
-              {ov.board.released ? `${ov.board.pst?.toLocaleString('pt-BR')}% apurado` : 'antes das 17h'} · gerado há {ov.board.ageS}s
+              {ov.board.released ? `${ov.board.pst?.toLocaleString('pt-BR')}% apurado` : 'antes das 19h'} · gerado há {ov.board.ageS}s
             </span>
           ) : (
             'sem br.json'
