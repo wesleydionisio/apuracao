@@ -9,7 +9,7 @@ import { CityDetailSkeleton, CitySearchSkeleton, GuessSkeleton, MapSkeleton, Mom
 import { lastReleased } from './lib/ghost';
 import { aroundNav, pages } from './lib/nav';
 import { api, fetchBoard } from './lib/api';
-import { live, savedSide } from './lib/live';
+import { live, savedNeutral, savedSide } from './lib/live';
 import { poll } from './lib/poll';
 import { startSite } from './lib/site';
 import ChatPage, { SalaPage } from './pages/ChatPage';
@@ -64,7 +64,7 @@ function useIdentityAndStats() {
         } catch {
           /* sem storage */
         }
-        useBoard.getState().set({ me: { ...me, nick: nick ?? me.nick, side: savedSide() } });
+        useBoard.getState().set({ me: { ...me, nick: nick ?? me.nick, side: savedSide(), neutral: savedNeutral() } });
       })
       .catch(() => {});
     return poll(() => api.stats().then((stats) => useBoard.getState().set({ stats })), 30_000);

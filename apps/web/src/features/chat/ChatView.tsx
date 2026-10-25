@@ -7,7 +7,7 @@ import { ArrowDown, BadgeDollarSign, Heart, SendHorizontal, Smile, UserRound, Wi
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useCandidates } from '@/components/core/candidate';
 import { Button } from '@/components/ui/button';
-import { live, savedSide } from '@/lib/live';
+import { live, savedNeutral, savedSide } from '@/lib/live';
 import { cn } from '@/lib/utils';
 import { ghostBoard } from '@/lib/ghost';
 import { useBoard } from '@/store/board';
@@ -88,6 +88,8 @@ export default function ChatView({
   const [login, setLogin] = useState(false);
   // a escolha de lado pode ser fechada (tocar fora): volta ao torcer, comentar ou entrar
   const [sideClosed, setSideClosed] = useState(false);
+  // neutro tocou no coração: reabre a escolha para torcer por alguém
+  const [sideAgain, setSideAgain] = useState(false);
   const sendAfterLogin = useRef(false);
   // Super Chat: pede lado e login antes, como a mensagem comum; depois de entrar a gaveta abre sozinha
   const [scOpen, setScOpen] = useState(false);
@@ -176,7 +178,7 @@ export default function ChatView({
   function doSend() {
     const body = text.trim();
     if (!body || disabled || cool) return;
-    if (!mySide) return setSideClosed(false);
+    if (!chosen) return setSideClosed(false);
     if (!useBoard.getState().me?.auth) {
       sendAfterLogin.current = true;
       setLogin(true);
@@ -206,7 +208,7 @@ export default function ChatView({
   }, [authed]);
 
   function openSuperchat() {
-    if (!mySide) return setSideClosed(false);
+    if (!chosen) return setSideClosed(false);
     if (!useBoard.getState().me?.auth) {
       scAfterLogin.current = true;
       setLogin(true);
@@ -241,6 +243,9 @@ export default function ChatView({
         : 'Comente a apuração…';
   const sideKey = me ? (me.side ?? null) : savedSide();
   const mySide = sideKey ? cands?.find((c) => c.key === sideKey) : null;
+  // neutro: comenta e reage, mas sem selo de candidato e sem botão de torcida
+  const neutral = !mySide && (me ? !!me.neutral : savedNeutral());
+  const chosen = !!mySide || neutral;
   const counts = { a: reacts?.['cheer:a'] ?? 0, b: reacts?.['cheer:b'] ?? 0 };
 
   return (
@@ -359,9 +364,9 @@ export default function ChatView({
           >
             <button
               type="button"
-              onClick={() => (me?.auth ? setProfileOpen(true) : mySide ? setLogin(true) : setSideClosed(false))}
+              onClick={() => (me?.auth ? setProfileOpen(true) : chosen ? setLogin(true) : setSideClosed(false))}
               className="relative shrink-0 rounded-full"
-              aria-label={me?.auth ? `Seu perfil: ${me.nick}${mySide ? `, torce ${mySide.n}` : ''}` : 'Entrar com o Google'}
+              aria-label={me?.auth ? `Seu perfil: ${me.nick}${mySide ? `, torce ${mySide.n}` : neutral ? ', neutro' : ''}` : 'Entrar com o Google'}
             >
               {me?.auth ? <NickAvatar m={me} className="size-9" /> : (
               <span className="flex size-9 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 bg-muted text-muted-foreground transition-colors hover:text-foreground">
@@ -426,9 +431,9 @@ export default function ChatView({
               ) : (
                 <button
                   type="button"
-                  onClick={() => setSideClosed(false)}
+                  onClick={() => (neutral ? setSideAgain(true) : setSideClosed(false))}
                   className="flex size-10 shrink-0 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 bg-muted text-muted-foreground transition-colors hover:text-foreground"
-                  aria-label="Escolher seu lado para torcer"
+                  aria-label={neutral ? 'Você está neutro. Escolher um lado para torcer' : 'Escolher seu lado para torcer'}
                 >
                   <Heart className="size-[18px]" aria-hidden />
                 </button>
@@ -466,11 +471,24 @@ export default function ChatView({
           </div>
         </div>
 
-        {cands && !mySide && !sideClosed && <SideGate cands={cands} onPick={(s) => live.side(s)} onClose={() => setSideClosed(true)} />}
+        {cands && ((!chosen && !sideClosed) || (neutral && sideAgain)) && (
+          <SideGate
+            cands={cands}
+            neutral={neutral}
+            onPick={(s) => {
+              setSideAgain(false);
+              live.side(s);
+            }}
+            onClose={() => {
+              setSideAgain(false);
+              setSideClosed(true);
+            }}
+          />
+        )}
       </div>
 
       {/* o login cobre a coluna inteira (placar incluso): o cadastro precisa de espaço no celular */}
-      {login && mySide && (
+      {login && chosen && (
         <LoginGate
           onClose={() => {
             sendAfterLogin.current = false;

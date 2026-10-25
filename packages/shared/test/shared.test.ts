@@ -17,6 +17,7 @@ import {
   transfer,
   type HistRow,
   type Snap,
+  wireSide,
 } from '../src/index';
 
 const fx = (f: string) => JSON.parse(readFileSync(new URL(`../../data/fixtures/${f}`, import.meta.url), 'utf8'));
@@ -173,4 +174,10 @@ test('andamento por município (ab da UF)', async () => {
   const rows = parseMunProgress(raw);
   assert.equal(rows.length, 1);
   assert.deepEqual(rows[0], { tse: '61000', pst: 100, el: 6336, elc: 6336, turnout: 5012, at: '2026-10-04T18:49:26-03:00' });
+});
+
+test('wireSide: só a/b viram lado; neutro, null e lixo são sem lado (cliente antigo ou novo)', () => {
+  assert.equal(wireSide('a'), 'a');
+  assert.equal(wireSide('b'), 'b');
+  for (const v of [null, undefined, 'n', 'neutro', '', 1, {}]) assert.equal(wireSide(v), null);
 });

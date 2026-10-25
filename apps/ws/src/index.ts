@@ -26,6 +26,7 @@ import {
   type Room,
   type ServerMsg,
   type Snap,
+  wireSide,
 } from '@apuracao/shared';
 import { AID_COOKIE, readCookie, SESSION_COOKIE, verifyAid, verifySession } from '@apuracao/shared/server';
 import { BoardState } from './board';
@@ -815,7 +816,7 @@ app.ws<UD>('/ws', {
       case 'nick':
         return void setNick(ws, msg.nick).catch(() => {});
       case 'side': {
-        ud.side = msg.side === 'a' || msg.side === 'b' ? msg.side : null;
+        ud.side = wireSide(msg.side);
         return send(ws, { t: 'hello', you: { id: ud.pub, nick: ud.nick, hue: ud.hue, side: ud.side, auth: ud.auth }, online: Math.max(online, conns), flags });
       }
       case 'report':

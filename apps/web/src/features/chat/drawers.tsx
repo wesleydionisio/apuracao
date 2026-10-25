@@ -1,6 +1,6 @@
 // Gavetas do chat (vaul), num chunk separado: carregam só no primeiro uso.
-import type { CandidateDef, ChatMsg, Room, Side } from '@apuracao/shared';
-import { Check, Copy, Flag, LogOut } from 'lucide-react';
+import type { CandidateDef, ChatMsg, Room } from '@apuracao/shared';
+import { Check, Copy, Flag, LogOut, Scale } from 'lucide-react';
 import { useState } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { LegalFooter } from '@/components/shell/bits';
@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui';
 import { auth } from '@/lib/auth';
 import { fmtHM } from '@/lib/format';
-import { live } from '@/lib/live';
+import { live, type SidePick } from '@/lib/live';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/store/board';
 import { NICK_CLS, NickAvatar, nickColor, PartyBadge, renderBody } from './parts';
@@ -107,12 +107,13 @@ export function ProfileDrawer({
   cands: [CandidateDef, CandidateDef] | null;
 }) {
   const me = useBoard((s) => s.me);
-  const [side, setSide] = useState<Side | null>(me?.side ?? null);
+  const current: SidePick | null = me?.side ?? (me?.neutral ? 'n' : null);
+  const [side, setSide] = useState<SidePick | null>(current);
   const [seen, setSeen] = useState(open);
   // reabriu: começa do estado atual
   if (open && !seen) {
     setSeen(true);
-    setSide(me?.side ?? null);
+    setSide(current);
   } else if (!open && seen) setSeen(false);
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -120,7 +121,7 @@ export function ProfileDrawer({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (side && side !== (me?.side ?? null)) live.side(side);
+            if (side && side !== current) live.side(side);
             onOpenChange(false);
             toast('Perfil atualizado');
           }}
@@ -156,6 +157,7 @@ export function ProfileDrawer({
               <div className="grid grid-cols-2 gap-2">
                 <Skeleton className="h-14 rounded-xl" />
                 <Skeleton className="h-14 rounded-xl" />
+                <Skeleton className="col-span-2 h-12 rounded-xl" />
               </div>
             </div>
           )}
@@ -179,6 +181,21 @@ export function ProfileDrawer({
                     <PartyBadge c={c} />
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setSide('n')}
+                  aria-pressed={side === 'n'}
+                  className={cn(
+                    'col-span-2 flex min-h-12 items-center gap-2.5 rounded-xl border px-3 py-2 text-[13px] font-medium transition-colors',
+                    side === 'n' ? 'border-foreground bg-accent' : 'hover:bg-accent/60',
+                  )}
+                >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground" aria-hidden>
+                    <Scale className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-left">Neutro</span>
+                  <span className="text-[12px] font-normal text-muted-foreground">sem torcida</span>
+                </button>
               </div>
             </fieldset>
           )}

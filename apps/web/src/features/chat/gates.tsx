@@ -1,13 +1,14 @@
 // Portas do chat: camadas sobre o chat desfocado.
-//  - SideGate: no primeiro acesso, "Qual é o seu lado?" (sem lado não dá para torcer nem comentar);
+//  - SideGate: no primeiro acesso, "Qual é o seu lado?" (um candidato ou neutro; sem escolher não dá para comentar);
 //  - LoginGate: ao mandar a primeira mensagem, entrar com o Google e, se a conta é nova, nome, celular e usuário.
-import type { CandidateDef, Side } from '@apuracao/shared';
-import { ArrowLeft, Check, Loader2, X } from 'lucide-react';
+import type { CandidateDef } from '@apuracao/shared';
+import { ArrowLeft, Check, Loader2, Scale, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CandidateAvatar } from '@/components/core/candidate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { auth, errCode, loadGis, maskPhone, SIGNUP_ERR, type AuthInfo, type SignInResult, type SignupStart } from '@/lib/auth';
+import type { SidePick } from '@/lib/live';
 import { cn } from '@/lib/utils';
 
 /** camada sobre o chat: o fundo fica desfocado; tocar fora do conteúdo ou Esc fecha */
@@ -38,12 +39,28 @@ function Overlay({ children, label, onDismiss }: { children: ReactNode; label: s
 
 const tint = (c: CandidateDef, pct: number) => `color-mix(in oklab, ${c.color} ${pct}%, transparent)`;
 
-export function SideGate({ cands, onPick, onClose }: { cands: [CandidateDef, CandidateDef]; onPick: (s: Side) => void; onClose: () => void }) {
+/** neutro: sem cor de candidato, um cinza da própria paleta */
+const ink = (pct: number) => `color-mix(in oklab, var(--foreground) ${pct}%, transparent)`;
+
+export function SideGate({
+  cands,
+  neutral = false,
+  onPick,
+  onClose,
+}: {
+  cands: [CandidateDef, CandidateDef];
+  /** já entrou como neutro (reabriu para escolher um lado) */
+  neutral?: boolean;
+  onPick: (s: SidePick) => void;
+  onClose: () => void;
+}) {
   return (
     <Overlay label="Escolha seu lado" onDismiss={onClose}>
       <div data-backdrop="1" className="text-center">
         <h2 className="text-[22px] leading-tight font-bold tracking-tight text-balance">Qual é o seu lado?</h2>
-        <p className="mx-auto mt-1 max-w-[30ch] text-[13px] leading-snug text-muted-foreground">Escolha para entrar no chat e torcer.</p>
+        <p className="mx-auto mt-1 max-w-[30ch] text-[13px] leading-snug text-muted-foreground">
+          {neutral ? 'Escolha um lado para torcer.' : 'Escolha para entrar no chat e torcer.'}
+        </p>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3">
         {cands.map((c) => (
@@ -66,6 +83,29 @@ export function SideGate({ cands, onPick, onClose }: { cands: [CandidateDef, Can
           </button>
         ))}
       </div>
+      <button
+        type="button"
+        onClick={() => onPick('n')}
+        aria-pressed={neutral}
+        className="relative mt-3 flex w-full items-center gap-3 overflow-hidden rounded-2xl border-2 bg-card py-3 pr-4 pl-3 text-left transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 active:scale-[0.98]"
+        style={{ borderColor: ink(neutral ? 45 : 16), boxShadow: `0 10px 30px -14px ${ink(30)}` }}
+      >
+        <span className="absolute inset-y-0 left-0 w-28 opacity-60" style={{ background: `linear-gradient(90deg, ${ink(9)}, transparent)` }} aria-hidden />
+        <span
+          className="relative flex size-11 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground ring-2 ring-offset-2 ring-offset-card"
+          style={{ ['--tw-ring-color' as string]: ink(22) }}
+          aria-hidden
+        >
+          <Scale className="size-5" strokeWidth={2.25} />
+        </span>
+        <span className="relative min-w-0 flex-1">
+          <span className="block text-[14px] leading-tight font-semibold">Neutro</span>
+          <span className="mt-0.5 block text-[12px] leading-snug text-muted-foreground">
+            {neutral ? 'Seguir no chat sem torcer' : 'Entrar no chat sem torcer por ninguém'}
+          </span>
+        </span>
+        {neutral && <Check className="relative size-4 shrink-0 text-foreground" aria-hidden />}
+      </button>
       <p className="mt-3 text-center text-[11.5px] text-muted-foreground">Não é voto nem pesquisa. Dá para trocar depois.</p>
     </Overlay>
   );

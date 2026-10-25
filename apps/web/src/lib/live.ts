@@ -158,16 +158,18 @@ class Live {
     this.raw({ t: 'nick', nick });
   }
 
-  /** lado da torcida (selo ao lado do apelido). Fica no aparelho e é reenviado a cada conexão. */
-  side(side: Side | null) {
+  /** lado da torcida (selo ao lado do apelido) ou neutro. Fica no aparelho e é reenviado a cada conexão. */
+  side(pick: SidePick | null) {
     try {
-      if (side) localStorage.setItem('side', side);
+      if (pick) localStorage.setItem('side', pick);
       else localStorage.removeItem('side');
     } catch {
       /* sem storage */
     }
+    // neutro vai como "sem lado": o servidor e os clientes antigos não conhecem outro valor
+    const side = pick === 'n' ? null : pick;
     const me = useBoard.getState().me;
-    if (me) useBoard.getState().set({ me: { ...me, side } });
+    if (me) useBoard.getState().set({ me: { ...me, side, neutral: pick === 'n' } });
     if (!MOCK) this.raw({ t: 'side', side });
   }
 
@@ -182,12 +184,23 @@ class Live {
   }
 }
 
+/** escolha da tela "Qual é o seu lado?": um candidato ou 'n' (neutro, entra sem torcer) */
+export type SidePick = Side | 'n';
+
 export function savedSide(): Side | null {
   try {
     const s = localStorage.getItem('side');
     return s === 'a' || s === 'b' ? s : null;
   } catch {
     return null;
+  }
+}
+
+export function savedNeutral(): boolean {
+  try {
+    return localStorage.getItem('side') === 'n';
+  } catch {
+    return false;
   }
 }
 
@@ -210,8 +223,9 @@ function handle(m: ServerMsg) {
       if (m.you.auth) custom = null;
       if (custom && custom !== m.you.nick) live.nick(custom);
       const side = savedSide();
+      const neutral = savedNeutral();
       if (side && side !== m.you.side) live.side(side);
-      board.set({ online: m.online, me: { ...m.you, nick: custom || m.you.nick, side: side ?? m.you.side ?? null, auth: !!m.you.auth } });
+      board.set({ online: m.online, me: { ...m.you, nick: custom || m.you.nick, side: neutral ? null : (side ?? m.you.side ?? null), neutral, auth: !!m.you.auth } });
       chat.set({ enabled: m.flags.chat });
       board.setFlags(m.flags);
       break;

@@ -8,6 +8,8 @@ export interface Me {
   hue: number;
   /** lado da torcida no chat */
   side?: 'a' | 'b' | null;
+  /** escolheu entrar sem torcer: no servidor é sem lado; só o aparelho distingue de "ainda não escolheu" */
+  neutral?: boolean;
   /** entrou com o Google (só assim manda mensagem); o apelido é o nome de usuário */
   auth?: boolean;
 }

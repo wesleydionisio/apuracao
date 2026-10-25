@@ -32,6 +32,7 @@ import {
   type ScCharge,
   ufName,
   UFS,
+  wireSide,
 } from '@apuracao/shared';
 import { AiModerator, aiModConfig } from '@apuracao/shared/moderation-ai';
 import { AID_COOKIE, clientIp, newAid, SESSION_COOKIE, signToken, verifyAid, verifySession, verifyToken } from '@apuracao/shared/server';
@@ -549,7 +550,7 @@ app.post<{ Body: Record<string, unknown> }>('/api/superchat', async (req, reply)
     uid: acc.id,
     username: acc.username,
     hue: hueOf(acc.id),
-    side: b.side === 'a' || b.side === 'b' ? b.side : null,
+    side: wireSide(b.side),
     body,
     amount,
     status: 'pending',

@@ -23,6 +23,8 @@ export const CHEERS = ['cheer:a', 'cheer:b'] as const;
 export const REACTIONS = [...EMOJI_REACTIONS, ...CHEERS] as const;
 export type Reaction = (typeof REACTIONS)[number];
 export const cheerOf = (side: Side) => `cheer:${side}` as const;
+/** lado vindo do cliente: só 'a' ou 'b' contam; qualquer outra coisa (null, neutro, lixo) é sem lado */
+export const wireSide = (v: unknown): Side | null => (v === 'a' || v === 'b' ? v : null);
 
 /**
  * Emoji de partido/candidato dentro do texto do chat: ":13:", ":22:", ":pt:", ":pl:".
@@ -57,6 +59,7 @@ export type ClientMsg =
   | { t: 'chat'; r: Room; body: string }
   | { t: 'react'; r: Room; e: Reaction }
   | { t: 'nick'; nick: string }
+  /** null = sem lado: ainda não escolheu ou entrou como neutro (o neutro só existe no aparelho) */
   | { t: 'side'; side: Side | null }
   | { t: 'report'; r: Room; id: string }
   | { t: 'ping' };
