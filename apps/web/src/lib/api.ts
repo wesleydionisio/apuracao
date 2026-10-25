@@ -260,7 +260,7 @@ export const api = MOCK ? mock : real;
 
 export const ogUrl = {
   /** `v` (updatedAt do palpite): ajustou o palpite, a CDN não serve o card antigo */
-  guess: (id: string, f: 'story' | 'og' = 'story', v?: string) => `/api/og/guess/${id}.png?f=${f}${v ? `&v=${Date.parse(v).toString(36)}` : ''}`,
+  guess: (id: string, f: 'story' | 'portrait' | 'wide' | 'og' = 'story', v?: string) => `/api/og/guess/${id}.png?f=${f}${v ? `&v=${Date.parse(v).toString(36)}` : ''}`,
   city: (ibge: string) => `/api/og/city/${ibge}.png`,
   moment: (id: string) => `/api/og/moment/${encodeURIComponent(id)}.png`,
   board: () => `/api/og/board.png`,

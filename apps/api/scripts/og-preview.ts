@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Board } from '@apuracao/shared';
 import { config } from '../src/config';
-import { guessCard, scoreCard } from '../src/og';
+import { guessCard, POSTERS, scoreCard } from '../src/og';
 
 const out = path.join(config.varDir, 'og-preview');
 mkdirSync(out, { recursive: true });
@@ -16,10 +16,12 @@ const save = (name: string, png: Buffer) => {
 };
 
 const t = Date.now();
-save('guess-story.png', await guessCard('story', { nick: 'Capivara Atenta 12', pa: 48.6, cands }));
-save('guess-og.png', await guessCard('og', { nick: 'Capivara Atenta 12', pa: 48.6, cands }));
-save('guess-result-story.png', await guessCard('story', { nick: 'Capivara Atenta 12', pa: 48.6, cands, result: { pa: 48.92, dist: 0.32, rank: 1834, total: 131977 } }));
-save('guess-result-og.png', await guessCard('og', { nick: 'Capivara Atenta 12', pa: 48.6, cands, result: { pa: 48.92, dist: 0.32, rank: 1834, total: 131977 } }));
+const result = { pa: 48.92, dist: 0.32, rank: 1834, total: 131977 };
+for (const f of [...POSTERS, 'og'] as const) {
+  save(`guess-${f}.png`, await guessCard(f, { nick: 'Capivara Atenta 12', pa: 47.8, cands }));
+  save(`guess-lula-${f}.png`, await guessCard(f, { nick: 'Tatu Ligeiro 75', pa: 53.4, cands }));
+  save(`guess-result-${f}.png`, await guessCard(f, { nick: 'Capivara Atenta 12', pa: 48.6, cands, result }));
+}
 save('board.png', await scoreCard({ title: 'Apuração do 2º turno ao vivo', snap: board.br, cands, at: board.source.at }));
 save('board-pre.png', await scoreCard({ title: 'Apuração do 2º turno ao vivo a partir das 17h', snap: null, cands }));
 const m = board.moments[0];

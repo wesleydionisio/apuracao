@@ -1,4 +1,4 @@
-// Cards PNG para compartilhar (Stories 1080×1350, OG 1200×630). satori → SVG → resvg → PNG.
+// Cards PNG para compartilhar (palpite em 9:16, 3:4 e 16:9; OG 1200×630). satori → SVG → resvg → PNG.
 // Mesmo visual do site: grafite, fotos oficiais do TSE, um número protagonista, barra bicolor.
 // Cache por chave de conteúdo (disco; palpites só em memória): cada card é gerado uma vez por versão dos dados.
 import { createHash } from 'node:crypto';
@@ -20,7 +20,7 @@ const h = (style: Style, ...children: Child[]): Node => ({
 });
 
 /** muda quando o desenho muda: invalida o cache em disco dos cards antigos */
-const DESIGN = 'v4';
+const DESIGN = 'v5';
 
 let fonts: { name: string; data: Buffer; weight: 400 | 800; style: 'normal' }[] | null = null;
 function loadFonts() {
@@ -43,8 +43,11 @@ const LINE = '#262c35';
 const FG = '#eef1f5';
 const MUTED = '#8b95a1';
 
-export type Format = 'og' | 'story';
-const SIZE: Record<Format, [number, number]> = { og: [1200, 630], story: [1080, 1350] };
+/** story 9:16, portrait 3:4, wide 16:9: os formatos do pôster de palpite; og: a prévia do link */
+export type Poster = 'story' | 'portrait' | 'wide';
+export type Format = 'og' | Poster;
+export const POSTERS: Poster[] = ['story', 'portrait', 'wide'];
+const SIZE: Record<Format, [number, number]> = { og: [1200, 630], story: [1080, 1920], portrait: [1080, 1440], wide: [1920, 1080] };
 
 const host = () => new URL(config.publicUrl).host;
 
@@ -213,7 +216,7 @@ export function guessCard(
   fmt: Format,
   o: { nick: string; pa: number; cands: CandidateDef[]; result?: { pa: number; dist: number; rank: number; total: number } },
 ) {
-  return fmt === 'story' ? guessStory(o) : guessOg(o);
+  return fmt === 'og' ? guessOg(o) : guessPoster(fmt, o);
 }
 
 type GuessIn = Parameters<typeof guessCard>[1];
@@ -221,48 +224,162 @@ type GuessIn = Parameters<typeof guessCard>[1];
 const headline = (o: GuessIn) =>
   o.result ? (o.result.dist < 0.005 ? 'Na mosca!' : `Errei por ${fmtPct(o.result.dist, 2)} ponto${o.result.dist >= 2 ? 's' : ''}`) : `Meu palpite para o 2º turno`;
 
-function guessStory(o: GuessIn) {
+/**
+ * Pôster do palpite, feito para circular: a aposta em letras grandes ("Flavio Bolsonaro vence com 52,2%"), o duelo
+ * com o brilho da cor de cada lado e o desafio ("Duvido você chegar mais perto") com o endereço. Depois do TSE, o
+ * mesmo pôster vira o resultado: quanto errou, a posição no ranking e o placar oficial ao lado do palpite.
+ */
+function guessPoster(fmt: Poster, o: GuessIn) {
   const [ca, cb] = o.cands;
   const pb = 100 - o.pa;
-  const side = (c: CandidateDef, p: number, lead: boolean, dim: boolean) =>
+  const wide = fmt === 'wide';
+  const story = fmt === 'story';
+  const [W, H] = SIZE[fmt];
+  const pad = wide ? 88 : 80;
+  const r = o.result;
+  const win = o.pa > 50 ? ca : pb > 50 ? cb : null;
+  const winPct = Math.max(o.pa, pb);
+  // largura útil da coluna de texto
+  const col = wide ? 900 : W - pad * 2;
+  /** maior corpo em que o texto cabe numa linha (Inter 800 ≈ 0,6 em por letra) */
+  const fit = (text: string, max: number) => Math.min(max, Math.floor(col / (text.length * 0.6)));
+
+  const brand = h(
+    { justifyContent: 'space-between', alignItems: 'center' },
     h(
-      { flexDirection: 'column', alignItems: 'center', gap: 22, width: 400 },
-      photo(c, 216, 44, lead),
-      h({ alignItems: 'center', gap: 12, fontSize: 38, fontWeight: 800 }, dot(c.color, 16), c.short),
-      h({ fontSize: 120, fontWeight: 800, letterSpacing: -5, lineHeight: 1, color: dim ? MUTED : FG }, `${fmtPct(p, 1)}%`),
-    );
-  const body = h(
-    { flexDirection: 'column', gap: 44, flexGrow: 1, justifyContent: 'center', padding: '40px 0' },
-    h(
-      { flexDirection: 'column', gap: 10 },
-      h({ fontSize: 34, color: MUTED }, o.nick),
-      h({ fontSize: 68, fontWeight: 800, letterSpacing: -2, lineHeight: 1.05 }, headline(o)),
-      o.result ? h({ fontSize: 38, color: FG }, rankLine(o.result.rank, o.result.total)) : null,
+      { alignItems: 'center', gap: 18 },
+      h({ fontSize: 40, fontWeight: 800, letterSpacing: -1.2 }, 'urna.digi'),
+      h({ fontSize: 22, color: MUTED, letterSpacing: 4 }, '2º TURNO'),
     ),
     h(
-      { flexDirection: 'column', gap: 44, background: CARD, border: `1px solid ${LINE}`, borderRadius: 48, padding: '56px 48px' },
-      h({ justifyContent: 'space-between' }, side(ca, o.pa, o.pa > 50, o.pa < 50), side(cb, pb, pb > 50, pb < 50)),
-      bar(o.pa, ca, cb, 28),
-      o.result
-        ? h({ justifyContent: 'center', fontSize: 32, color: MUTED }, `Resultado do TSE: ${fmtPct(o.result.pa, 2)}% × ${fmtPct(100 - o.result.pa, 2)}%`)
-        : null,
-    ),
-    h(
-      { justifyContent: 'center' },
-      h(
-        { background: FG, color: BG, borderRadius: 999, padding: '24px 44px', fontSize: o.result ? 34 : 30, fontWeight: 800 },
-        o.result ? `E você? Veja em ${host()}` : `Faça seu palpite também em ${host()}`,
-      ),
+      { alignItems: 'center', gap: 12, fontSize: 22, fontWeight: 800, letterSpacing: 2, border: `1px solid ${LINE}`, borderRadius: 999, padding: '12px 24px', background: `${CARD}cc` },
+      dot(r ? FG : '#22c55e', 14),
+      r ? 'RESULTADO OFICIAL' : 'APURAÇÃO AO VIVO · 25/10 · 17H',
     ),
   );
-  return render(
+
+  const kicker = h(
+    { alignItems: 'center', gap: 16, fontSize: 30 },
+    h({ fontWeight: 800, letterSpacing: 3, color: BG, background: FG, borderRadius: 10, padding: '8px 16px' }, r ? 'MEU RESULTADO' : 'MEU PALPITE'),
+    h({ color: MUTED }, o.nick),
+  );
+
+  // a frase da aposta: o nome de quem vence e a porcentagem na cor dele
+  const big = wide ? 104 : story ? 112 : 100;
+  const head = r
+    ? h(
+        { flexDirection: 'column', gap: 18 },
+        h({ fontSize: fit(headline(o), big), fontWeight: 800, letterSpacing: -3, lineHeight: 1 }, headline(o)),
+        h(
+          { alignSelf: 'flex-start', fontSize: wide ? 44 : 48, fontWeight: 800, color: BG, background: '#facc15', borderRadius: 16, padding: '10px 22px' },
+          rankLine(r.rank, r.total),
+        ),
+      )
+    : win
+      ? h(
+          { flexDirection: 'column' },
+          h({ fontSize: fit(win.short, big), fontWeight: 800, letterSpacing: -3.5, lineHeight: 1.02 }, win.short),
+          h(
+            { fontSize: big * 0.86, fontWeight: 800, letterSpacing: -3, lineHeight: 1.08 },
+            h({ color: MUTED, marginRight: big * 0.25 }, 'vence com'),
+            h({ color: win.color }, `${fmtPct(winPct, 1)}%`),
+          ),
+        )
+      : h({ fontSize: big, fontWeight: 800, letterSpacing: -3.5, lineHeight: 1.02 }, 'Empate: 50 × 50');
+
+  // o duelo: retrato maior e com brilho para quem o palpite põe na frente
+  const ph = wide ? 260 : story ? 300 : 230;
+  const side = (c: CandidateDef, p: number) => {
+    const lead = p > 50;
+    return h(
+      { flexDirection: 'column', alignItems: 'center', gap: wide ? 18 : 20, flexGrow: 1, flexBasis: 0 },
+      h(
+        { position: 'relative' },
+        // brilho atrás do retrato: um gradiente pequeno (boxShadow com blur grande leva >20 s no resvg)
+        lead
+          ? h({
+              position: 'absolute',
+              left: -ph * 0.45,
+              top: -ph * 0.45,
+              width: ph * 1.9 + 14,
+              height: ph * 1.9 + 14,
+              backgroundImage: `radial-gradient(circle, ${c.color}99 0%, ${c.color}33 40%, transparent 68%)`,
+            })
+          : null,
+        h(
+          { borderRadius: ph * 0.24, padding: 7, background: lead ? c.color : LINE, opacity: p < 50 ? 0.6 : 1 },
+          photo(c, ph, ph * 0.21),
+        ),
+      ),
+      h({ fontSize: wide ? 34 : 36, fontWeight: 800, color: p < 50 ? MUTED : FG }, c.short),
+      h({ fontSize: wide ? 96 : story ? 108 : 92, fontWeight: 800, letterSpacing: -4, lineHeight: 1, color: p < 50 ? MUTED : FG }, `${fmtPct(p, 1)}%`),
+    );
+  };
+  const duel = h(
+    {
+      flexDirection: 'column',
+      gap: wide ? 34 : 38,
+      background: `${CARD}e6`,
+      border: `1px solid ${LINE}`,
+      borderRadius: 48,
+      padding: wide ? '52px 48px' : story ? '60px 44px' : '44px 40px',
+      width: wide ? 760 : '100%',
+    },
     h(
-      { width: 1080, height: 1350, background: BG, color: FG, fontFamily: 'Inter', flexDirection: 'column', padding: 80 },
-      header('· 2º turno', '25 de outubro', 28),
-      body,
-      footer('Dados oficiais do TSE na apuração', 28),
+      { alignItems: 'flex-start' },
+      side(ca, o.pa),
+      h({ fontSize: 44, fontWeight: 800, color: MUTED, marginTop: ph * 0.42 }, '×'),
+      side(cb, pb),
     ),
-    'story',
+    bar(o.pa, ca, cb, wide ? 26 : 30),
+    r
+      ? h(
+          { justifyContent: 'center', alignItems: 'center', gap: 14, fontSize: 32, color: MUTED },
+          'TSE:',
+          h({ fontWeight: 800, color: FG }, `${ca.short} ${fmtPct(r.pa, 2)}% × ${fmtPct(100 - r.pa, 2)}% ${cb.short}`),
+        )
+      : null,
+  );
+
+  const dare = h(
+    { flexDirection: 'column', gap: 14 },
+    h({ fontSize: wide ? 56 : 58, fontWeight: 800, letterSpacing: -1.6, lineHeight: 1.05 }, r ? 'E você, quanto errou?' : 'Duvido você chegar mais perto.'),
+    h(
+      { fontSize: 32, color: MUTED, lineHeight: 1.3 },
+      r ? 'O ranking com todos os palpites está no site.' : 'Quem errar menos sobe no ranking ao vivo da apuração.',
+    ),
+  );
+  const cta = h(
+    { alignSelf: wide ? 'flex-start' : 'stretch', justifyContent: 'center', alignItems: 'center', gap: 18, background: FG, color: BG, borderRadius: 999, padding: '28px 48px', fontSize: 38, fontWeight: 800 },
+    r ? 'Veja o seu em' : 'Faça o seu em',
+    h({ color: win?.color ?? BG }, host()),
+  );
+  const foot = h({ justifyContent: 'center', fontSize: 24, color: MUTED }, 'Placar e chat ao vivo · dados oficiais do TSE');
+
+  // cada lado com a cor do seu candidato (gradiente linear: o radial na tela inteira custa ~1 s no resvg)
+  const bg = `linear-gradient(90deg, ${ca.color}40 0%, ${ca.color}10 30%, transparent 48%, transparent 52%, ${cb.color}10 70%, ${cb.color}40 100%)`;
+  const frame: Style = { width: W, height: H, background: BG, backgroundImage: bg, color: FG, fontFamily: 'Inter', padding: pad };
+
+  return render(
+    wide
+      ? h(
+          { ...frame, flexDirection: 'column', gap: 40 },
+          brand,
+          h(
+            { flexGrow: 1, alignItems: 'center', justifyContent: 'space-between' },
+            h({ flexDirection: 'column', gap: 40, width: col }, kicker, head, dare, cta),
+            duel,
+          ),
+        )
+      : h(
+          { ...frame, flexDirection: 'column', justifyContent: 'space-between' },
+          brand,
+          h({ flexDirection: 'column', gap: story ? 34 : 26 }, kicker, head),
+          duel,
+          h({ flexDirection: 'column', gap: story ? 40 : 30 }, dare, cta),
+          story ? foot : null,
+        ),
+    fmt,
   );
 }
 

@@ -42,7 +42,7 @@ import { FileAccounts, PgAccounts, type Account, type AccountStore } from './acc
 import { config } from './config';
 import { board, cityPayload, munBoard, municipalities } from './data';
 import { renderHtml, type Meta } from './html';
-import { Busy, cached, guessCard, scoreCard, stripEmoji, teaserCard, type Format } from './og';
+import { Busy, cached, guessCard, POSTERS, scoreCard, stripEmoji, teaserCard, type Format } from './og';
 import { createCharge, fetchPayment, providerOf, qrPng, simulateWooviPayment, wooviSandbox } from './pix';
 import { cleanSite, Site } from './site';
 import { FileStore, newId, PgStore, type GuessStore, type StoredGuess } from './store';
@@ -740,7 +740,8 @@ app.get<{ Params: { file: string }; Querystring: { f?: string } }>('/api/og/gues
   if (!g) return reply.code(404).send();
   const cands = candidates();
   if (!cands) return noCands(reply);
-  const fmt: Format = req.query.f === 'story' ? 'story' : 'og';
+  // story 9:16, portrait 3:4, wide 16:9; sem f (ou outro valor): a prévia do link
+  const fmt: Format = (POSTERS as string[]).includes(req.query.f ?? '') ? (req.query.f as Format) : 'og';
   const b = board();
   const final = b?.br?.status === 'totalizado' ? b.br : null;
   let result: { pa: number; dist: number; rank: number; total: number } | undefined;

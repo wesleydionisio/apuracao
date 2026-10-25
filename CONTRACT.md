@@ -58,7 +58,7 @@ Coordenadas arredondadas (3 casas), malha IBGE "qualidade mínima".
 | `GET /api/city/:ibge` | `{ mun: Municipality, now: Snap \| null, t1: HistRow \| null, y2022: HistRow \| null, uf: Snap \| null, br: Snap \| null }` |
 | `GET /api/city/by-slug/:uf/:slug` | idem |
 | `GET /api/stats` | `{ online, guesses, topCities: { ibge, name, uf, n }[] }` (cache 10s) |
-| `GET /api/og/guess/:id.png?f=story\|og` | PNG 1080×1350 (story) ou 1200×630 (og) |
+| `GET /api/og/guess/:id.png?f=story\|portrait\|wide\|og` | PNG do pôster de palpite: 1080×1920 (story, 9:16), 1080×1440 (portrait, 3:4), 1920×1080 (wide, 16:9); sem `f`, 1200×630 (og, prévia do link) |
 | `GET /api/og/city/:ibge.png`, `/api/og/moment/:id.png`, `/api/og/board.png` | PNG 1200×630 |
 | `GET /p/:id`, `/cidade/:uf/:slug`, `/m/:id`, `/sala/:slug`, `/` | `index.html` do web com `<meta og:*>` injetadas |
 | `GET /api/stats` (extra) | também `guessesLastHour`, `guessAWins` (% dos palpites com A vencendo), `recentGuesses: { nick, pa, at }[]` |
