@@ -14,12 +14,14 @@ import {
   TSE_UFS,
   type CandidateDef,
   type ParsedResult,
+  type ProjModel,
   type Side,
 } from '@apuracao/shared';
-import { emptyState, runCycle, toBoard, type PollState } from './board';
+import { emptyState, projectionStep, runCycle, toBoard, type PollState } from './board';
 import { config } from './config';
 import { loadHistory, readJson } from './history';
 import { hashOf, loadState, Output, writeJsonAtomic } from './output';
+import { buildPollerModel } from './projection';
 import { ReplaySource, T_END } from './replay';
 import { pool, TseSource, type Source } from './source';
 
@@ -31,13 +33,20 @@ const stateFile = path.join(config.varDir, `poller-state-${config.source}.json`)
 
 let state: PollState = loadState(stateFile) ?? emptyState();
 let cands: CandidateDef[] | null = null;
+let projModel: ProjModel | null = null;
+const projFile = path.join(config.varDir, 'projection.json');
 let y2022Map: Record<Side, string> | null = null;
 let lastBoardHash = '';
 let munCursor = 0;
-/** andamento de TODAS as cidades (ab por UF): % apurado e hora da última seção, por IBGE */
-const munProg = new Map<string, { pst: number; at: string | null; el: number }>();
-/** hora do andamento quando os votos daquela cidade foram buscados pela última vez */
+/** andamento de TODAS as cidades (ab por UF): % apurado, eleitorado e comparecimento apurados, hora da última seção */
+const munProg = new Map<string, { pst: number; at: string | null; el: number; te: number; elc: number; turnout: number }>();
+/** hora do andamento quando os votos daquela cidade foram buscados pela última vez, e em qual ciclo */
 const fetchedAt = new Map<string, string | null>();
+const fetchedCycle = new Map<string, number>();
+let cycleNo = 0;
+/** prioridade de busca: eleitorado × ciclos sem buscar (nunca buscada conta como 30), para as grandes que mudam
+ *  a todo ciclo não deixarem as pequenas sem parcial no pico da noite */
+const fetchPriority = (ibge: string, el: number) => el * (fetchedCycle.has(ibge) ? cycleNo - fetchedCycle.get(ibge)! : 30);
 /** ordem das cidades no mapa de pontos (static/dots.json); o mungrid.json segue esta ordem */
 const dotOrder: string[] = readJson<{ mun: string[] }>(path.join(config.staticDir, 'dots.json'))?.mun ?? [];
 let lastGridHash = '';
@@ -58,6 +67,16 @@ async function fetchResult(uf: string, munTse?: string): Promise<ParsedResult | 
 }
 
 async function cycle(opts: { allMun?: boolean } = {}) {
+  replay?.freeze();
+  try {
+    await cycleAt(opts);
+  } finally {
+    replay?.thaw();
+  }
+}
+
+async function cycleAt(opts: { allMun?: boolean }) {
+  cycleNo++;
   const br = await fetchResult('br');
   if (!br) throw new Error('arquivo BR do 2º turno indisponível');
   if (!cands) {
@@ -70,6 +89,11 @@ async function cycle(opts: { allMun?: boolean } = {}) {
     });
     y2022Map = { a: config.y2022.a ?? cands[0].n, b: config.y2022.b ?? cands[1].n };
     console.log(`[poller] A=${cands[0].n} ${cands[0].name} | B=${cands[1].n} ${cands[1].name}`);
+    try {
+      projModel = buildPollerModel(hist, cands, y2022Map, config.geoDir);
+    } catch (e) {
+      console.error(`[projeção] modelo por cidade indisponível, fica o modelo por UF: ${(e as Error).message}`);
+    }
   }
 
   const ufCodes = TSE_UFS;
@@ -90,13 +114,13 @@ async function cycle(opts: { allMun?: boolean } = {}) {
     const UF = ufCodes[i].toUpperCase();
     for (const r of parseMunProgress(raw)) {
       const m = hist.byTse.get(`${UF}:${r.tse}`);
-      if (m) munProg.set(m.ibge, { pst: r.pst, at: r.at, el: m.el });
+      if (m) munProg.set(m.ibge, { pst: r.pst, at: r.at, el: m.el, te: r.el, elc: r.elc, turnout: r.turnout });
     }
   });
   const batch = munProg.size
     ? [...munProg]
         .filter(([ibge, p]) => p.pst > 0 && fetchedAt.get(ibge) !== p.at)
-        .sort((x, y) => y[1].el - x[1].el)
+        .sort((x, y) => fetchPriority(y[0], y[1].el) - fetchPriority(x[0], x[1].el))
         .slice(0, opts.allMun ? Infinity : config.munPerCycle)
         .flatMap(([ibge]) => {
           const m = hist.byIbge.get(ibge);
@@ -112,6 +136,7 @@ async function cycle(opts: { allMun?: boolean } = {}) {
     const r = munRes[i];
     if (!r || r instanceof Error) return [];
     fetchedAt.set(m.ibge, munProg.get(m.ibge)?.at ?? null);
+    fetchedCycle.set(m.ibge, cycleNo);
     return [{ ibge: m.ibge, p: r }];
   });
 
@@ -119,6 +144,7 @@ async function cycle(opts: { allMun?: boolean } = {}) {
   const result = runCycle(state, { cands, br, ufs, mun, hist, y2022Map: y2022Map!, bigMunEl: config.bigMunEl, now: br.at });
   for (const k of missing) result.state.ufs[k] = state.ufs[k];
   state = result.state;
+  await stepProjection();
 
   const released = releaseOverride === 'auto' ? isReleased(new Date(), config.releaseAt) : releaseOverride === 'on';
   // "antes das 17h" forçado mostra a contagem para o horário real de domingo
@@ -157,8 +183,29 @@ async function cycle(opts: { allMun?: boolean } = {}) {
   for (const m of result.moments) console.log(`[momento] ${m.title}`);
   const b = state.br;
   console.log(
-    `[poller] ${released ? 'AO VIVO' : 'observação'} pst=${b?.pst ?? 0}% A=${b?.pa ?? 0}% B=${b?.pb ?? 0}% need=${b?.need ?? '-'} status=${b?.status} ufs=${ufs.length} mun=${mun.length} mudou=${result.changed.length}`,
+    `[poller] ${released ? 'AO VIVO' : 'observação'} pst=${b?.pst ?? 0}% A=${b?.pa ?? 0}% B=${b?.pb ?? 0}% need=${b?.need ?? '-'} proj=${state.proj?.last ? `${state.proj.last.pa}[${state.proj.last.lo},${state.proj.last.hi}]${state.proj.last.model}` : '-'} status=${b?.status} ufs=${ufs.length} mun=${mun.length} mudou=${result.changed.length}`,
   );
+}
+
+/**
+ * Projeção do ciclo: guarda no estado e grava o relatório interno (var/projection.json, lido pelo /admin).
+ * Nunca derruba o ciclo: se algo der errado aqui, o placar segue e a projeção volta ao modelo por UF.
+ */
+async function stepProjection(report = true) {
+  if (!cands) return;
+  const t0 = Date.now();
+  try {
+    const step = projectionStep(state, { model: projModel, prog: munProg, cands, hist, minPst: config.projMinPst });
+    state.proj = step.proj;
+    if (report && step.report) {
+      const r = step.report;
+      await writeJsonAtomic(projFile, { at: state.br?.at ?? null, ms: Date.now() - t0, ...r, public: step.proj.last });
+      if (r.reason && r.pst >= config.projMinPst) console.warn(`[projeção] usando o modelo por UF: ${r.reason}`);
+    }
+  } catch (e) {
+    console.error(`[projeção] falhou, placar segue com o modelo por UF: ${(e as Error).message}`);
+    if (state.proj) state.proj = { ...state.proj, last: undefined };
+  }
 }
 
 function rotate<T>(list: T[], n: number): T[] {
@@ -196,6 +243,7 @@ async function rebuildTo(t: number) {
   munCursor = 0;
   munProg.clear();
   fetchedAt.clear();
+  fetchedCycle.clear();
   lastGridHash = '';
   const steps = Math.max(1, Math.min(120, Math.ceil(t * 120)));
   for (let i = 1; i < steps; i++) {
@@ -203,6 +251,7 @@ async function rebuildTo(t: number) {
     const br = await fetchResult('br');
     if (!br) continue;
     const ufs = (await Promise.all(TSE_UFS.map((uf) => fetchResult(uf)))).filter((x): x is ParsedResult => !!x);
+    // sem andamento por cidade nestes passos: a projeção (e o aprendizado dela) começa no ciclo completo abaixo
     state = runCycle(state, { cands, br, ufs, mun: [], hist, y2022Map: y2022Map!, bigMunEl: config.bigMunEl, now: br.at }).state;
   }
   replay.setT(t);

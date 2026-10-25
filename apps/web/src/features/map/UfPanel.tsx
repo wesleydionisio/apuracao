@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { UfProjection } from '@/features/score/Projection';
 import { staticData } from '@/lib/api';
 import { fmtCompact } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -101,6 +102,7 @@ function UfDetail({ board, uf, desktop }: { board: Board; uf: string; desktop: b
           {snap?.valid ? (
             <>
               <CandidateLines cands={cands} snap={snap} />
+              <UfProjection board={board} uf={uf} />
               {pa1 == null && p22 == null && (t1Wait || y22Wait) && (
                 // mesmo cartão (barra com as marcas + legenda de uma linha), em fantasma
                 <div className="mt-4 rounded-xl bg-muted/50 p-3" aria-hidden>

@@ -20,7 +20,7 @@ Gerados pelo poller a cada ciclo (Cache-Control `s-maxage=5, stale-while-revalid
 
 | Caminho | Tipo | Notas |
 |---|---|---|
-| `/data/br.json` | `Board` | placar completo. Antes das 17h: `released=false`, `br=null`, `ufs={}` |
+| `/data/br.json` | `Board` | placar completo. Antes das 17h: `released=false`, `br=null`, `ufs={}`. `projection` (≥ 20% apurado): `pa/lo/hi` (faixa de 95%), `model` (`cidade` \| `uf`), `lead` (lado já confirmado, com histerese), `ufs` (faixa por UF com 20%+), `curve` (a faixa ao longo da noite) |
 | `/data/mun/<UF>.json` | `MunBoard` | só municípios já coletados (top ~300 por eleitorado) |
 | `/data/site.json` | `SiteConfig` | gravado pela API (boot e painel admin): patrocínio, "anuncie aqui", Super Chat ligado |
 
@@ -67,7 +67,7 @@ Coordenadas arredondadas (3 casas), malha IBGE "qualidade mínima".
 | `POST /api/superchat/:id/dev-pay` | só com o provedor `dev` (fora de produção, sem Pix configurado) |
 | `POST /api/pix/webhook` | Woovi (`OPENPIX:CHARGE_COMPLETED`, `charge.correlationID` = id do Super Chat); confirmado consultando a API |
 | `POST /api/admin/flags` | header `x-admin-token`; body `{ chat?, projection?, map_mun?, closeRoom?, openRoom? }` |
-| `GET /api/admin/overview` | carga da máquina, workers WS (`WS_URLS`), placar, usuários, totais de Super Chat |
+| `GET /api/admin/overview` | carga da máquina, workers WS (`WS_URLS`), placar, usuários, totais de Super Chat, `projection` (`var/projection.json` do poller: modelo no ar, os dois modelos, diagnóstico) |
 | `GET /api/admin/superchats`, `POST /api/admin/superchats/:id` | lista; body `{ action: 'approve' \| 'hide' }` |
 | `GET/POST /api/admin/site` | patrocínio do topo e WhatsApp do "anuncie aqui"; publica `DATA_DIR/site.json` |
 | `GET /api/health`, `GET /metrics` | |
@@ -105,6 +105,8 @@ Online: cada worker WS grava `online:<worker>` = conexões, `EX 15`, a cada 5s.
 | `TSE_ELECTION` / `TSE_T1` | poller | `6258` / `6257` |
 | `CAND_A` / `CAND_B` | poller | ordem `seq` do TSE |
 | `SOURCE` | poller | `tse` \| `replay` (simulação acelerada) |
+| `PROJ_MIN_PST` | poller | `20` (% apurado para a projeção aparecer) |
+| `GEO_DIR` | poller | `<repo>/apps/web/public/geo/mun` (vizinhança das cidades na projeção) |
 | `PUBLIC_URL` | api | `http://localhost:5173` |
 | `GOOGLE_CLIENT_ID` | api | vazio = sem login com Google (em dev, login de teste por e-mail) |
 | `WOOVI_APP_ID` / `WOOVI_API` | api | Super Chat pela Woovi (confirma sozinho); `WOOVI_API` = sandbox nos testes |

@@ -34,6 +34,10 @@ export const config = {
   colorByNum: env.CAND_COLORS || '',
   /** fotos baixadas pelo ETL ficam em apps/web/public/cand/<n>.jpg */
   photoDir: env.PHOTO_DIR ?? path.join(repo, 'apps/web/public/cand'),
+  /** malhas dos municípios (vizinhança da projeção) */
+  geoDir: env.GEO_DIR ?? path.join(repo, 'apps/web/public/geo/mun'),
+  /** projeção pública só a partir deste % apurado */
+  projMinPst: Number(env.PROJ_MIN_PST || 20),
   y2022: { a: env.Y2022_A || undefined, b: env.Y2022_B || undefined },
   intervalMs: int(env.POLL_INTERVAL_MS, source === 'replay' ? 3000 : 12000),
   jitterMs: int(env.POLL_JITTER_MS, source === 'replay' ? 500 : 3000),

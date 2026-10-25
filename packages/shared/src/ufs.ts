@@ -51,3 +51,20 @@ const UF_PREP: Record<string, 'no' | 'na' | 'em'> = {
 
 /** "na Bahia", "em São Paulo", "no Rio de Janeiro" */
 export const inUf = (uf: string) => `${UF_PREP[uf.toUpperCase()] ?? 'em'} ${ufName(uf)}`;
+
+/** região de cada UF (exterior à parte) */
+export const UF_REGION: Record<string, string> = {
+  AC: 'N', AM: 'N', AP: 'N', PA: 'N', RO: 'N', RR: 'N', TO: 'N',
+  AL: 'NE', BA: 'NE', CE: 'NE', MA: 'NE', PB: 'NE', PE: 'NE', PI: 'NE', RN: 'NE', SE: 'NE',
+  DF: 'CO', GO: 'CO', MS: 'CO', MT: 'CO',
+  ES: 'SE', MG: 'SE', RJ: 'SE', SP: 'SE',
+  PR: 'S', RS: 'S', SC: 'S',
+  ZZ: 'ZZ',
+};
+
+/** códigos IBGE das 27 capitais */
+export const CAPITALS = new Set([
+  '1100205', '1200401', '1302603', '1400100', '1501402', '1600303', '1721000', '2111300', '2211001', '2304400',
+  '2408102', '2507507', '2611606', '2704302', '2800308', '2927408', '3106200', '3205309', '3304557', '3550308',
+  '4106902', '4205407', '4314902', '5002704', '5103403', '5208707', '5300108',
+]);

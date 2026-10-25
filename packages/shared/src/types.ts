@@ -88,11 +88,26 @@ export interface CurvePoint {
 }
 
 export interface Projection {
-  /** estimativa de % final de A, com intervalo */
+  /** estimativa de % final de A, com intervalo (95%) */
   pa: number;
   lo: number;
   hi: number;
   basedOnPst: number;
+  /** 'cidade' = modelo por cidade (packages/shared/src/projection.ts); 'uf' = modelo simples, de reserva */
+  model?: 'cidade' | 'uf';
+  /** lado que a faixa inteira já aponta como à frente (confirmado em ciclos seguidos); null = indefinido */
+  lead?: Side | null;
+  /** faixa por UF (só as que têm 20%+ apurado e ainda não fecharam) */
+  ufs?: Record<string, { pa: number; lo: number; hi: number }>;
+  /** como a projeção andou na noite */
+  curve?: ProjectionPoint[];
+}
+
+export interface ProjectionPoint {
+  pst: number;
+  pa: number;
+  lo: number;
+  hi: number;
 }
 
 export interface RemainingRow {

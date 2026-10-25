@@ -143,6 +143,8 @@ export interface MunProgress {
   pst: number;
   el: number;
   elc: number;
+  /** comparecimento nas seções já totalizadas */
+  turnout: number;
   /** hora da última totalização daquela cidade (muda quando entra seção nova) */
   at: string | null;
 }
@@ -156,6 +158,7 @@ export function parseMunProgress(raw: Any): MunProgress[] {
       pst: pct(r.s?.pstn ?? r.s?.pst),
       el: num(r.e?.te),
       elc: num(r.e?.est),
+      turnout: num(r.e?.c),
       at: tseDate(r.dt, r.ht),
     }));
 }

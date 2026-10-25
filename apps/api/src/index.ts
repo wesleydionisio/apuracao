@@ -658,6 +658,15 @@ const brtMidnight = () => {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) + 3 * 3_600_000;
 };
 
+/** relatório interno da projeção (o poller grava a cada ciclo em var/projection.json) */
+function projectionReport(): unknown {
+  try {
+    return JSON.parse(readFileSync(path.join(config.varDir, 'projection.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 app.get('/api/admin/overview', async () => {
   const b = board();
   const [ws, online, acc] = await Promise.all([Promise.all(config.wsUrls.map(wsWorker)), onlineCount(), accounts.summary(12)]);
@@ -680,6 +689,7 @@ app.get('/api/admin/overview', async () => {
       recent: acc.recent.map((a) => ({ username: a.username, name: a.name, email: a.email, createdAt: a.createdAt })),
     },
     superchat: { provider: pixProvider, today: superchats.totals(brtMidnight()), all: superchats.totals(0) },
+    projection: projectionReport(),
   };
 });
 

@@ -52,6 +52,45 @@ interface Overview {
     recent: { username: string; name: string; email: string; createdAt: string }[];
   };
   superchat: { provider: 'woovi' | 'manual' | 'dev' | null; today: Totals; all: Totals };
+  projection: ProjReport | null;
+}
+
+interface ProjEst {
+  pa: number;
+  lo: number;
+  hi: number;
+  sd?: number;
+  pWin?: number;
+}
+
+/** var/projection.json do poller (os dois modelos e o diagnóstico do modelo por cidade) */
+interface ProjReport {
+  at: string | null;
+  ms: number;
+  pst: number;
+  used: 'cidade' | 'uf' | null;
+  reason: string | null;
+  abCoverage: number | null;
+  city: ProjEst | null;
+  uf: ProjEst | null;
+  public: ProjEst | null;
+  diag: {
+    nFit: number;
+    nRem: number;
+    remShare: number;
+    sigmaCity: number;
+    tauUf: number;
+    rho: number;
+    sigmaDrift: number;
+    driftMean: number;
+    nDrift: number;
+    nErr: number;
+    bias: number;
+    zRms: number;
+    sigmaSys: number;
+    turnoutRatio: number;
+    var: Record<string, number>;
+  } | null;
 }
 
 interface ScRow {
@@ -212,6 +251,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
           {ov && <Server ov={ov} />}
           {ov && <Users ov={ov} />}
         </div>
+        {ov?.projection && <ProjectionDiag r={ov.projection} />}
         <Superchats rows={scs} provider={ov?.superchat.provider ?? null} token={token} onChange={load} />
         <SponsorForm token={token} />
       </main>
@@ -326,6 +366,47 @@ function Server({ ov }: { ov: Overview }) {
             ))}
           </tbody>
         </table>
+      </div>
+    </Section>
+  );
+}
+
+const range = (e: ProjEst | null) =>
+  e && [e.pa, e.lo, e.hi].every(Number.isFinite) ? `${e.pa.toLocaleString('pt-BR')}% [${e.lo.toLocaleString('pt-BR')}, ${e.hi.toLocaleString('pt-BR')}]` : '—';
+
+/** projeção: qual modelo está no ar, os dois lado a lado e a saúde do modelo por cidade */
+function ProjectionDiag({ r }: { r: ProjReport }) {
+  const d = r.diag;
+  const fallback = r.used === 'uf' || (!!r.reason && r.pst >= 20);
+  return (
+    <Section title="Projeção (só aqui: o público vê a faixa)" right={<span className="num text-[12px] text-muted-foreground">{r.pst.toLocaleString('pt-BR')}% apurado · {r.ms} ms</span>}>
+      <div className="grid gap-x-8 lg:grid-cols-2">
+        <div>
+          <Row k="No ar" v={<span className={cn(fallback && 'text-destructive')}>{r.used === 'cidade' ? 'modelo por cidade' : r.used === 'uf' ? 'modelo por UF (reserva)' : 'escondida (< 20% ou totalizado)'}</span>} />
+          {r.reason && <Row k="Por que a reserva" v={<span className="text-destructive">{r.reason}</span>} />}
+          <Row k="Pública (A)" v={range(r.public)} />
+          <Row k="Por cidade (A)" v={`${range(r.city)}${r.city?.pWin != null ? ` · chance de A ${(r.city.pWin * 100).toFixed(1)}%` : ''}`} />
+          <Row k="Por UF (A)" v={range(r.uf)} />
+          <Row k="Andamento por cidade / apurado BR" v={r.abCoverage == null ? '—' : `${(r.abCoverage * 100).toFixed(1)}%`} />
+        </div>
+        {d && (
+          <div>
+            <Row k="Cidades no ajuste / com resto" v={`${fmtInt(d.nFit)} / ${fmtInt(d.nRem)} · ${d.remShare.toLocaleString('pt-BR')}% dos votos ainda previstos`} />
+            <Row k="σ cidade · τ UF · vizinhança" v={`${d.sigmaCity} · ${d.tauUf} · ρ ${d.rho}`} />
+            <Row k="Deriva das 1ªs seções" v={`média ${d.driftMean} · dp ${d.sigmaDrift} (${fmtInt(d.nDrift)} obs.)`} />
+            <Row k="Autoavaliação (cidades que chegaram)" v={<span className={cn(d.zRms > 1.5 && 'text-destructive')}>{d.nErr < 30 ? `${d.nErr} conferidas` : `z rms ${d.zRms} · viés ${d.bias} (${d.nErr})`}</span>} />
+            <Row k="Erro sistemático usado" v={`${d.sigmaSys} (logit)`} />
+            <Row k="Comparecimento vs 1º turno" v={`×${d.turnoutRatio}`} />
+            <Row
+              k="De onde vem a incerteza"
+              v={Object.entries(d.var)
+                .filter(([, x]) => x >= 0.05)
+                .sort((x, y) => y[1] - x[1])
+                .map(([k, x]) => `${k} ${Math.round(x * 100)}%`)
+                .join(' · ')}
+            />
+          </div>
+        )}
       </div>
     </Section>
   );

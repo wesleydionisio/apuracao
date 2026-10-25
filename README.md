@@ -72,6 +72,63 @@ página da cidade. O painel da UF abre como modal no desktop e gaveta de baixo n
 
 Testes: `pnpm test`.
 
+## Projeção ("Para onde vai")
+
+Estimativa do resultado final, sempre como faixa de 95%, com o rótulo "estimativa" e o % apurado, a partir de
+20% apurado (`PROJ_MIN_PST`). Código em `packages/shared/src/projection.ts`, ligado no poller em
+`apps/poller/src/board.ts` (`projectionStep`).
+
+**Como calcula.** Total final = o que já foi contado (exato, arquivo BR do TSE) + o que falta em cada uma das ~5.700
+cidades (eleitores não apurados × comparecimento × fração A+B, tudo do andamento `-ab` de cada UF). A % de A no
+que falta vem de um modelo em logit: % de A no confronto A×B do 1º turno de 2026 + covariáveis (votos nos
+eliminados, brancos/nulos, porte, capital, 2º turno de 2022, para onde foram os eliminados em 2022) + desvios de
+região, UF e vizinhança (as 8 cidades mais próximas, pela malha IBGE). Tudo é reestimado a cada ciclo com as cidades
+que já têm votos, puxando para zero quando há pouco dado. A cidade parcial pesa o próprio parcial, descontando a
+**deriva das primeiras seções**, que o modelo aprende durante a noite: compara cada retrato de cada cidade com o
+seguinte, e a deriva média aparece com ~2% apurado. A faixa soma as fontes de erro (β, região, UF, cidade, deriva,
+um erro sistemático do resto inteiro e comparecimento) e se alarga sozinha se as cidades que vão chegando errarem mais
+do que o previsto (autoavaliação).
+
+**Salvaguardas.** O poller cai no modelo antigo, por UF, se o histórico por cidade não carregar, se o andamento
+por cidade cobrir menos de 85% ou mais de 115% do apurado do arquivo BR, se o resto por cidade não bater com o
+arquivo da UF (só nas UFs com resto relevante), ou se der número inválido. Com 99,8% apurado a projeção some (a faixa
+já seria um ponto), e por UF também. "À frente" só aparece depois de 2 ciclos seguidos com a faixa inteira do
+mesmo lado, e some na hora. Com a projeção desligada (`./infra/flag.sh projection false`), nada sai. O `/admin`
+mostra o modelo no ar, os dois modelos lado a lado, por que a reserva entrou e a saúde do modelo
+(`var/projection.json`, gravado a cada ciclo; a chance de vitória fica só ali).
+
+**Backtest** (`packages/data/scripts/backtest-projection.ts`). Refaz noites reais minuto a minuto, como o poller as
+veria: hora de fechamento de cada zona eleitoral (dados abertos do TSE) no 2º turno de 2018 e de 2022 e no 1º turno
+de 2022 e de 2026, cada uma em 12 cenários de ordem de chegada (real, atrasos regionais, capitais por último, deriva
+das primeiras seções por zona e na mesma direção em todo o país; o cenário "estilo-2022" reproduz a curva real
+daquela noite). Resultado em 48 noites (720 pontos), erro médio do % final:
+
+| % apurado | modelo por cidade | modelo antigo (UF) | parcial | faixa de 95% contém o final |
+|---|---|---|---|---|
+| 17–35% | 0,18 | 0,90 | 3,63 | 99% |
+| 35–65% | 0,11 | 0,65 | 2,42 | 100% |
+| 65–85% | 0,07 | 0,40 | 1,35 | 100% |
+| 85–100% | 0,01 | 0,15 | 0,39 | 100% |
+
+Nenhuma noite com a faixa fora de 50% do lado errado. Por UF a faixa contém o final em 95–98% dos casos.
+
+```bash
+cd packages/data
+npx tsx scripts/backtest-data.ts
+```
+
+```bash
+npx tsx scripts/backtest-projection.ts --calib
+```
+
+O primeiro baixa ~2 GB de dados abertos (2010–2026) para `raw/`. No segundo, `--quick` roda um cenário,
+`--case 2022-T2` uma noite, `--verbose` mostra ciclo a ciclo e `--param sigmaSys=0.04` testa um parâmetro.
+
+**No replay:** use `REPLAY_SCENARIO=realista`, em que a curva da noite sai só da ordem de chegada (NE e N atrasam, como
+em 2022) e a faixa deve conter o final. O roteiro `domingo` impõe a curva com um ajuste nacional que muda com o tempo
+(o voto contado depois fica mais pró-Lula em todo lugar), algo que nenhum modelo prevê: ali a faixa mostra o que os
+votos contados indicam, não o roteiro.
+
 ## Produção (VPS)
 
 ### Onde está e como subir uma mudança
@@ -188,6 +245,7 @@ Cole o JSON em `var/manual/<mesmo caminho do TSE>`, por exemplo
 | 14h | freeze de código |
 | 16h | poller ligado (modo observação: grava internamente, `released=false`, nada público) |
 | 17h | liberação automática por `RELEASE_AT`: placar, WS e projeção (projeção só ≥ 20% apurado) |
+| — | no `/admin`, seção Projeção: "No ar" deve ser "modelo por cidade"; se aparecer a reserva, o motivo está ao lado |
 | — | olhar `curl localhost:3003/health`, `/metrics` dos workers e o chat |
 | totalização | cards de resultado dos palpites passam a mostrar acerto e posição |
 
@@ -195,5 +253,5 @@ Cole o JSON em `var/manual/<mesmo caminho do TSE>`, por exemplo
 
 - Placar e projeção só a partir das 17h de Brasília, aplicado no servidor (poller e WS), não só no front.
 - "Matematicamente definido" só quando a vantagem supera **todo** o eleitorado ainda não apurado.
-- Projeção sempre com intervalo, rótulo "estimativa" e % apurado ao lado.
+- Projeção sempre com intervalo, rótulo "estimativa" e % apurado ao lado; a chance de vitória não é publicada.
 - Nunca "eleito" antes de `tf = s` (totalização final) do TSE.

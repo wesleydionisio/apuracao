@@ -4,12 +4,15 @@
 //
 // Dois modos:
 //  - roteiro (padrão, scenarios/<nome>.json): a margem nacional segue pontos (% apurado → margem);
-//    cada estado mantém a geografia do 1º turno e um ajuste nacional δ(t) leva o total ao roteiro.
+//    cada cidade mantém a geografia do 1º turno e um ajuste nacional δ(t), aplicado só às seções que entram
+//    naquele instante, leva o total ao roteiro.
 //  - "aleatorio": vieses sorteados por estado (viradas espontâneas).
+// A contagem é cumulativa (voto contado não muda) e as UFs e o Brasil são a soma das cidades, então o andamento
+// por cidade bate com os arquivos das UFs, como no TSE (a projeção por cidade depende disso).
 // O relógio é controlável (play/pausa/velocidade/ir para t) — usado pela barra de debug local.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { parseProgress, parseResult, twoWay, type CandidateDef, type HistRow } from '@apuracao/shared';
+import { parseProgress, parseResult, twoWay, UF_REGION, type CandidateDef, type HistRow } from '@apuracao/shared';
 import type { Config } from './config';
 import type { History } from './history';
 import type { Source } from './source';
@@ -31,7 +34,7 @@ interface Area {
   el: number;
   tr: number; // comparecimento
   fa: number; // % final de A
-  bias: number; // viés das primeiras seções (só no modo aleatório; some quando chega a 100%)
+  bias: number; // viés das primeiras seções (só no modo aleatório; diminui conforme a área é apurada)
   delay: number; // 0–1 da noite
   span: number; // duração relativa da apuração
 }
@@ -41,7 +44,13 @@ export interface Scenario {
   /** número do candidato cuja margem o roteiro descreve */
   candidato: string;
   /** [% apurado no Brasil, margem em pontos (candidato − adversário)] */
-  margem: [number, number][];
+  margem?: [number, number][];
+  /**
+   * Alternativa realista ao `margem`: só a margem final; a curva da noite sai da ordem de chegada
+   * (`atraso`: fração da noite que cada região começa depois, ex. { "NE": 0.08 }), como numa apuração de verdade.
+   */
+  final?: number;
+  atraso?: Record<string, number>;
 }
 
 /** fim da noite simulada; um pouco depois de 1 o TSE marca totalização */
@@ -68,6 +77,8 @@ export class ReplaySource implements Source {
   private scenario: Scenario | null;
   /** roteiro em termos de % de A (primeiro candidato) */
   private targetA: ((pst: number) => number) | null = null;
+  /** roteiro realista: % final de A (o δ é o mesmo a noite inteira) */
+  private finalA: number | null = null;
   private clock = { playing: true, speed: 1, base: 0, wall: Date.now() };
 
   constructor(
@@ -85,10 +96,12 @@ export class ReplaySource implements Source {
     this.scenario = loadScenario(cfg);
     if (this.scenario) {
       const sign = this.scenario.candidato === this.cands[0].n ? 1 : -1;
-      const pts = [...this.scenario.margem].sort((x, y) => x[0] - y[0]);
-      this.targetA = (pst) => 50 + (sign * interp(pts, pst)) / 2;
+      if (this.scenario.margem?.length) {
+        const pts = [...this.scenario.margem].sort((x, y) => x[0] - y[0]);
+        this.targetA = (pst) => 50 + (sign * interp(pts, pst)) / 2;
+      } else if (typeof this.scenario.final === 'number') this.finalA = 50 + (sign * this.scenario.final) / 2;
     }
-    const scripted = !!this.targetA;
+    const scripted = !!this.targetA || this.finalA !== null;
     const r = rng(cfg.replay.seed);
     const swing = (r() - 0.5) * 3;
     // viés nacional das primeiras urnas no modo aleatório (como 2022: um lado larga na frente e o outro vira)
@@ -114,17 +127,9 @@ export class ReplaySource implements Source {
         fa: clamp(pa1 + spread + (scripted ? 0 : swing) + (u() - 0.5) * 3, 5, 95),
         bias: scripted ? 0 : early + (u() - 0.5) * 6,
         // no roteiro os estados começam quase juntos: o total já nasce perto da média nacional
-        delay: u() * (scripted ? 0.03 : 0.08),
+        delay: u() * (scripted ? 0.03 : 0.08) + (this.scenario?.atraso?.[UF_REGION[uf] ?? ''] ?? 0),
         span: 0.45 + u() * 0.45,
       });
-    }
-    // calibra o resultado final dos estados para fechar exatamente no roteiro
-    if (this.targetA) {
-      for (let i = 0; i < 3; i++) {
-        const final = this.share(1, 0).sA;
-        const adj = this.targetA(100) - final;
-        for (const a of this.ufs.values()) a.fa = clamp(a.fa + adj, 2, 98);
-      }
     }
     for (const m of hist.municipalities) {
       const h = hist.t1Mun[m.ibge];
@@ -145,6 +150,7 @@ export class ReplaySource implements Source {
         span: clamp((parent.span + (u() - 0.5) * 0.3) * clamp((h.el / 200_000) ** 0.35, 0.15, 1), 0.04, 0.95),
       });
     }
+    this.buildGrid();
     console.log(
       `[replay] ${this.ufs.size} UFs, ${this.mun.size} municípios, noite de ${cfg.replay.minutes} min, ${
         this.scenario ? `roteiro "${this.scenario.nome}"` : 'modo aleatório'
@@ -156,9 +162,20 @@ export class ReplaySource implements Source {
 
   /** 0 → 1 ao longo da noite simulada (passa um pouco de 1 para fechar a totalização) */
   t(): number {
+    if (this.frozen !== null) return this.frozen;
     const c = this.clock;
     if (!c.playing) return c.base;
     return clamp(c.base + ((Date.now() - c.wall) / (this.cfg.replay.minutes * 60_000)) * c.speed, 0, T_END);
+  }
+
+  /** um ciclo do poller lê BR, UFs e andamento no mesmo instante (no TSE os arquivos saem juntos) */
+  private frozen: number | null = null;
+  freeze() {
+    this.frozen = null;
+    this.frozen = this.t();
+  }
+  thaw() {
+    this.frozen = null;
   }
 
   setT(t: number) {
@@ -188,13 +205,7 @@ export class ReplaySource implements Source {
 
   /** % apurado no Brasil num instante t */
   pstAt(t: number): number {
-    let el = 0;
-    let elc = 0;
-    for (const a of this.ufs.values()) {
-      el += a.el;
-      elc += (a.el * this.pst(a, t)) / 100;
-    }
-    return el ? (elc / el) * 100 : 0;
+    return this.br.at(this.step(t)).pst;
   }
 
   /** instante t em que o Brasil chega a `target` % apurado (busca binária; pst cresce com t) */
@@ -212,59 +223,107 @@ export class ReplaySource implements Source {
   }
 
   // ---------- modelo ----------
+  //
+  // Contagem cumulativa, como no TSE: cada cidade apura seções ao longo da noite e o voto de uma seção não muda
+  // depois de contado. O roteiro nacional vira um ajuste δ aplicado só às seções que entram em cada passo, e as
+  // UFs e o Brasil são a soma das cidades (o andamento por cidade bate com os arquivos das UFs).
 
   private pst(a: Area, t: number) {
+    if (t >= 1) return 100;
     const u = clamp((t - a.delay) / a.span, 0, 1);
     return 100 * (1 - (1 - u) ** 2);
   }
 
-  /** % de A na parte apurada de uma área, dado o ajuste nacional δ */
-  private areaShare(a: Area, pst: number, delta: number) {
-    return clamp(a.fa + a.bias * (1 - pst / 100) + delta, 1, 99);
+  /** passo da grade para um instante t */
+  private step(t: number) {
+    return Math.round(clamp(t, 0, 1) * GRID);
   }
 
-  /** % de A nacional na parte apurada (sem δ) e o δ que leva ao roteiro */
-  private share(t: number, delta = 0): { sA: number; pst: number } {
-    let v = 0;
-    let va = 0;
-    let el = 0;
-    let elc = 0;
-    for (const a of this.ufs.values()) {
-      const p = this.pst(a, t);
-      const valid = (a.el * p * a.tr * VALID) / 100;
-      v += valid;
-      va += (valid * this.areaShare(a, p, delta)) / 100;
-      el += a.el;
-      elc += (a.el * p) / 100;
+  /** áreas que apuram de fato: as cidades (ou, sem ETL, as UFs inteiras) */
+  private areas: (Area & { uf: string })[] = [];
+  /** δ do roteiro aplicado às seções que entram em cada passo */
+  private delta = new Float64Array(GRID + 1);
+  private ufAcc = new Map<string, Acc>();
+  private br: Acc = newAcc(0);
+
+  private buildGrid() {
+    this.areas = this.mun.size ? [...this.mun.values()] : [...this.ufs].map(([uf, a]) => ({ ...a, uf }));
+    const acc = (uf: string) => this.ufAcc.get(uf) ?? this.ufAcc.set(uf, newAcc(0)).get(uf)!;
+    for (const a of this.areas) {
+      acc(a.uf).el += a.el;
+      this.br.el += a.el;
     }
-    return { sA: v ? (va / v) * 100 : 50, pst: el ? (elc / el) * 100 : 0 };
+    const A = new Float64Array(this.areas.length);
+    const V = new Float64Array(this.areas.length);
+    let sumA = 0;
+    // roteiro realista: um δ só, que leva o resultado final ao roteiro (a forma da curva vem da ordem de chegada)
+    let d0 = 0;
+    if (this.finalA !== null) {
+      let v = 0;
+      let va = 0;
+      for (const a of this.areas) {
+        v += a.el * a.tr;
+        va += (a.el * a.tr * a.fa) / 100;
+      }
+      d0 = v ? this.finalA - (va / v) * 100 : 0;
+    }
+    for (let k = 1; k <= GRID; k++) {
+      const t = k / GRID;
+      const tm = (k - 0.5) / GRID;
+      // incrementos do passo e a % de A "natural" de cada um
+      let dVsum = 0;
+      let dAsum = 0;
+      let Vsum = 0;
+      const dV = new Float64Array(this.areas.length);
+      const sh = new Float64Array(this.areas.length);
+      this.areas.forEach((a, i) => {
+        const v = (a.el * this.pst(a, t) * a.tr * VALID) / 100;
+        dV[i] = v - V[i];
+        sh[i] = clamp(a.fa + a.bias * (1 - this.pst(a, tm) / 100), 1, 99);
+        dVsum += dV[i];
+        dAsum += (dV[i] * sh[i]) / 100;
+        Vsum += v;
+      });
+      const pstBr = this.br.el ? (this.areas.reduce((s2, a) => s2 + a.el * this.pst(a, t), 0) / this.br.el) : 0;
+      const d = this.targetA && dVsum > 0 ? ((this.targetA(pstBr) * Vsum) / 100 - sumA - dAsum) / dVsum * 100 : d0;
+      this.delta[k] = clamp(d, -30, 30);
+      for (const x of this.ufAcc.values()) x.push(k);
+      this.br.push(k);
+      this.areas.forEach((a, i) => {
+        const da = (dV[i] * clamp(sh[i] + this.delta[k], 1, 99)) / 100;
+        A[i] += da;
+        V[i] += dV[i];
+        sumA += da;
+        const elc = (a.el * this.pst(a, t)) / 100;
+        for (const x of [acc(a.uf), this.br]) x.add(k, elc, elc * a.tr, dV[i], da);
+      });
+    }
   }
 
-  private deltaAt(t: number): number {
-    if (!this.targetA) return 0;
-    const { sA, pst } = this.share(t);
-    return this.targetA(pst) - sA;
-  }
-
-  private counts(a: Area, t: number, delta: number) {
-    const pst = this.pst(a, t);
-    const elc = Math.round((a.el * pst) / 100);
-    const turnout = Math.round(elc * a.tr);
-    const valid = Math.round(turnout * VALID);
-    const blank = Math.round(turnout * 0.016);
-    const va = Math.round((valid * this.areaShare(a, pst, delta)) / 100);
-    return { pst, el: a.el, elc, turnout, valid, blank, nulls: turnout - valid - blank, va, vb: valid - va };
+  /** contagem de uma cidade no passo k (refaz a soma dos incrementos; só ~150 cidades por ciclo) */
+  private cityAt(a: Area, k: number) {
+    let va = 0;
+    let vPrev = 0;
+    for (let j = 1; j <= k; j++) {
+      const v = (a.el * this.pst(a, j / GRID) * a.tr * VALID) / 100;
+      const sh = clamp(a.fa + a.bias * (1 - this.pst(a, (j - 0.5) / GRID) / 100) + this.delta[j], 1, 99);
+      va += ((v - vPrev) * sh) / 100;
+      vPrev = v;
+    }
+    const pst = this.pst(a, k / GRID);
+    return countsOf({ el: a.el, elc: (a.el * pst) / 100, turnout: (a.el * pst * a.tr) / 100, valid: vPrev, va });
   }
 
   /** <uf>-e<ele>-ab.json: andamento de cada cidade; a hora só muda quando entra seção nova (como no TSE) */
-  private progressUf(uf: string, t: number, delta: number) {
+  private progressUf(uf: string, t: number) {
     return {
       ele: this.cfg.tse.code,
       abr: (this.munByUf.get(uf) ?? []).map((tse) => {
         const a = this.mun.get(`${uf}:${tse}`)!;
-        const c = this.counts(a, t, delta);
-        const ts = Math.max(1, Math.round(c.el / 320));
-        const st = Math.round((ts * c.pst) / 100);
+        const pst = this.pst(a, this.step(t) / GRID);
+        const elc = Math.round((a.el * pst) / 100);
+        const ts = Math.max(1, Math.round(a.el / 320));
+        const st = Math.round((ts * pst) / 100);
         const secs = 17 * 3600 + st; // monotônico em st: muda só com seção nova
         const ht = [Math.floor(secs / 3600), Math.floor(secs / 60) % 60, secs % 60].map((v) => String(v).padStart(2, '0')).join(':');
         return {
@@ -273,7 +332,7 @@ export class ReplaySource implements Source {
           dt: '25/10/2026',
           ht: st ? ht : '',
           s: { ts: String(ts), st: String(st), pstn: ((st / ts) * 100).toFixed(2).replace('.', ',') },
-          e: { te: String(c.el), est: String(c.elc) },
+          e: { te: String(a.el), est: String(elc), c: String(Math.round(elc * a.tr)) },
         };
       }),
     };
@@ -283,33 +342,26 @@ export class ReplaySource implements Source {
     const ab = /\/(\d+)\/dados\/([a-z]{2})\/([a-z]{2})-e\d+-ab\.json$/.exec(p);
     if (ab) {
       if (ab[1] !== this.cfg.tse.code || ab[3] === 'br') return null;
-      const t = this.t();
-      return this.progressUf(ab[3].toUpperCase(), t, this.deltaAt(t));
+      return this.progressUf(ab[3].toUpperCase(), this.t());
     }
     const m = /\/(\d+)\/dados\/([a-z]{2})\/([a-z]{2})(\d*)-c0001-e\d+-u\.json$/.exec(p);
     if (!m || m[1] !== this.cfg.tse.code) return null;
     const t = this.t();
-    const delta = this.deltaAt(t);
+    const k = this.step(t);
     const uf = m[3].toUpperCase();
     const munCode = m[4];
     const clock = new Date(Date.parse('2026-10-25T20:00:00Z') + clamp(t, 0, T_END) * DURATION_H * 3_600_000);
     const done = t >= T_TOTAL;
-    let c: ReturnType<ReplaySource['counts']>;
-    if (m[2] === 'br') {
-      c = { pst: 0, el: 0, elc: 0, turnout: 0, valid: 0, blank: 0, nulls: 0, va: 0, vb: 0 };
-      for (const a of this.ufs.values()) {
-        const x = this.counts(a, t, delta);
-        for (const k of Object.keys(c) as (keyof typeof c)[]) if (k !== 'pst') c[k] += x[k];
-      }
-      c.pst = c.el ? (c.elc / c.el) * 100 : 0;
-    } else if (munCode) {
+    let c: Counts;
+    if (m[2] === 'br') c = this.br.at(k);
+    else if (munCode) {
       const a = this.mun.get(`${uf}:${munCode}`);
       if (!a) return null;
-      c = this.counts(a, t, delta);
+      c = this.cityAt(a, k);
     } else {
-      const a = this.ufs.get(uf);
-      if (!a) return null;
-      c = this.counts(a, t, delta);
+      const x = this.ufAcc.get(uf);
+      if (!x) return null;
+      c = x.at(k);
     }
     return fakeTse({
       ele: this.cfg.tse.code,
@@ -321,6 +373,53 @@ export class ReplaySource implements Source {
       ...c,
     });
   }
+}
+
+/** passos da grade da noite (t de 0 a 1) */
+const GRID = 600;
+
+type Counts = ReturnType<typeof countsOf>;
+
+function countsOf(x: { el: number; elc: number; turnout: number; valid: number; va: number }) {
+  const elc = Math.round(x.elc);
+  const turnout = Math.round(x.turnout);
+  const valid = Math.round(x.valid);
+  const blank = Math.round(turnout * 0.016);
+  const va = Math.round(x.va);
+  return { pst: x.el ? (x.elc / x.el) * 100 : 0, el: x.el, elc, turnout, valid, blank, nulls: Math.max(0, turnout - valid - blank), va, vb: valid - va };
+}
+
+/** somas cumulativas de uma UF (ou do Brasil) em cada passo da grade */
+interface Acc {
+  el: number;
+  /** começo do passo k: válidos e votos de A continuam do passo anterior (eleitorado apurado é refeito) */
+  push(k: number): void;
+  add(k: number, elc: number, turnout: number, dValid: number, dA: number): void;
+  at(k: number): Counts;
+}
+
+function newAcc(el: number): Acc {
+  const mk = () => new Float64Array(GRID + 1);
+  const elc = mk();
+  const turnout = mk();
+  const valid = mk();
+  const va = mk();
+  return {
+    el,
+    push(k) {
+      valid[k] = valid[k - 1];
+      va[k] = va[k - 1];
+    },
+    add(k, e, t, dValid, dA) {
+      elc[k] += e;
+      turnout[k] += t;
+      valid[k] += dValid;
+      va[k] += dA;
+    },
+    at(k) {
+      return countsOf({ el: this.el, elc: elc[k], turnout: turnout[k], valid: valid[k], va: va[k] });
+    },
+  };
 }
 
 function loadScenario(cfg: Config): Scenario | null {

@@ -13,6 +13,8 @@ export interface History {
   t1Mun: Record<string, HistRow>;
   /** 2º turno 2022 por município (IBGE) */
   y22t2Mun: Record<string, HistRow>;
+  /** 1º turno 2022 por município (IBGE) — projeção: para onde foram os votos dos eliminados em 2022 */
+  y22t1Mun: Record<string, HistRow>;
 }
 
 export function readJson<T>(file: string): T | null {
@@ -44,9 +46,10 @@ export function loadHistory(st: string): History {
     t1: readJson<HistoryFile>(path.join(st, 'hist/t1-2026.json')),
     t1Mun: readMunDir(path.join(st, 'hist/t1-2026')),
     y22t2Mun: readMunDir(path.join(st, 'hist/y2022-t2')),
+    y22t1Mun: readMunDir(path.join(st, 'hist/y2022-t1')),
   };
   console.log(
-    `[history] municípios=${municipalities.length} t1=${h.t1 ? 'ok' : '—'} t1Mun=${Object.keys(h.t1Mun).length} y22Mun=${Object.keys(h.y22t2Mun).length}`,
+    `[history] municípios=${municipalities.length} t1=${h.t1 ? 'ok' : '—'} t1Mun=${Object.keys(h.t1Mun).length} y22Mun=${Object.keys(h.y22t2Mun).length} y22t1Mun=${Object.keys(h.y22t1Mun).length}`,
   );
   return h;
 }

@@ -34,7 +34,7 @@ function openEntry(zipPath: string, entryName: string): Promise<Readable> {
   });
 }
 
-async function* rows(zipPath: string, entryName: string): AsyncGenerator<Record<string, string>> {
+export async function* rows(zipPath: string, entryName: string): AsyncGenerator<Record<string, string>> {
   const stream = await openEntry(zipPath, entryName);
   const parser = stream.pipe(
     parse({ delimiter: ';', columns: true, encoding: 'latin1', relax_quotes: true, skip_empty_lines: true }),
