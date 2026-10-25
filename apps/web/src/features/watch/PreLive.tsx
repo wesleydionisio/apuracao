@@ -96,7 +96,7 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
           t1={refs.t1 ? t1 : null}
           flip22={flip22}
           fullAxis
-          height={size === 'lg' ? 200 : 168}
+          height={size === 'lg' ? 270 : 227}
         />
       </div>
 

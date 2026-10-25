@@ -44,24 +44,25 @@ export function headerMini(path: string): 'none' | 'hero' | 'pinned' {
 }
 
 /**
- * Antes das 17h, nas telas "pinned", a faixa só teria a contagem: de 640px para cima ela vai para o centro do
- * cabeçalho (que fica vazio) e a faixa some; no celular não cabe, e a faixa fica. O App usa o mesmo para a folga do topo.
+ * Antes das 17h, nas telas "pinned", a faixa só teria a contagem: ela vai para o centro do cabeçalho (que fica vazio)
+ * e a faixa some; no celular, só "em 15:54:40". O App usa o mesmo para a folga do topo.
  */
 export function useMiniInHeader(path: string): boolean {
   const board = useBoard((s) => s.board);
-  const wide = useMedia('(min-width: 640px)');
-  return wide && headerMini(path) === 'pinned' && !!board && !board.released;
+  return headerMini(path) === 'pinned' && !!board && !board.released;
 }
 
 /** ao vivo, mas sem placar novo há mais de 90 s (poller/CDN/rede): mostra de quando é. O /painel tem o próprio "atualizado há" */
-function HeaderStatus() {
+function HeaderStatus({ compact }: { compact?: boolean }) {
   const link = useBoard((s) => s.link);
   const at = useBoard((s) => (s.board?.released ? (s.board.br?.at ?? s.board.source.at) : null));
   const seenAt = useBoard((s) => s.seenAt);
   const [path] = useLocation();
   const now = useNow(10_000);
-  if (at && seenAt && now - seenAt > 90_000 && !path.startsWith('/painel')) return <StalePill at={at} className="shrink-0" />;
-  return <LivePill link={link} className="shrink-0" />;
+  // compact: sem a largura reservada para "Reconectando…", que tiraria o lugar da contagem no celular
+  const cls = cn('shrink-0', compact && 'min-w-0');
+  if (at && seenAt && now - seenAt > 90_000 && !path.startsWith('/painel')) return <StalePill at={at} className={cls} />;
+  return <LivePill link={link} className={cls} />;
 }
 
 /** altura da faixa do mini-placar (px): reservada no topo das telas "pinned" */
@@ -76,6 +77,7 @@ export function Header() {
   const [path] = useLocation();
   const live = !!board?.released && !!board.br;
   const inHeader = useMiniInHeader(path);
+  const wide = useMedia('(min-width: 640px)');
   const mini = inHeader ? 'none' : headerMini(path);
   // Painel antes das 17h: a contagem já é o topo da página; o mini (só a contagem de novo) ficaria por cima dela
   const show = mini === 'pinned' || (mini === 'hero' && live && !hero);
@@ -93,13 +95,18 @@ export function Header() {
             <Link href="/" className="flex min-w-0 flex-1 items-center gap-2.5" aria-label="urna.digi, início">
               <Logo className="text-[19px]" />
               {/* rótulo seco: caixa alta pequena, separada por um fio, sem pílula */}
-              <span className="hidden border-l pl-2.5 text-[10.5px] leading-none font-semibold tracking-[0.14em] text-muted-foreground uppercase min-[340px]:inline">
+              <span
+                className={cn(
+                  'hidden border-l pl-2.5 text-[10.5px] leading-none font-semibold tracking-[0.14em] whitespace-nowrap text-muted-foreground uppercase',
+                  inHeader ? 'min-[440px]:inline' : 'min-[340px]:inline',
+                )}
+              >
                 2º turno
               </span>
             </Link>
-            {inHeader && board && <MiniCountdown board={board} className="h-auto shrink-0" />}
+            {inHeader && board && <MiniCountdown board={board} short={!wide} className="h-auto shrink-0" />}
             <div className="flex flex-1 items-center justify-end gap-2">
-              <HeaderStatus />
+              <HeaderStatus compact={inHeader && !wide} />
               <ThemeToggle />
             </div>
           </div>
@@ -170,7 +177,8 @@ function MiniScore({ board }: { board: Board }) {
   );
 }
 
-export function MiniCountdown({ board, className }: { board: Board; className?: string }) {
+/** `short`: só "em 15:54:40", para caber no cabeçalho do celular */
+export function MiniCountdown({ board, short, className }: { board: Board; short?: boolean; className?: string }) {
   const now = useNow(1000);
   const left = Date.parse(board.releaseAt) - now;
   return (
@@ -179,7 +187,7 @@ export function MiniCountdown({ board, className }: { board: Board; className?: 
       className={cn('flex h-[46px] items-center justify-center text-[11.5px] font-medium tracking-[0.08em] text-foreground/75 uppercase', className)}
     >
       <span>
-        Placar abre em{' '}
+        {short ? 'em' : 'Placar abre em'}{' '}
         <span className="num font-bold tracking-[0.04em] text-foreground">{left > 0 ? fmtCountdown(left) : 'instantes'}</span>
       </span>
     </Link>
