@@ -26,6 +26,7 @@ import { FlipsCard, TransferCard, useAsync } from '../components/context';
 import { Card, useNow } from '../components/ui';
 import { staticData } from '../lib/api';
 import { fmtCompact, fmtInt, fmtPct } from '../lib/format';
+import { preBoard } from '../lib/prelive';
 import { useBoard } from '../store/board';
 import { Fill } from '@/components/core/bars';
 import { PainelSkeleton } from '@/components/skeletons';
@@ -36,7 +37,8 @@ export default function Painel() {
   const board = useBoard((s) => s.board);
   const loadError = useBoard((s) => s.loadError);
   if (!board) return <Loading error={loadError} />;
-  if (!board.released || !board.br) return <PreRelease board={board} />;
+  // antes das 17h: o mesmo painel do ao vivo, zerado, com a contagem regressiva no topo
+  if (!board.released || !board.br) return <Live board={preBoard(board)} />;
   return <Live board={board} />;
 }
 
@@ -115,8 +117,25 @@ function Freshness() {
   );
 }
 
-/** topo enxuto: título curto, status, barra de apuração e procedência */
+/** topo enxuto: título curto, status, barra de apuração e procedência (antes das 17h: a contagem regressiva) */
 function TopBar({ board, snap }: { board: Board; snap: Snap }) {
+  if (!board.released)
+    return (
+      <header className="pt-1 pb-4">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-[20px] leading-tight font-semibold tracking-[-0.02em] lg:text-[24px]">Presidente, 2º turno</h1>
+          <StatusBadge s="nao_iniciada" short />
+        </div>
+        <p className="mt-1 text-[13px] text-muted-foreground">A apuração começa em</p>
+        <Countdown board={board} />
+        <Button asChild className="mt-4 h-11 w-full justify-between rounded-xl px-4 text-[14px] lg:w-auto lg:gap-6">
+          <Link href="/palpite">
+            Fazer meu palpite antes das 17h
+            <ArrowRight className="size-4" aria-hidden />
+          </Link>
+        </Button>
+      </header>
+    );
   return (
     <header className="pt-1 pb-3">
       <div className="flex items-center justify-between gap-3">
@@ -142,6 +161,8 @@ function TopBar({ board, snap }: { board: Board; snap: Snap }) {
 
 function Live({ board }: { board: Board }) {
   const br = board.br!;
+  // véspera: o mesmo painel, zerado (lib/prelive), com o contexto do 1º turno e de 2022 junto
+  const pre = !board.released;
   const watch = useHeroWatch();
   const desktop = useIsDesktop();
   const [refs] = useRefs();
@@ -158,6 +179,7 @@ function Live({ board }: { board: Board }) {
         <CandidateRows board={board} snap={br} refs={activeRefs(refs, values)} reserve className="mt-2" />
       </div>
       <Kpis board={board} snap={br} t1={values.t1?.rows.br} className="mt-2 mb-5" />
+      {pre && <Matchup board={board} />}
       {br.status === 'totalizado' && leader && (
         <p className="mb-5 rounded-xl border bg-card p-3 text-[13px] leading-relaxed">
           Totalização concluída pelo TSE: <strong style={{ color: leader.color }}>{leader.short}</strong> tem a maioria dos votos válidos.
@@ -195,6 +217,7 @@ function Live({ board }: { board: Board }) {
         <aside className="col-span-4 pt-1" aria-label="Contexto">
           <NeedMeter board={board} snap={br} className="border-t-0 pt-0" />
           <ProjectionBand board={board} />
+          {pre && <Context2022 board={board} />}
           <MomentsTimeline board={board} limit={6} />
           {flips}
           {map}
@@ -208,6 +231,7 @@ function Live({ board }: { board: Board }) {
       {hero}
       <NeedMeter board={board} snap={br} />
       <ProjectionBand board={board} />
+      {pre && <Context2022 board={board} />}
       <RemainingTable board={board} />
       <MomentsTimeline board={board} limit={5} />
       {map}
@@ -261,46 +285,6 @@ function Countdown({ board }: { board: Board }) {
         {when.charAt(0).toUpperCase() + when.slice(1)} (Brasília)
       </p>
     </>
-  );
-}
-
-function PreRelease({ board }: { board: Board }) {
-  const desktop = useIsDesktop();
-  const head = (
-    <header className="pt-1 pb-5">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-[20px] leading-tight font-semibold tracking-[-0.02em] lg:text-[24px]">A apuração começa em</h1>
-        <StatusBadge s="nao_iniciada" short />
-      </div>
-      <Countdown board={board} />
-      <Button asChild className="mt-4 h-11 w-full justify-between rounded-xl px-4 text-[14px] lg:w-auto lg:gap-6">
-        <Link href="/palpite">
-          Fazer meu palpite antes das 17h
-          <ArrowRight className="size-4" aria-hidden />
-        </Link>
-      </Button>
-    </header>
-  );
-  if (desktop)
-    return (
-      <div className="grid grid-cols-12 items-start gap-x-10">
-        <div className="col-span-8">
-          {head}
-          <Matchup board={board} />
-        </div>
-        <aside className="col-span-4 pt-1">
-          <Context2022 board={board} className="border-t-0 pt-0" />
-          <Engagement />
-        </aside>
-      </div>
-    );
-  return (
-    <div>
-      {head}
-      <Matchup board={board} />
-      <Context2022 board={board} />
-      <Engagement />
-    </div>
   );
 }
 

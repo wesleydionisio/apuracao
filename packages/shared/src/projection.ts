@@ -405,6 +405,8 @@ export interface ProjDiag {
 }
 
 export interface ProjResult extends ProjEstimate {
+  /** votos válidos (A+B) previstos no que falta, no Brasil */
+  rem: number;
   ufs: Record<string, ProjEstimate & { pst: number }>;
   diag: ProjDiag;
   /** áreas ainda sem voto: índice → [logit previsto, variância, peso] (para a autoavaliação) */
@@ -778,6 +780,7 @@ export function projectByCity(model: ProjModel, input: ProjInput, p: ProjParams 
       parts,
       total,
       remShare: addV / T,
+      rem: addV,
       calib: c,
     };
   };
@@ -795,6 +798,7 @@ export function projectByCity(model: ProjModel, input: ProjInput, p: ProjParams 
   const names = ['intercepto', ...PROJ_FEATURES];
   return {
     ...br.est,
+    rem: Math.round(br.rem),
     ufs,
     pending,
     diag: {

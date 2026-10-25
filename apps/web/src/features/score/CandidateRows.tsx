@@ -77,6 +77,7 @@ function Row({
   final,
   refs,
   reserve = false,
+  counted = true,
 }: {
   c: CandidateDef;
   pct: number;
@@ -85,6 +86,8 @@ function Row({
   delta: number | null;
   final: boolean;
   reserve?: boolean;
+  /** já há voto apurado (antes das 17h não) */
+  counted?: boolean;
   /** referências já convertidas para este candidato (0–100) */
   refs: { k: keyof RowRefs; v: number }[];
 }) {
@@ -140,7 +143,8 @@ function Row({
               </dt>
               <dd className="num flex items-center gap-1.5">
                 <span className="font-medium text-foreground">{fmtPct(r.v, 1)}%</span>
-                <Arrowed v={pct - r.v} digits={1} suffix="pts" />
+                {/* sem voto apurado ainda, a distância para a referência não quer dizer nada */}
+                {counted && <Arrowed v={pct - r.v} digits={1} suffix="pts" />}
               </dd>
             </div>
           ))}
@@ -180,7 +184,7 @@ export function CandidateRows({
   return (
     <ul className={cn('divide-y', className)} aria-label="Votos por candidato">
       {rows.map((r) => (
-        <Row key={r.c.key} {...r} final={final} reserve={reserve} />
+        <Row key={r.c.key} {...r} final={final} reserve={reserve} counted={snap.valid > 0} />
       ))}
     </ul>
   );

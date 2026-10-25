@@ -101,6 +101,8 @@ export interface Projection {
   ufs?: Record<string, { pa: number; lo: number; hi: number }>;
   /** como a projeção andou na noite */
   curve?: ProjectionPoint[];
+  /** votos válidos (A+B) que ainda faltam, na estimativa do modelo: com eles o gráfico desenha o caminho até 100% */
+  rem?: number;
 }
 
 export interface ProjectionPoint {

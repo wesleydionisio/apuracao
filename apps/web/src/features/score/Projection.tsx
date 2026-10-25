@@ -49,104 +49,92 @@ export function RangeBar({ lo, hi, cands, compact, label }: { lo: number; hi: nu
   );
 }
 
+/** um candidato: % projetado, faixa de 95% e o parcial de agora */
+function Tile({ c, v, lo, hi, now, lead }: { c: CandidateDef; v: number | null; lo?: number; hi?: number; now: number | null; lead: boolean }) {
+  return (
+    <div className="min-w-0 rounded-xl border bg-card p-3" style={lead ? { borderColor: c.color } : undefined}>
+      <div className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold">
+        <span className="inline-block h-0.5 w-3 shrink-0 rounded-full" style={{ background: c.color }} aria-hidden />
+        <span className="truncate">{c.short}</span>
+        {c.party && <span className="shrink-0 text-[12px] font-normal text-muted-foreground">{c.party}</span>}
+      </div>
+      <div className="display mt-2 text-[30px] leading-none font-semibold" style={v === null ? undefined : { color: c.color }}>
+        {v === null ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          <>
+            {fmtPct(v, 1)}
+            <span className="text-[16px]">%</span>
+          </>
+        )}
+      </div>
+      <div className="mt-1 text-[11px] leading-tight text-muted-foreground">projeção do resultado final</div>
+      <dl className="num mt-2.5 space-y-0.5 text-[12px]">
+        <div className="flex justify-between gap-2">
+          <dt className="whitespace-nowrap text-muted-foreground">faixa 95%</dt>
+          <dd className="font-medium whitespace-nowrap">{lo === undefined || hi === undefined ? '—' : `${fmtPct(lo, 1)}–${fmtPct(hi, 1)}`}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="whitespace-nowrap text-muted-foreground">parcial agora</dt>
+          <dd className="font-medium">{now === null ? '—' : `${fmtPct(now, 1)}%`}</dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
 export function ProjectionBand({ board, className }: { board: Board; className?: string }) {
+  if (board.released && !board.flags.projection) return null;
   const p = board.projection;
-  if (!board.flags.projection || !p) return null;
   const [ca, cb] = board.candidates;
+  const br = board.br;
+  const now = (k: 'a' | 'b') => (br?.valid ? (k === 'a' ? br.pa : br.pb) : null);
+  if (!p) {
+    // antes das 17h ou com menos de 20% apurado: o cartão já montado, esperando
+    const when = board.released ? 'com 20% apurado' : 'às 17h';
+    return (
+      <Section
+        icon={TrendingUp}
+        title="Para onde vai"
+        meta={<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{when}</span>}
+        className={className}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <Tile c={ca} v={null} now={now('a')} lead={false} />
+          <Tile c={cb} v={null} now={now('b')} lead={false} />
+        </div>
+        <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
+          A partir de 20% apurado: a estimativa do resultado final, com faixa de 95%, feita cidade por cidade. No gráfico, o caminho
+          pontilhado até 100%.
+        </p>
+        <HowItWorks />
+      </Section>
+    );
+  }
   const lo = Math.max(0, Math.min(p.lo, 100));
   const hi = Math.max(0, Math.min(p.hi, 100));
   const lead = leaderOf(p);
   const winner = lead ? board.candidates.find((c) => c.key === lead)! : null;
   return (
     <Section icon={TrendingUp} title="Para onde vai" meta={<Estimate pst={p.basedOnPst} />} className={className}>
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <div className="text-[12px] text-muted-foreground">{ca.short}</div>
-          <div className="display mt-1 text-[24px] leading-none font-semibold">
-            {fmtPct(lo, 1)}% a {fmtPct(hi, 1)}%
-          </div>
-        </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Tile c={ca} v={p.pa} lo={lo} hi={hi} now={now('a')} lead={lead === 'a'} />
+        <Tile c={cb} v={100 - p.pa} lo={100 - hi} hi={100 - lo} now={now('b')} lead={lead === 'b'} />
+      </div>
+      <p className="mt-3 flex items-center gap-2 text-[12px]">
         {winner ? (
-          <div className="flex items-center gap-2 text-right">
-            <div className="text-[12px] leading-tight text-muted-foreground">
-              à frente
-              <div className="text-[13px] font-semibold" style={{ color: winner.color }}>
-                {winner.short}
-              </div>
-            </div>
-            <CandidateAvatar c={winner} size="sm" />
-          </div>
+          <>
+            <CandidateAvatar c={winner} size="xs" />
+            <span>
+              A faixa inteira aponta <strong style={{ color: winner.color }}>{winner.short}</strong> à frente.
+            </span>
+          </>
         ) : (
-          <div className="text-right text-[12px] font-medium text-muted-foreground">indefinido</div>
+          <span className="text-muted-foreground">Indefinido: a faixa ainda cruza os 50%.</span>
         )}
-      </div>
-      <div className="mt-4">
-        <RangeBar lo={lo} hi={hi} cands={board.candidates} label={`Intervalo estimado para ${ca.short}: ${fmtPct(lo, 1)}% a ${fmtPct(hi, 1)}%`} />
-      </div>
-      <p className="num mt-2 text-[12px] text-muted-foreground">
-        {cb.short}: {fmtPct(100 - hi, 1)}% a {fmtPct(100 - lo, 1)}%
       </p>
-      {p.curve && p.curve.length >= 3 && <Trail board={board} p={p} />}
       <HowItWorks model={p.model} />
     </Section>
-  );
-}
-
-/** faixa da projeção ao longo da noite (x = % apurado) com o parcial por baixo: mostra para onde o parcial estava indo */
-function Trail({ board, p }: { board: Board; p: Projection }) {
-  const ca = board.candidates[0];
-  const pts = p.curve!;
-  const x0 = pts[0].pst;
-  const partial = board.curve.filter((c) => c.pst >= x0);
-  const vals = [...pts.flatMap((q) => [q.lo, q.hi]), ...partial.map((c) => c.pa), 50];
-  const pad = 0.4;
-  const y0 = Math.min(...vals) - pad;
-  const y1 = Math.max(...vals) + pad;
-  const W = 320;
-  const H = 96;
-  const x1 = Math.max(x0 + 5, pts[pts.length - 1].pst, partial[partial.length - 1]?.pst ?? 0);
-  const X = (v: number) => ((v - x0) / (x1 - x0)) * W;
-  const Y = (v: number) => H - ((v - y0) / Math.max(0.5, y1 - y0)) * H;
-  const band = `M${pts.map((q) => `${X(q.pst).toFixed(1)},${Y(q.hi).toFixed(1)}`).join('L')}L${[...pts]
-    .reverse()
-    .map((q) => `${X(q.pst).toFixed(1)},${Y(q.lo).toFixed(1)}`)
-    .join('L')}Z`;
-  const line = (xs: { pst: number; v: number }[]) => `M${xs.map((q) => `${X(q.pst).toFixed(1)},${Y(q.v).toFixed(1)}`).join('L')}`;
-  const first = pts[0];
-  const last = pts[pts.length - 1];
-  return (
-    <figure className="relative mt-4">
-      <span className="num pointer-events-none absolute right-0 -translate-y-full pb-0.5 text-[10px] text-muted-foreground" style={{ top: `${(Y(50) / H) * 96}px` }} aria-hidden>
-        50%
-      </span>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        className="h-24 w-full overflow-visible"
-        role="img"
-        aria-label={`A projeção para ${ca.short} começou em ${fmtPct(first.pa, 1)}% com ${fmtPct(first.pst, 0)}% apurado e está em ${fmtPct(last.pa, 1)}%; o parcial está em ${fmtPct(board.br?.pa ?? last.pa, 1)}%.`}
-      >
-        <line x1={0} x2={W} y1={Y(50)} y2={Y(50)} className="stroke-foreground/30" vectorEffect="non-scaling-stroke" />
-        <path d={band} fill={`color-mix(in oklab, ${ca.color} 20%, transparent)`} />
-        <path d={line(pts.map((q) => ({ pst: q.pst, v: q.pa })))} fill="none" stroke={ca.color} strokeWidth={2} vectorEffect="non-scaling-stroke" />
-        {partial.length > 1 && (
-          <path d={line(partial.map((c) => ({ pst: c.pst, v: c.pa })))} fill="none" className="stroke-foreground/70" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
-        )}
-      </svg>
-      <figcaption className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-3 rounded-sm" style={{ background: `color-mix(in oklab, ${ca.color} 35%, transparent)` }} aria-hidden />
-          projeção de {ca.short} (faixa de 95%)
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block w-3 border-t-[1.5px] border-dashed border-foreground/70" aria-hidden />
-          parcial de {ca.short}
-        </span>
-        <span className="num">
-          {fmtPct(x0, 0)}% → {fmtPct(x1, 0)}% apurado
-        </span>
-      </figcaption>
-    </figure>
   );
 }
 

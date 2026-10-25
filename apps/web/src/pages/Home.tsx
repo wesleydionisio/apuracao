@@ -85,7 +85,8 @@ export function LiveScreen({ room, roomBar }: { room: Room; roomBar: ReactNode }
       </div>
       {board && <GuessCta board={board} />}
       {!desktop && <ChatEntry />}
-      {shown.released && (
+      {/* antes das 17h o mapa mostra o 1º turno: o site já aparece inteiro */}
+      {board && (
         <Suspense fallback={<MapCardSkeleton />}>
           <MapCard />
         </Suspense>

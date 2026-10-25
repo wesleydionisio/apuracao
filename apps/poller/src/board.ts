@@ -226,8 +226,8 @@ export function projectionStep(st: PollState, i: ProjStepInput): ProjStepOutput 
         const s = st.ufs[`uf:${uf}`];
         if (s && s.pst >= i.minPst && s.status !== 'totalizado' && s.pst < END_PST && e.hi - e.lo >= 0.05) ufs[uf] = { pa: e.pa, lo: e.lo, hi: e.hi };
       }
-      last = { pa: city!.pa, lo: city!.lo, hi: city!.hi, basedOnPst: pst, model: 'cidade', ufs };
-    } else if (old) last = { ...old, model: 'uf' };
+      last = { pa: city!.pa, lo: city!.lo, hi: city!.hi, basedOnPst: pst, model: 'cidade', ufs, rem: city!.rem };
+    } else if (old) last = { ...old, model: 'uf', rem: br.rem };
   }
   // histerese: "à frente" só depois de LEAD_CYCLES ciclos seguidos com a faixa inteira do mesmo lado; some na hora
   const side: Side | null = last ? (last.lo > 50 ? 'a' : last.hi < 50 ? 'b' : null) : null;
@@ -258,7 +258,7 @@ export function projectionStep(st: PollState, i: ProjStepInput): ProjStepOutput 
 function fallbackProjection(st: PollState, hist: History, cands: CandidateDef[]): Projection | null {
   if (!st.br || st.br.pst >= END_PST) return null;
   const p = project(st.br, st.ufs, hist.t1?.uf, cands);
-  return p ? { ...p, model: 'uf' } : null;
+  return p ? { ...p, model: 'uf', rem: st.br.rem } : null;
 }
 
 export function toBoard(

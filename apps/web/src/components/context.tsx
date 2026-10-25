@@ -128,7 +128,11 @@ export function TransferCard({ board, className }: { board: Board; className?: s
   const t = hist?.br && br ? transfer(br, hist.br, board.candidates) : null;
   return (
     <Section icon={Waypoints} title="De onde vieram os votos" meta={<MetaPill>vs 1º turno</MetaPill>} className={className}>
-      {loading ? (
+      {!br?.valid ? (
+        <Empty title="Começa às 17h">
+          Quanto cada um ganhou dos votos dos eliminados, dos brancos e nulos e de quem não votou no 1º turno.
+        </Empty>
+      ) : loading ? (
         <Skeleton h={220} />
       ) : !t ? (
         <Empty title="1º turno indisponível">Aparece quando o histórico for publicado.</Empty>
