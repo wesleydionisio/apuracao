@@ -274,6 +274,13 @@ html.kb nav[aria-label="Navegação"] {
 .chat-shell {
   top: calc(var(--vvtop, 0px) + var(--header-total, 120px));
   height: calc(var(--vvh) - var(--header-total, 120px) - var(--tabbar-total));
+  overscroll-behavior: none;
+}
+/* aba Chat: a página por baixo do chat não rola (só a lista de mensagens) */
+html.chat-lock,
+html.chat-lock body {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 /*

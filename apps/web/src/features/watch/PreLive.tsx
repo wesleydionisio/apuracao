@@ -100,7 +100,8 @@ export function PreLive({ board, size = 'md' }: { board: Board; size?: 'md' | 'l
         />
       </div>
 
-      <div className="mt-2.5 flex items-center justify-between gap-2 text-[11.5px] text-muted-foreground">
+      {/* no celular a linha sai: o gráfico fica com o espaço */}
+      <div className="mt-2.5 hidden items-center justify-between gap-2 text-[11.5px] text-muted-foreground lg:flex">
         <span className="num truncate">
           {stats ? (
             <>

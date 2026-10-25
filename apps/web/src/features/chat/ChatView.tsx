@@ -320,25 +320,28 @@ export default function ChatView({
             // várias por segundo: anunciar cada uma afoga o leitor de tela (role=log já seria "polite")
             aria-live="off"
           >
-            {!msgs.length && <EmptyChat disabled={disabled} cands={cands} />}
-            {msgs.map((m) =>
-              m.sc ? (
-                <SuperLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
-              ) : m.sys ? (
-                <SystemLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
-              ) : m.mod ? (
-                <ModLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
-              ) : (
-                <ChatLine
-                  key={m.id}
-                  m={m}
-                  cands={cands}
-                  fresh={!!initial.current && !initial.current.has(m.id)}
-                  mine={!!me && m.nick === me.nick && m.hue === me.hue}
-                  onPick={setPicked}
-                />
-              ),
-            )}
+            {/* sempre 1px mais alta que a lista: mesmo com poucas mensagens o arrasto fica nela e não vaza para a página */}
+            <div className="flex min-h-[calc(100%+1px)] flex-col">
+              {!msgs.length && <EmptyChat disabled={disabled} cands={cands} />}
+              {msgs.map((m) =>
+                m.sc ? (
+                  <SuperLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
+                ) : m.sys ? (
+                  <SystemLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
+                ) : m.mod ? (
+                  <ModLine key={m.id} m={m} cands={cands} fresh={!!initial.current && !initial.current.has(m.id)} />
+                ) : (
+                  <ChatLine
+                    key={m.id}
+                    m={m}
+                    cands={cands}
+                    fresh={!!initial.current && !initial.current.has(m.id)}
+                    mine={!!me && m.nick === me.nick && m.hue === me.hue}
+                    onPick={setPicked}
+                  />
+                ),
+              )}
+            </div>
           </div>
           <FloatLayer cands={cands} />
           {!stuck && msgs.length > 0 && (
@@ -525,7 +528,7 @@ export default function ChatView({
 
 function EmptyChat({ disabled, cands }: { disabled: boolean; cands: ReturnType<typeof useCandidates> }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
       <p className="text-[14px] font-semibold">{disabled ? 'Sem mensagens por enquanto' : 'Seja o primeiro a comentar'}</p>
       <p className="mt-1 max-w-[30ch] text-[12.5px] leading-relaxed text-muted-foreground">
         {disabled ? (

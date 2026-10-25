@@ -9,6 +9,8 @@ import { SourceStamp } from '@/components/core/live';
 import { VersusGlow } from '@/components/core/versus';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { fmtCompact } from '@/lib/format';
+import { useNow } from '@/components/ui';
+import { fmtCountdown } from '@/components/shell/bits';
 import { cn } from '@/lib/utils';
 import { flipOf, useCurve22, useHistRefs, type HistRefs } from './data';
 
@@ -395,5 +397,60 @@ export function LiveScoreCompact({ board }: { board: Board }) {
       <CandidateAvatar c={cb} size="xs" ring={s?.lead === 'b'} />
       <span className="num ml-1 text-[11px] text-muted-foreground">{s ? `${fmt1(s.pst)}%` : ''}</span>
     </div>
+  );
+}
+
+/**
+ * Topo da aba Chat (celular): o essencial do placar em pouca altura, para sobrar tela para a conversa.
+ * Antes das 17h, a contagem no lugar dos números (sem 0,00% nem barras vazias); depois, os dois %, a barra e o apurado.
+ */
+export function LiveScoreEssential({ board }: { board: Board }) {
+  const s = board.br;
+  const [ca, cb] = board.candidates;
+  const now = useNow(1000);
+  const started = board.released && !!s && s.valid > 0;
+  const name = (c: CandidateDef, align: 'l' | 'r', pct: number | null, lead: boolean) => (
+    <div className={cn('flex min-w-0 flex-1 items-center gap-2', align === 'r' && 'flex-row-reverse text-right')}>
+      <CandidateAvatar c={c} size="sm" ring={lead} priority />
+      <div className="min-w-0">
+        <div className="truncate text-[13px] leading-tight font-semibold">{c.short}</div>
+        {pct === null ? (
+          <div className="truncate text-[11px] text-muted-foreground">{c.party}</div>
+        ) : (
+          <div className={cn('display text-[19px] leading-tight font-semibold', !lead && 'text-foreground/60')}>
+            <NumberFlow value={pct} format={PCT2} locales="pt-BR" suffix="%" willChange />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+  if (!started) {
+    const left = Date.parse(board.releaseAt) - now;
+    return (
+      <section aria-label="Placar" className="flex items-center gap-2 px-4 py-2.5">
+        {name(ca, 'l', null, false)}
+        <div className="shrink-0 text-center leading-tight">
+          <div className="text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">{board.released ? 'Aguardando' : 'Placar abre em'}</div>
+          <div className="num text-[15px] font-bold">{board.released ? 'as urnas' : left > 0 ? fmtCountdown(left) : 'instantes'}</div>
+        </div>
+        {name(cb, 'r', null, false)}
+      </section>
+    );
+  }
+  const st = STATUS[s!.status];
+  return (
+    <section aria-label="Placar ao vivo" className="px-4 pt-2.5 pb-2">
+      <div className="flex items-center gap-2">
+        {name(ca, 'l', s!.pa, s!.lead === 'a')}
+        {name(cb, 'r', s!.pb, s!.lead === 'b')}
+      </div>
+      <div className="relative mt-2 flex h-2 w-full gap-[2px] overflow-hidden rounded-full bg-muted" aria-hidden>
+        <SplitFill pa={s!.pa} colorA={ca.color} colorB={cb.color} gap={2} />
+      </div>
+      <div className="num mt-1 text-center text-[11px] text-muted-foreground">
+        <span className="font-semibold text-foreground">{s!.pst.toLocaleString('pt-BR', PCT2)}%</span> das urnas apuradas
+        {st ? ` · ${st}` : ''}
+      </div>
+    </section>
   );
 }
