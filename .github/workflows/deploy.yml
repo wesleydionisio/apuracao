@@ -1,6 +1,8 @@
 # Deploy na VPS a cada push na main (ou à mão, em Actions → Deploy → Run workflow).
 # Antes confere tipos e testes (~1 min). Na pressa da apuração, rode à mão com "pular checagens".
 # Segredos do repositório: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY (chave privada que entra na VPS).
+# Roda no runner próprio da VM ARM da Oracle (oracle-arm). Se ela estiver fora, os jobs ficam na fila:
+# troque `runs-on` para ubuntu-latest para deployar pelo GitHub.
 name: Deploy
 
 on:
@@ -25,7 +27,7 @@ concurrency:
 jobs:
   check:
     if: ${{ !inputs.skip_checks }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ARM64]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +41,7 @@ jobs:
   deploy:
     needs: check
     if: ${{ always() && (needs.check.result == 'success' || needs.check.result == 'skipped') }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ARM64]
     timeout-minutes: 20
     steps:
       - name: Deploy na VPS
@@ -48,7 +50,9 @@ jobs:
           HOST: ${{ secrets.DEPLOY_HOST }}
           USER: ${{ secrets.DEPLOY_USER }}
           REF: ${{ inputs.ref || github.sha }}
+        # A chave fica no RUNNER_TEMP, que o runner esvazia a cada job (o runner não é descartável).
         run: |
-          install -m 600 /dev/null key && printf '%s\n' "$KEY" > key
-          ssh -i key -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "$USER@$HOST" \
+          key="$RUNNER_TEMP/deploy_key"
+          install -m 600 /dev/null "$key" && printf '%s\n' "$KEY" > "$key"
+          ssh -i "$key" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "$USER@$HOST" \
             "cd /opt/apuracao && ./infra/deploy.sh '$REF'"
